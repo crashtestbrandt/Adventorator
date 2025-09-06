@@ -31,3 +31,44 @@ class CharacterSheet(BaseModel):
         return v
 
     model_config = dict(populate_by_name=True, extra="forbid")
+
+
+# -----------------------------
+# LLM shadow-mode data models
+# -----------------------------
+
+LLMAction = Literal[
+    # Keep tight for milestone 0; expand as new actions are supported
+    "ability_check",
+]
+
+
+class LLMProposal(BaseModel):
+    """Model for the LLM's mechanics proposal in shadow mode.
+
+    Fields mirror the JSON contract emitted by the narrator prompt.
+    """
+
+    action: LLMAction
+    ability: Ability
+    suggested_dc: int = Field(ge=1, le=40)
+    reason: str
+
+    model_config = dict(extra="forbid")
+
+
+class LLMNarration(BaseModel):
+    """Free-form narration text."""
+
+    narration: str
+
+    model_config = dict(extra="forbid")
+
+
+class LLMOutput(BaseModel):
+    """Top-level structure produced by the narrator in JSON-only mode."""
+
+    proposal: LLMProposal
+    narration: str
+
+    model_config = dict(extra="forbid")

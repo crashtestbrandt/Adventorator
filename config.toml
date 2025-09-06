@@ -14,3 +14,5 @@ response_timeout_seconds = 3
 api_url = "http://localhost:8901/api/chat"  # Ollama's default chat endpoint
 model_name = "gemma3:4b-it-q8_0" # Or any model you have, e.g., "qwen2:7b"
 default_system_prompt = "You are simple llm chat bot, follow user instructions. For context here are some details about the environment: ai model = gemma3:4b-it-q8_0 ; chat system = each user has their own isolated context / history ; emoji = off by default, match user style ; response length = prefer shorter messages. Details about this model: Gemma3:4B-IT-Q8_0 is an open-weight, 4 billion-parameter multimodal AI model from Google that processes both text and images, supports 128,000-token context, works in 140+ languages, and is optimized for efficiency with 8-bit quantization for use on desktops, cloud, and edge devices"
+max_prompt_tokens = 4096
+max_response_chars = 8000
