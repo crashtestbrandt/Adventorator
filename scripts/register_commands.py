@@ -52,6 +52,18 @@ commands = [
       ]
     },
     {
+      "name": "narrate",
+      "description": "Shadow-mode narrator: propose a check and narrate.",
+      "options": [
+        {
+          "type": 3,  # STRING
+          "name": "message",
+          "description": "What you want to do or say.",
+          "required": True,
+        }
+      ]
+    },
+    {
       "name": "sheet",
       "description": "Character sheet operations",
       "options": [
