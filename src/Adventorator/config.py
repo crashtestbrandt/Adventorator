@@ -17,7 +17,7 @@ def _toml_settings_source() -> dict[str, Any]:
         return {}
     with cfg_path.open("rb") as f:
         t = tomllib.load(f)
-    return {
+    out: dict[str, Any] = {
         "env": t.get("app", {}).get("env", "dev"),
         "features_llm": t.get("features", {}).get("llm", False),
         "features_rules": t.get("features", {}).get("rules", False),
@@ -27,6 +27,14 @@ def _toml_settings_source() -> dict[str, Any]:
         "llm_model_name": t.get("llm", {}).get("model_name"),
         "llm_default_system_prompt": t.get("llm", {}).get("default_system_prompt"),
     }
+
+    llm_cfg = t.get("llm", {}) or {}
+    if "max_prompt_tokens" in llm_cfg and llm_cfg.get("max_prompt_tokens") is not None:
+        out["llm_max_prompt_tokens"] = llm_cfg["max_prompt_tokens"]
+    if "max_response_chars" in llm_cfg and llm_cfg.get("max_response_chars") is not None:
+        out["llm_max_response_chars"] = llm_cfg["max_response_chars"]
+
+    return out
 
 
 class Settings(BaseSettings):
@@ -42,6 +50,8 @@ class Settings(BaseSettings):
     llm_api_url: str | None = None
     llm_model_name: str = "llama3:8b"
     llm_default_system_prompt: str = "You are a helpful assistant."
+    llm_max_prompt_tokens: int = 4096
+    llm_max_response_chars: int = 8000
 
     model_config = SettingsConfigDict(
         env_prefix="",
