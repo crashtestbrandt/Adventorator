@@ -20,6 +20,7 @@ def _toml_settings_source() -> dict[str, Any]:
     out: dict[str, Any] = {
         "env": t.get("app", {}).get("env", "dev"),
         "features_llm": t.get("features", {}).get("llm", False),
+    "features_llm_visible": t.get("features", {}).get("llm_visible", False),
         "features_rules": t.get("features", {}).get("rules", False),
         "features_combat": t.get("features", {}).get("combat", False),
         "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
@@ -43,6 +44,7 @@ class Settings(BaseSettings):
     discord_public_key: str
     discord_bot_token: str | None = None
     features_llm: bool = False
+    features_llm_visible: bool = False
     features_rules: bool = False
     features_combat: bool = False
     response_timeout_seconds: int = 3
