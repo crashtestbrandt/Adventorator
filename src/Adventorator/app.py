@@ -171,7 +171,7 @@ async def _dispatch_command(inter: Interaction):
             await repos.write_transcript(s, campaign.id, scene.id, channel_id, "player", message, str(user_id))
 
             # 2. Fetch recent history for context, only from this user
-            history = await repos.get_recent_transcripts(s, scene.id, limit=15, user_id=user_id)
+            history = await repos.get_recent_transcripts(s, scene.id, limit=15, user_id=str(user_id))
             
             # 3. Format history for the LLM prompt
             prompt_messages = []
@@ -197,7 +197,7 @@ async def _dispatch_command(inter: Interaction):
             # 6. Write the LLM's response to the transcript to complete the loop
             await repos.write_transcript(s, campaign.id, scene.id, channel_id, "bot", llm_response, str(user_id))
     else:
-        await followup_message(inter.application_id, inter.token, f"Unknown commandz: {name}", ephemeral=True)
+        await followup_message(inter.application_id, inter.token, f"Unknown command: {name}", ephemeral=True)
 
 def _subcommand(inter: Interaction) -> str | None:
     # options[0].name for SUB_COMMAND

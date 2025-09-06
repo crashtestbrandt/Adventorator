@@ -1,0 +1,34 @@
+{
+  // VS Code tasks wrapping Makefile targets for consistent local workflows
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Dev", "type": "process", "command": "make", "args": ["dev"], "group": "build", "problemMatcher": [] },
+    { "label": "Run Server", "type": "process", "command": "make", "args": ["run"], "isBackground": true, "problemMatcher": [] },
+    { "label": "Tunnel (cloudflared)", "type": "process", "command": "make", "args": ["tunnel"], "isBackground": true, "problemMatcher": [] },
+    { "label": "Test", "type": "process", "command": "make", "args": ["test"], "group": "test", "problemMatcher": [] },
+    { "label": "Lint", "type": "process", "command": "make", "args": ["lint"], "problemMatcher": [] },
+    { "label": "Type Check", "type": "process", "command": "make", "args": ["type"], "problemMatcher": [] },
+    { "label": "Format", "type": "process", "command": "make", "args": ["format"], "problemMatcher": [] },
+    { "label": "DB Up (local Postgres)", "type": "process", "command": "make", "args": ["db-up"], "problemMatcher": [] },
+    { "label": "Alembic Upgrade", "type": "process", "command": "make", "args": ["alembic-up"], "problemMatcher": [] },
+    { "label": "Alembic Downgrade (-1)", "type": "process", "command": "make", "args": ["alembic-down"], "problemMatcher": [] },
+    {
+      "label": "Alembic Revision (prompt)",
+      "type": "process",
+      "command": "make",
+      "args": ["alembic-rev"],
+      "options": { "env": { "m": "${input:alembicMessage}" } },
+      "problemMatcher": []
+    },
+    { "label": "Build Implementation Plan", "type": "process", "command": "make", "args": ["implementation-plan"], "problemMatcher": [] },
+    { "label": "Clean venv", "type": "process", "command": "make", "args": ["clean"], "problemMatcher": [] }
+  ],
+  "inputs": [
+    {
+      "id": "alembicMessage",
+      "type": "promptString",
+      "description": "Alembic revision message",
+      "default": "schema update"
+    }
+  ]
+}
