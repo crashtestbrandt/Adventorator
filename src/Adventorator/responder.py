@@ -33,6 +33,6 @@ async def followup_message(application_id: str, token: str, content: str, epheme
     url = f"https://discord.com/api/v10/webhooks/{application_id}/{token}"
     flags = 64 if ephemeral else 0  # 64 = EPHEMERAL
     payload = {"content": content, "flags": flags}
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(url, content=orjson.dumps(payload), headers={"Content-Type": "application/json"})
         r.raise_for_status()

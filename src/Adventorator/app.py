@@ -15,6 +15,7 @@ import structlog
 import asyncio
 import json
 from Adventorator.llm import LLMClient
+from Adventorator.orchestrator import run_orchestrator
 
 rng = DiceRNG()  # TODO: Seed per-scene later
 
@@ -42,12 +43,15 @@ async def interactions(request: Request):
     sig = request.headers.get(DISCORD_SIG_HEADER)
     ts  = request.headers.get(DISCORD_TS_HEADER)
     if not sig or not ts:
+        log.error("Missing signature headers", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="missing signature headers")
 
     if not verify_ed25519(settings.discord_public_key, ts, raw, sig):
+        log.error("Invalid signature", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="bad signature")
 
     inter = Interaction.model_validate_json(raw)
+    log.info("Interaction received", inter=inter)
 
     async with session_scope() as s:
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
@@ -190,12 +194,58 @@ async def _dispatch_command(inter: Interaction):
                 await followup_message(inter.application_id, inter.token, "The narrator is silent. (No response from LLM)", ephemeral=True)
                 return
             
-            # 5. Send the LLM's response to the Discord channel
-            formatted_response = f"**{username}:** {message}\n**Response:** {llm_response}"
-            await followup_message(inter.application_id, inter.token, formatted_response)
+            # 5. Send the LLM's response to the Discord channel, chunked if needed
+            max_chunk_size = 2000
+            formatted_response = f"> **{username}:** {message}\n**Response:** {llm_response}"
+            # Split into chunks, preserving formatting on first chunk
+            chunks = [formatted_response[i:i + max_chunk_size] for i in range(0, len(formatted_response), max_chunk_size)]
+
+            for i, chunk in enumerate(chunks):
+                prefix = f"**Part {i + 1}/{len(chunks)}:**\n" if len(chunks) > 1 else ""
+                await followup_message(inter.application_id, inter.token, prefix + chunk)
 
             # 6. Write the LLM's response to the transcript to complete the loop
             await repos.write_transcript(s, campaign.id, scene.id, channel_id, "bot", llm_response, str(user_id))
+    elif name == "narrate":
+        # Shadow-mode narrator using orchestrator (LLM JSON + rules). Behind llm feature flag.
+        if not settings.features_llm or not llm_client:
+            await followup_message(inter.application_id, inter.token, "❌ The LLM narrator is currently disabled.", ephemeral=True)
+            return
+
+        message = _option(inter, "message")
+        if not message:
+            await followup_message(inter.application_id, inter.token, "❌ You need to provide a message.", ephemeral=True)
+            return
+
+        guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
+
+        # Persist player's input first so it's part of the context facts builder
+        async with session_scope() as s:
+            campaign = await repos.get_or_create_campaign(s, guild_id)
+            scene = await repos.ensure_scene(s, campaign.id, channel_id)
+            await repos.write_transcript(s, campaign.id, scene.id, channel_id, "player", message, str(user_id))
+            scene_id = scene.id
+
+        # Run the orchestrator (neutral sheet for now; extend to character sheets later)
+        res = await run_orchestrator(scene_id=scene_id, player_msg=message, llm_client=llm_client)
+
+        if res.rejected:
+            text = f"🛑 Proposal rejected: {res.reason or 'invalid'}"
+            await followup_message(inter.application_id, inter.token, text, ephemeral=True)
+            return
+
+        # Format mechanics + narration for Discord
+        formatted = (
+            f"🧪 Mechanics\n{res.mechanics}\n\n"
+            f"📖 Narration\n{res.narration}"
+        )
+        await followup_message(inter.application_id, inter.token, formatted)
+
+        # Log bot narration to transcript (non-blocking context open)
+        async with session_scope() as s:
+            campaign = await repos.get_or_create_campaign(s, guild_id)
+            scene = await repos.ensure_scene(s, campaign.id, channel_id)
+            await repos.write_transcript(s, campaign.id, scene.id, channel_id, "bot", res.narration, str(user_id), meta={"mechanics": res.mechanics})
     else:
         await followup_message(inter.application_id, inter.token, f"Unknown command: {name}", ephemeral=True)
 

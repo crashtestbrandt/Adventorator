@@ -43,7 +43,7 @@ class LLMClient:
         }
 
         try:
-            response = await self._client.post(self.api_url, content=orjson.dumps(data), headers=self.headers)
+            response = await self._client.post(self.api_url, content=orjson.dumps(data), headers=self.headers, timeout=60.0)
             response.raise_for_status()
             
             result = response.json()
