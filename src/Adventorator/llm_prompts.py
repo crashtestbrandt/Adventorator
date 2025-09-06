@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
+from .llm_utils import looks_system_like, scrub_system_text
 from .models import Transcript
-
 
 SYSTEM_PROMPT_CLERK = (
     "You are the Fact Clerk. Extract concise, factual summaries of the recent scene. "
@@ -18,13 +19,13 @@ SYSTEM_PROMPT_NARRATOR = (
     "decide if a single d20 ability check is warranted. Respond with ONLY a single JSON object, "
     "no extra text or markdown. The JSON schema is:\n"
     "{\n"
-    "  \"proposal\": {\n"
-    "    \"action\": \"ability_check\",\n"
-    "    \"ability\": \"STR|DEX|CON|INT|WIS|CHA\",\n"
-    "    \"suggested_dc\": <int 1-40>,\n"
-    "    \"reason\": \"short justification\"\n"
+    '  "proposal": {\n'
+    '    "action": "ability_check",\n'
+    '    "ability": "STR|DEX|CON|INT|WIS|CHA",\n'
+    '    "suggested_dc": <int 1-40>,\n'
+    '    "reason": "short justification"\n'
     "  },\n"
-    "  \"narration\": \"brief evocative narration\"\n"
+    '  "narration": "brief evocative narration"\n'
     "}\n"
     "Rules: If no check is needed, pick the most relevant ability and a reasonable DC anyway. "
     "Do not include commentary outside the JSON."
@@ -57,14 +58,12 @@ def build_clerk_messages(
     - Excludes entries with author == 'system'.
     - Applies a rough token cap if provided.
     """
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT_CLERK}
-    ]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT_CLERK}]
 
     budget = max_tokens or 10_000
     # Do not count system tokens against budget; reserve space for player's message if provided.
     used = 0
-    player_line = (player_msg or "").strip()
+    player_line = scrub_system_text((player_msg or "").strip())
     reserve = _approx_tokens(player_line) if player_line else 0
 
     # Include recent lines, skipping system
@@ -73,6 +72,9 @@ def build_clerk_messages(
             continue
         line = _summarize_transcript_line(t)
         if not line:
+            continue
+        # Drop any system-like leakage just in case
+        if looks_system_like(line):
             continue
         cost = _approx_tokens(line)
         # Keep space for the player's message, if present
@@ -101,13 +103,11 @@ def build_narrator_messages(
     - Ensures the player's current input is included
     - Applies a rough token cap if provided (not counting system prompt)
     """
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT_NARRATOR}
-    ]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT_NARRATOR}]
 
     budget = max_tokens or 10_000
     used = 0
-    player_line = (player_msg or "").strip()
+    player_line = scrub_system_text((player_msg or "").strip())
     reserve = _approx_tokens(player_line) if player_line else 0
 
     picked_facts: list[str] = []

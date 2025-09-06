@@ -1,4 +1,4 @@
-.PHONY: dev test lint type run docker
+.PHONY: dev test tests lint type run docker
 
 uv:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -16,6 +16,9 @@ tunnel:
 
 test:
 	. .venv/bin/activate && pytest
+
+# Alias for convenience
+tests: test
 
 lint:
 	. .venv/bin/activate && ruff check src tests

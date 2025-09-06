@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -32,7 +31,7 @@ def test_env_overrides_toml_for_llm_api_url(isolated_tmpdir, monkeypatch):
         api_url = "http://from-toml:11434/api/chat"
         model_name = "llama3:in-toml"
         default_system_prompt = "toml prompt"
-        """
+        """,
     )
 
     # And a .env overriding the llm api url
@@ -67,17 +66,19 @@ def test_toml_used_when_env_absent(isolated_tmpdir):
         api_url = "http://only-toml:11434/api/chat"
         model_name = "llama3:toml-only"
         default_system_prompt = "hello from toml"
-        """
+        """,
     )
 
     # Provide only the required Discord key via .env to satisfy Settings validation,
     # but do not provide any LLM-related env vars so TOML values should be used.
     write_file(
         isolated_tmpdir / ".env",
-        "\n".join([
-            "DISCORD_PUBLIC_KEY=dummy",
-            "ENV=dev",
-        ]),
+        "\n".join(
+            [
+                "DISCORD_PUBLIC_KEY=dummy",
+                "ENV=dev",
+            ]
+        ),
     )
 
     settings = load_settings()

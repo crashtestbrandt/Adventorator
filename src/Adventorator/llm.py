@@ -1,15 +1,16 @@
 # src/Adventorator/llm.py
 
+
 import httpx
 import orjson
 import structlog
-from typing import List, Dict, Optional
 
 from Adventorator.config import Settings
 from Adventorator.llm_utils import extract_first_json, validate_llm_output
 from Adventorator.schemas import LLMOutput
 
 log = structlog.get_logger()
+
 
 class LLMClient:
     def __init__(self, settings: Settings):
@@ -23,10 +24,8 @@ class LLMClient:
         log.info("LLMClient initialized", model=self.model_name, url=self.api_url)
 
     async def generate_response(
-        self,
-        messages: List[Dict[str, str]],
-        system_prompt: Optional[str] = None
-    ) -> Optional[str]:
+        self, messages: list[dict[str, str]], system_prompt: str | None = None
+    ) -> str | None:
         """
         Generates a response from the LLM based on a list of messages.
         """
@@ -47,16 +46,18 @@ class LLMClient:
         }
 
         try:
-            response = await self._client.post(self.api_url, content=orjson.dumps(data), headers=self.headers)
+            response = await self._client.post(
+                self.api_url, content=orjson.dumps(data), headers=self.headers
+            )
             response.raise_for_status()
-            
+
             result = response.json()
             content = result.get("message", {}).get("content")
 
             if not content:
                 log.error("LLM API response missing 'content'", response_body=result)
                 return "The narrator seems lost for words..."
-                
+
             return content.strip()
 
         except httpx.RequestError as e:
@@ -68,9 +69,9 @@ class LLMClient:
 
     async def generate_json(
         self,
-        messages: List[Dict[str, str]],
-        system_prompt: Optional[str] = None,
-    ) -> Optional[LLMOutput]:
+        messages: list[dict[str, str]],
+        system_prompt: str | None = None,
+    ) -> LLMOutput | None:
         """Call the chat API and return validated LLMOutput or None.
 
         Expects messages to already include any system prompt if desired. Enforces
@@ -82,13 +83,17 @@ class LLMClient:
 
         data = {
             "model": self.model_name,
-            "messages": messages if messages else ([{"role": "system", "content": system_prompt or self.system_prompt}]),
+            "messages": messages
+            if messages
+            else ([{"role": "system", "content": system_prompt or self.system_prompt}]),
             "stream": False,
             "temperature": 0.2,
         }
 
         try:
-            response = await self._client.post(self.api_url, content=orjson.dumps(data), headers=self.headers)
+            response = await self._client.post(
+                self.api_url, content=orjson.dumps(data), headers=self.headers
+            )
             response.raise_for_status()
             result = response.json()
             content = (result.get("message", {}) or {}).get("content")
@@ -106,7 +111,11 @@ class LLMClient:
                 log.warning("LLM JSON validation failed", raw_preview=content[:200])
             return out
         except httpx.RequestError as e:
-            log.error("LLM API request failed", url=str(e.request.url) if getattr(e, "request", None) else None, error=str(e))
+            log.error(
+                "LLM API request failed",
+                url=str(e.request.url) if getattr(e, "request", None) else None,
+                error=str(e),
+            )
             return None
         except Exception as e:
             log.error("Failed to process LLM JSON response", error=str(e))

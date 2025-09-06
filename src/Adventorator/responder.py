@@ -1,8 +1,8 @@
 # src/Adventorator/responder.py
 
-from fastapi import Response
 import httpx
 import orjson
+from fastapi import Response
 
 # Keep this module dependency-free of Settings to avoid import-time env errors
 # (we don't actually need settings here)
@@ -14,16 +14,20 @@ __all__ = [
     "followup_message",
 ]
 
+
 def orjson_response(data: dict) -> Response:
     return Response(content=orjson.dumps(data), media_type="application/json")
+
 
 def respond_pong() -> Response:
     # Interaction callback type 1 (PONG)
     return orjson_response({"type": 1})
 
+
 def respond_deferred() -> Response:
     # Interaction callback type 5 (DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE)
     return orjson_response({"type": 5})
+
 
 async def followup_message(application_id: str, token: str, content: str, ephemeral: bool = False):
     """
@@ -34,5 +38,7 @@ async def followup_message(application_id: str, token: str, content: str, epheme
     flags = 64 if ephemeral else 0  # 64 = EPHEMERAL
     payload = {"content": content, "flags": flags}
     async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.post(url, content=orjson.dumps(payload), headers={"Content-Type": "application/json"})
+        r = await client.post(
+            url, content=orjson.dumps(payload), headers={"Content-Type": "application/json"}
+        )
         r.raise_for_status()

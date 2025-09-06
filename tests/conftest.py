@@ -1,10 +1,13 @@
 # tests/conftest.py
 
 import os
+from collections.abc import AsyncIterator  # <-- add this (or from collections.abc)
+
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from Adventorator.db import Base
-from typing import AsyncIterator  # <-- add this (or from collections.abc)
+
 
 @pytest.fixture(scope="session")
 async def test_sessionmaker() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
@@ -16,6 +19,7 @@ async def test_sessionmaker() -> AsyncIterator[async_sessionmaker[AsyncSession]]
         yield async_sessionmaker(engine, expire_on_commit=False)
     finally:
         await engine.dispose()
+
 
 @pytest.fixture
 async def db(test_sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncSession]:

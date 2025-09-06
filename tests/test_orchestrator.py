@@ -1,8 +1,7 @@
-import asyncio
 import pytest
 
-from Adventorator.orchestrator import run_orchestrator, OrchestratorResult
-from Adventorator.schemas import LLMProposal, LLMOutput
+from Adventorator.orchestrator import OrchestratorResult, run_orchestrator
+from Adventorator.schemas import LLMOutput, LLMProposal
 
 
 class FakeLLM:
@@ -21,8 +20,10 @@ def _neutral_sheet(ability: str):
 async def test_orchestrator_happy_path(monkeypatch):
     # Prepare fixed LLM output
     out = LLMOutput(
-        proposal=LLMProposal(action="ability_check", ability="DEX", suggested_dc=12, reason="nimble"),
-        narration="You nimbly avoid the trap." 
+        proposal=LLMProposal(
+            action="ability_check", ability="DEX", suggested_dc=12, reason="nimble"
+        ),
+        narration="You nimbly avoid the trap.",
     )
     llm = FakeLLM(out)
 
@@ -34,7 +35,13 @@ async def test_orchestrator_happy_path(monkeypatch):
 
     monkeypatch.setattr(repos, "get_recent_transcripts", fake_get_recent_transcripts)
 
-    res = await run_orchestrator(scene_id=1, player_msg="I step forward.", sheet_getter=_neutral_sheet, rng_seed=42, llm_client=llm)
+    res = await run_orchestrator(
+        scene_id=1,
+        player_msg="I step forward.",
+        sheet_getter=_neutral_sheet,
+        rng_seed=42,
+        llm_client=llm,
+    )
     assert isinstance(res, OrchestratorResult)
     assert not res.rejected
     assert "Check: DEX vs DC 12" in res.mechanics
@@ -45,8 +52,10 @@ async def test_orchestrator_happy_path(monkeypatch):
 @pytest.mark.asyncio
 async def test_orchestrator_rejects_bad_dc(monkeypatch):
     out = LLMOutput(
-        proposal=LLMProposal(action="ability_check", ability="STR", suggested_dc=40, reason="too hard"),
-        narration="—"
+        proposal=LLMProposal(
+            action="ability_check", ability="STR", suggested_dc=40, reason="too hard"
+        ),
+        narration="—",
     )
     llm = FakeLLM(out)
 
@@ -57,7 +66,9 @@ async def test_orchestrator_rejects_bad_dc(monkeypatch):
 
     monkeypatch.setattr(repos, "get_recent_transcripts", fake_get_recent_transcripts)
 
-    res = await run_orchestrator(scene_id=1, player_msg="I lift.", sheet_getter=_neutral_sheet, rng_seed=1, llm_client=llm)
+    res = await run_orchestrator(
+        scene_id=1, player_msg="I lift.", sheet_getter=_neutral_sheet, rng_seed=1, llm_client=llm
+    )
     assert res.rejected
     assert "Proposal rejected" in res.mechanics or res.reason is not None
 
@@ -67,7 +78,7 @@ async def test_orchestrator_rejects_bad_ability(monkeypatch):
     # ability invalid
     out = LLMOutput(
         proposal=LLMProposal(action="ability_check", ability="LCK", suggested_dc=10, reason="luck"),
-        narration="—"
+        narration="—",
     )
     llm = FakeLLM(out)
 
@@ -78,6 +89,8 @@ async def test_orchestrator_rejects_bad_ability(monkeypatch):
 
     monkeypatch.setattr(repos, "get_recent_transcripts", fake_get_recent_transcripts)
 
-    res = await run_orchestrator(scene_id=1, player_msg="I try.", sheet_getter=_neutral_sheet, rng_seed=1, llm_client=llm)
+    res = await run_orchestrator(
+        scene_id=1, player_msg="I try.", sheet_getter=_neutral_sheet, rng_seed=1, llm_client=llm
+    )
     assert res.rejected
     assert "Unknown ability" in (res.reason or "") or "Proposal rejected" in res.mechanics
