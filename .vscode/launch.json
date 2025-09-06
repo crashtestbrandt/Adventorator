@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug API (Uvicorn)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "Adventorator.app:app",
+        "--app-dir",
+        "src",
+        "--reload",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "18000"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "preLaunchTask": "Dev",
+      "justMyCode": true
+    },
+    {
+      "name": "Debug Tests (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-q"
+      ],
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "preLaunchTask": "Dev",
+      "justMyCode": true
+    }
+  ]
+}
