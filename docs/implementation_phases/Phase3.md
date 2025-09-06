@@ -90,7 +90,7 @@
     - run narrator → LLMOutput
     - map proposal → rules request using `rules/checks.py`
     - compute mechanics (roll d20 w/adv/dis if indicated; use suggested_dc)
-    - format mechanics block + narration string
+    - format mechanics block + narration stringgit pull
   - Reject if:
     - action/ability not in whitelist, DC out of range (e.g., 5–30), unknown actors, or missing required fields.
 - Tests:
