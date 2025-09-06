@@ -39,7 +39,7 @@ def extract_first_json(text: str, max_chars: int = 50_000) -> dict[str, Any] | N
 
         if ch == '"':
             in_string = True
-        elif ch == "{" :
+        elif ch == "{":
             depth += 1
         elif ch == "}":
             depth -= 1
