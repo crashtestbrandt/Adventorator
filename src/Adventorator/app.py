@@ -43,12 +43,15 @@ async def interactions(request: Request):
     sig = request.headers.get(DISCORD_SIG_HEADER)
     ts  = request.headers.get(DISCORD_TS_HEADER)
     if not sig or not ts:
+        log.error("Missing signature headers", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="missing signature headers")
 
     if not verify_ed25519(settings.discord_public_key, ts, raw, sig):
+        log.error("Invalid signature", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="bad signature")
 
     inter = Interaction.model_validate_json(raw)
+    log.info("Interaction received", inter=inter)
 
     async with session_scope() as s:
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
@@ -192,7 +195,7 @@ async def _dispatch_command(inter: Interaction):
                 return
             
             # 5. Send the LLM's response to the Discord channel
-            formatted_response = f"**{username}:** {message}\n**Response:** {llm_response}"
+            formatted_response = f"> **{username}:** {message}\n**Response:** {llm_response}"
             await followup_message(inter.application_id, inter.token, formatted_response)
 
             # 6. Write the LLM's response to the transcript to complete the loop

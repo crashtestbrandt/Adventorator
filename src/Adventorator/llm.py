@@ -43,7 +43,7 @@ class LLMClient:
             "model": self.model_name,
             "messages": full_prompt,
             "stream": False,  # For MVP, we'll wait for the full response
-            "temperature": 0.4,
+            "temperature": 0.6,
         }
 
         try:
