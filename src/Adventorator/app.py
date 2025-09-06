@@ -191,7 +191,7 @@ async def _dispatch_command(inter: Interaction):
                 return
             
             # 5. Send the LLM's response to the Discord channel
-            formatted_response = f"**{username}:** {message}\n**Response:** {llm_response}"
+            formatted_response = f"> **{username}:** {message}\n**Response:** {llm_response}"
             await followup_message(inter.application_id, inter.token, formatted_response)
 
             # 6. Write the LLM's response to the transcript to complete the loop

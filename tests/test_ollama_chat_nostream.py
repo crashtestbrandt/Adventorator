@@ -1,59 +1,50 @@
 """
-test ollama chat nostream
-
-example json result:
-{
-    'model': 'qwen3:1.7b-q8_0', 
-    'created_at': '2025-09-06T01:54:30.1595919Z', 
-    'message': {
-        'role': 'assistant', 
-        'content': '<think>\nOkay, the user said "Hello" in the query. I need to respond appropriately. Let me start by acknowledging their greeting. I should keep it friendly and open-ended to encourage further conversation. Maybe add a bit of enthusiasm to make it sound natural. I should also offer help in case they have any questions or need assistance. Let me check the tone to make sure it\'s welcoming and not too formal. Alright, that should cover it.\n</think>\n\nHello! How can I assist you today? 😊'
-    }, 
-    'done_reason': 'stop', 
-    'done': True, 
-    'total_duration': 2662046300, 
-    'load_duration': 1928924900, 
-    'prompt_eval_count': 9, 
-    'prompt_eval_duration': 142621400, 
-    'eval_count': 105, 
-    'eval_duration': 588998000
-}
-
+Test LLMClient with an active Ollama server.
 """
 
-import requests
-import json
+import asyncio
+import pytest
+from Adventorator.config import Settings
+from Adventorator.llm import LLMClient
 
-from Adventorator.llm import LLM
+async def test_llm_generate_response(verbose=False):
+    # Configure settings for the LLMClient
+    if verbose:
+        print("Configuring settings for LLMClient...")
+    settings = Settings(
+        llm_api_url="http://localhost:8901/api/chat",
+        llm_model_name="qwen3:30b-a3b-instruct-2507-q4_K_M",
+        llm_default_system_prompt="You are a helpful assistant."
+    )
 
-# Example usage:
-llm = LLM(
-    model="qwen3:1.7b-q8_0", 
-    url="http://localhost:8901/api/chat", 
-    api_type="ollama"
-)
+    # Initialize the LLMClient
+    if verbose:
+        print("Initializing LLMClient...")
+    llm_client = LLMClient(settings)
 
-data, user_prompt = llm.prepare_request_data(
-    user_prompt="Tell me about Jupiter.", 
-    think=False, 
-    stream=False, 
-    temperature=0.7
-)
-response = requests.post(url, headers=headers, data=json.dumps(data))
+    # Define the test messages
+    messages = [
+        {"role": "user", "content": "Tell me about Jupiter."}
+    ]
+    if verbose:
+        print(f"Sending messages: {messages}")
 
-# Validate the response structure
-assert isinstance(response.json(), dict)
+    # Call the generate_response method
+    response = await llm_client.generate_response(messages)
 
-# Check if the response contains the expected keys
-expected_keys = ["model", "created_at", "message", "done_reason", "done", "total_duration", "load_duration", "prompt_eval_count", "prompt_eval_duration", "eval_count", "eval_duration"]
-for key in expected_keys:
-    assert key in response.json(), f"Missing key: {key}"
+    # Validate the response
+    if verbose:
+        print(f"Received response: {response}")
+    assert response is not None, "Response should not be None"
+    assert isinstance(response, str), "Response should be a string"
+    assert len(response) > 0, "Response should not be empty"
 
-# print the user prompt
-print("\nuser prompt: \n", user_prompt)
+    # Close the client
+    if verbose:
+        print("Closing LLMClient...")
+    await llm_client.close()
 
-# print the 'thinking' content
-print("\nthinking: \n", response.json().get("message", {}).get("content", "").split("<think>")[1].split("</think>")[0].strip())
-
-# print the message content after the '</think>' tag
-print("\nmessage: \n", response.json().get("message", {}).get("content", "").split("</think>")[1].strip())
+if __name__ == "__main__":
+    import asyncio
+    print("Running test_llm_generate_response directly...")
+    asyncio.run(test_llm_generate_response(verbose=True))
