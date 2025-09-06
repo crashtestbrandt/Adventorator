@@ -50,7 +50,8 @@ class LLMProposal(BaseModel):
     """
 
     action: LLMAction
-    ability: Ability
+    # Allow any string here; the orchestrator will defensively validate against ABILS.
+    ability: str
     suggested_dc: int = Field(ge=1, le=40)
     reason: str
 
