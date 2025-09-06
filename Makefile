@@ -6,7 +6,7 @@ uv:
 dev:
 	uv venv || true
 	. .venv/bin/activate && uv pip install -r requirements.txt
-	. uv pip install -e .
+	. .venv/bin/activate && uv pip install -e .
 
 run:
 	. .venv/bin/activate && UVICORN_LOG_LEVEL=info uvicorn --app-dir src Adventorator.app:app --reload --host 0.0.0.0 --port 18000
@@ -18,13 +18,13 @@ test:
 	. .venv/bin/activate && pytest
 
 lint:
-	ruff check src tests
+	. .venv/bin/activate && ruff check src tests
 
 type:
-	mypy src
+	. .venv/bin/activate && mypy src
 
 format:
-	ruff format src tests
+	. .venv/bin/activate && ruff format src tests
 
 clean:
 	rm -rf .venv
@@ -38,13 +38,13 @@ alembic-init:
 	alembic init -t async migrations
 
 alembic-rev:
-	alembic revision --autogenerate -m "$(m)"
+	. .venv/bin/activate && PYTHONPATH=./src alembic revision --autogenerate -m "$(m)"
 
 alembic-up:
-	alembic upgrade head
+	. .venv/bin/activate && PYTHONPATH=./src alembic upgrade head
 
 alembic-down:
-	alembic downgrade -1
+	. .venv/bin/activate && PYTHONPATH=./src alembic downgrade -1
 
 # Build docs/implementation_plan.md from GitHub issues titled "Phase N"
 .PHONY: implementation-plan
