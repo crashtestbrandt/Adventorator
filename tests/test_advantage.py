@@ -1,6 +1,7 @@
 # test_advantage.py
 
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from Adventorator.rules.dice import DiceRNG
 

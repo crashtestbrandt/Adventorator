@@ -1,11 +1,10 @@
 # config.py
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
+import tomllib
 from pathlib import Path
 from typing import Any
-
-import tomllib
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _toml_settings_source() -> dict[str, Any]:
@@ -21,7 +20,6 @@ def _toml_settings_source() -> dict[str, Any]:
     out: dict[str, Any] = {
         "env": t.get("app", {}).get("env", "dev"),
         "features_llm": t.get("features", {}).get("llm", False),
-        "features_llm_visible": t.get("features", {}).get("llm_visible", False),
         "features_rules": t.get("features", {}).get("rules", False),
         "features_combat": t.get("features", {}).get("combat", False),
         "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
@@ -42,12 +40,9 @@ def _toml_settings_source() -> dict[str, Any]:
 class Settings(BaseSettings):
     env: str = Field(default="dev")
     database_url: str = Field(default="sqlite+aiosqlite:///./adventorator.sqlite3")
-    # Provide a benign default so mypy doesn't require ctor arg;
-    # env/.env should override at runtime.
-    discord_public_key: str = ""
+    discord_public_key: str
     discord_bot_token: str | None = None
     features_llm: bool = False
-    features_llm_visible: bool = False
     features_rules: bool = False
     features_combat: bool = False
     response_timeout_seconds: int = 3

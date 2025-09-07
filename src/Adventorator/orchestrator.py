@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Iterable, Optional
 
-from Adventorator import repos
 from Adventorator.db import session_scope
-from Adventorator.llm import LLMClient
-from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messages
-from Adventorator.llm_utils import is_unsafe_mechanics, scrub_system_text
+from Adventorator import repos
 from Adventorator.models import Transcript as TranscriptModel
-from Adventorator.rules.checks import ABILS, CheckInput, compute_check
+from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messages
+from Adventorator.llm import LLMClient
 from Adventorator.rules.dice import DiceRNG
+from Adventorator.rules.checks import CheckInput, compute_check, ABILS
 from Adventorator.schemas import LLMOutput
 
 
@@ -28,9 +27,7 @@ def _format_mechanics_block(result, ability: str, dc: int) -> str:
         d20_str = f"d20: {result.d20[0]}/{result.d20[1]} -> {result.pick}"
     else:
         d20_str = f"d20: {result.d20[0]}"
-    outcome = (
-        "SUCCESS" if (result.success is True) else ("FAIL" if result.success is False else "—")
-    )
+    outcome = "SUCCESS" if (result.success is True) else ("FAIL" if result.success is False else "—")
     return (
         f"Check: {ability} vs DC {dc}\n"
         f"{d20_str} | mod: {result.mod:+d} | total: {result.total} -> {outcome}"
@@ -51,27 +48,13 @@ def _validate_proposal(out: LLMOutput) -> tuple[bool, str | None]:
     # reason non-empty
     if not p.reason or not p.reason.strip():
         return False, "Missing reason"
-    # reject unsafe mutation-like verbs in reason or narration
-    if is_unsafe_mechanics(p.reason) or is_unsafe_mechanics(out.narration):
-        return False, "Unsafe proposal language"
-    # unknown actors heuristic: if narration tries to directly state inventory/HP change
-    if any(tok in out.narration.lower() for tok in ["hp", "hit points", "inventory", "backpack"]):
-        if any(
-            v in out.narration.lower()
-            for v in ["add", "remove", "set", "increase", "decrease", "heal", "damage"]
-        ):
-            return False, "Narration implies state change"
     return True, None
 
 
 async def _facts_from_transcripts(scene_id: int, player_msg: str | None) -> list[str]:
     async with session_scope() as s:
-        txs: list[TranscriptModel] = await repos.get_recent_transcripts(
-            s, scene_id=scene_id, limit=15
-        )
-    # Sanitize player message before prompt assembly
-    cleaned = scrub_system_text(player_msg or "", max_chars=500)
-    msgs = build_clerk_messages(txs, player_msg=cleaned)
+        txs: list[TranscriptModel] = await repos.get_recent_transcripts(s, scene_id=scene_id, limit=15)
+    msgs = build_clerk_messages(txs, player_msg=player_msg)
     # Convert assistant/user content lines (excluding system) into facts (strings)
     facts: list[str] = []
     for m in msgs:
@@ -84,18 +67,16 @@ async def _facts_from_transcripts(scene_id: int, player_msg: str | None) -> list
 async def run_orchestrator(
     scene_id: int,
     player_msg: str,
-    sheet_getter: Callable[[str], dict] | None = None,
-    rng_seed: int | None = None,
-    llm_client: LLMClient | None = None,
+    sheet_getter: callable | None = None,
+    rng_seed: Optional[int] = None,
+    llm_client: Optional[LLMClient] = None,
 ) -> OrchestratorResult:
     """End-to-end shadow-mode orchestration.
 
     - scene_id: active scene to fetch transcripts
     - player_msg: latest user input to include
-        - sheet_getter: optional callable returning a minimal sheet dict for ability
-            scores. Signature:
-            (ability: str) -> dict(score: int, proficient: bool,
-            expertise: bool, prof_bonus: int)
+    - sheet_getter: optional callable returning a minimal sheet dict for ability scores
+      signature: (ability: str) -> dict(score: int, proficient: bool, expertise: bool, prof_bonus: int)
       If not provided, defaults to a benign 10 score and no proficiency.
     - rng_seed: stable seed for deterministic tests
     - llm_client: inject to mock in tests; construct externally from settings in app layer
@@ -105,7 +86,7 @@ async def run_orchestrator(
     facts = await _facts_from_transcripts(scene_id, player_msg)
 
     # 2) narrator -> JSON output
-    narrator_msgs = build_narrator_messages(facts, scrub_system_text(player_msg, max_chars=500))
+    narrator_msgs = build_narrator_messages(facts, player_msg)
     if not llm_client:
         return OrchestratorResult(
             mechanics="LLM not configured.", narration="", rejected=True, reason="llm_unconfigured"
@@ -113,21 +94,14 @@ async def run_orchestrator(
     out = await llm_client.generate_json(narrator_msgs)
     if not out:
         return OrchestratorResult(
-            mechanics="Unable to generate a proposal.",
-            narration="",
-            rejected=True,
-            reason="llm_invalid_or_empty",
+            mechanics="Unable to generate a proposal.", narration="",
+            rejected=True, reason="llm_invalid_or_empty"
         )
 
     # 3) validate proposal defensively
     ok, why = _validate_proposal(out)
     if not ok:
-        return OrchestratorResult(
-            mechanics="Proposal rejected: " + (why or "invalid"),
-            narration="",
-            rejected=True,
-            reason=why,
-        )
+        return OrchestratorResult(mechanics="Proposal rejected: " + (why or "invalid"), narration="", rejected=True, reason=why)
 
     # 4) map proposal -> rules.CheckInput using provided sheet_getter
     p = out.proposal
