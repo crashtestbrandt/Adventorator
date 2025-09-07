@@ -52,13 +52,13 @@ commands = [
       ]
     },
     {
-      "name": "narrate",
-      "description": "Shadow-mode narrator: propose a check and narrate.",
+      "name": "do",
+      "description": "Interpret a player action with the shadow-mode narrator.",
       "options": [
         {
           "type": 3,  # STRING
           "name": "message",
-          "description": "What you want to do or say.",
+          "description": "Describe what you attempt.",
           "required": True,
         }
       ]

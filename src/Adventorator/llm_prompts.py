@@ -1,10 +1,11 @@
-# llm_prompts.py
+"""Prompt builders and system prompts for LLM calls."""
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
-from .models import Transcript
+from Adventorator.models import Transcript
 
 
 SYSTEM_PROMPT_CLERK = (
@@ -18,13 +19,13 @@ SYSTEM_PROMPT_NARRATOR = (
     "decide if a single d20 ability check is warranted. Respond with ONLY a single JSON object, "
     "no extra text or markdown. The JSON schema is:\n"
     "{\n"
-    "  \"proposal\": {\n"
-    "    \"action\": \"ability_check\",\n"
-    "    \"ability\": \"STR|DEX|CON|INT|WIS|CHA\",\n"
-    "    \"suggested_dc\": <int 1-40>,\n"
-    "    \"reason\": \"short justification\"\n"
+    '  "proposal": {\n'
+    '    "action": "ability_check",\n'
+    '    "ability": "STR|DEX|CON|INT|WIS|CHA",\n'
+    '    "suggested_dc": <int 1-40>,\n'
+    '    "reason": "short justification"\n'
     "  },\n"
-    "  \"narration\": \"brief evocative narration\"\n"
+    '  "narration": "brief evocative narration"\n'
     "}\n"
     "Rules: If no check is needed, pick the most relevant ability and a reasonable DC anyway. "
     "Do not include commentary outside the JSON."
@@ -57,9 +58,7 @@ def build_clerk_messages(
     - Excludes entries with author == 'system'.
     - Applies a rough token cap if provided.
     """
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT_CLERK}
-    ]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT_CLERK}]
 
     budget = max_tokens or 10_000
     # Do not count system tokens against budget; reserve space for player's message if provided.
@@ -101,9 +100,7 @@ def build_narrator_messages(
     - Ensures the player's current input is included
     - Applies a rough token cap if provided (not counting system prompt)
     """
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT_NARRATOR}
-    ]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT_NARRATOR}]
 
     budget = max_tokens or 10_000
     used = 0
