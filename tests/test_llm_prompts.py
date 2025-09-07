@@ -8,6 +8,7 @@ def _t(author: str, content: str) -> Transcript:
         def __init__(self, author, content):
             self.author = author
             self.content = content
+
     return T(author, content)  # type: ignore
 
 

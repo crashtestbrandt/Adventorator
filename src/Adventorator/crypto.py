@@ -1,7 +1,8 @@
 # crypto.py
 
-import nacl.signing
 import nacl.exceptions
+import nacl.signing
+
 
 def verify_ed25519(public_key_hex: str, timestamp: str, body: bytes, signature_hex: str) -> bool:
     try:

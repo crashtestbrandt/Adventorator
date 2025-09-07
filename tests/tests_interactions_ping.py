@@ -1,10 +1,13 @@
 # tests/test_interactions_ping.py
 import json
+
 from fastapi.testclient import TestClient
-from Adventorator.app import app
+
 import Adventorator.app as appmod
+from Adventorator.app import app
 
 client = TestClient(app)
+
 
 def test_ping_returns_pong(monkeypatch):
     # Bypass signature verification

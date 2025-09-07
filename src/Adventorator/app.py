@@ -173,33 +173,33 @@ async def _dispatch_command(inter: Interaction):
             campaign = await repos.get_or_create_campaign(s, guild_id)
             scene = await repos.ensure_scene(s, campaign.id, channel_id)
             await repos.write_transcript(s, campaign.id, scene.id, channel_id, "player", message, str(user_id))
-            scene_id = scene.id
 
-        # Run the orchestrator (neutral sheet for now; extend to character sheets later)
-        res = await run_orchestrator(scene_id=scene_id, player_msg=message, llm_client=llm_client)
+            # 2. Fetch recent history for context, only from this user
+            history = await repos.get_recent_transcripts(s, scene.id, limit=15, user_id=str(user_id))
+            
+            # 3. Format history for the LLM prompt
+            prompt_messages = []
+            for entry in history:
+                # Map our author types to LLM roles
+                role = "user" if entry.author == "player" else "assistant" if entry.author == "bot" else None
+                if role:
+                    prompt_messages.append({"role": role, "content": entry.content})
+            
+            # 4. Call the LLM to get a narrative response
+            log.info("Generating LLM response", scene_id=scene.id, history_len=len(prompt_messages))
+            llm_response = await llm_client.generate_response(prompt_messages)
 
-        if res.rejected:
-            # Polite ephemeral fallback in degraded mode
-            await followup_message(inter.application_id, inter.token, "The narrator is silent for now. (LLM unavailable)", ephemeral=True)
-            return
+            if not llm_response:
+                # The LLM client already logs errors, just inform the user.
+                await followup_message(inter.application_id, inter.token, "The narrator is silent. (No response from LLM)", ephemeral=True)
+                return
+            
+            # 5. Send the LLM's response to the Discord channel
+            formatted_response = f"> **{username}:** {message}\n**Response:** {llm_response}"
+            await followup_message(inter.application_id, inter.token, formatted_response)
 
-        # Format mechanics + narration
-        formatted = (
-            f"🧪 Mechanics\n{res.mechanics}\n\n"
-            f"📖 Narration\n{res.narration}"
-        )
-
-        if settings.features_llm_visible:
-            await followup_message(inter.application_id, inter.token, formatted)
-        else:
-            # Shadow mode: inform user minimally and avoid posting full content
-            await followup_message(inter.application_id, inter.token, "(Narrator running in shadow mode)", ephemeral=True)
-
-        # Log bot narration to transcript (non-blocking context open)
-        async with session_scope() as s:
-            campaign = await repos.get_or_create_campaign(s, guild_id)
-            scene = await repos.ensure_scene(s, campaign.id, channel_id)
-            await repos.write_transcript(s, campaign.id, scene.id, channel_id, "bot", res.narration, str(user_id), meta={"mechanics": res.mechanics})
+            # 6. Write the LLM's response to the transcript to complete the loop
+            await repos.write_transcript(s, campaign.id, scene.id, channel_id, "bot", llm_response, str(user_id))
     elif name == "narrate":
         # Shadow-mode narrator using orchestrator (LLM JSON + rules). Behind llm feature flag.
         if not settings.features_llm or not llm_client:
