@@ -1,15 +1,17 @@
 # schemas.py
 
-from pydantic import BaseModel, Field, field_validator
-from typing import Literal, Dict
+from typing import Literal
 
-Ability = Literal["STR","DEX","CON","INT","WIS","CHA"]
+from pydantic import BaseModel, Field, field_validator
+
+Ability = Literal["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+
 
 class CharacterSheet(BaseModel):
     name: str
     class_name: str = Field(alias="class")
     level: int = Field(ge=1, le=20)
-    abilities: Dict[Ability, int]
+    abilities: dict[Ability, int]
     proficiency_bonus: int = Field(ge=2, le=6)
     skills: dict[str, bool] = Field(default_factory=dict)
     ac: int = Field(ge=1, le=30)
@@ -24,8 +26,8 @@ class CharacterSheet(BaseModel):
 
     @field_validator("abilities")
     @classmethod
-    def validate_abilities(cls, v: Dict[str, int]):
-        missing = [k for k in ["STR","DEX","CON","INT","WIS","CHA"] if k not in v]
+    def validate_abilities(cls, v: dict[str, int]):
+        missing = [k for k in ["STR", "DEX", "CON", "INT", "WIS", "CHA"] if k not in v]
         if missing:
             raise ValueError(f"missing abilities: {missing}")
         return v
@@ -50,7 +52,8 @@ class LLMProposal(BaseModel):
     """
 
     action: LLMAction
-    ability: Ability
+    # Allow any string here; the orchestrator will defensively validate against ABILS.
+    ability: str
     suggested_dc: int = Field(ge=1, le=40)
     reason: str
 

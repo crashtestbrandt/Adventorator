@@ -173,7 +173,7 @@ sequenceDiagram
 
 * [X] Phase 0: Verified interactions endpoint, 3s deferral, logging.
 * [X] Phase 1: Deterministic dice + checks, /roll and /check commands.
-* [ ] Phase 2: Persistence (campaigns, characters, transcripts).
+* [X] Phase 2: Persistence (campaigns, characters, transcripts).
 * [ ] Phase 3: Shadow LLM narrator, proposal-only.
 * [ ] Phase 4+: Combat system, content ingestion, GM controls, premium polish.
 

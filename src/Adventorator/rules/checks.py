@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass
 
-ABILS = ("STR","DEX","CON","INT","WIS","CHA")
+ABILS = ("STR", "DEX", "CON", "INT", "WIS", "CHA")
+
 
 def ability_mod(score: int) -> int:
     return (score - 10) // 2
+
 
 @dataclass(frozen=True)
 class CheckInput:
@@ -18,13 +20,15 @@ class CheckInput:
     advantage: bool = False
     disadvantage: bool = False
 
+
 @dataclass(frozen=True)
 class CheckResult:
     total: int
-    d20: list[int]   # raw d20(s)
-    pick: int        # selected d20 (adv/dis)
-    mod: int         # ability +/- proficiency
+    d20: list[int]  # raw d20(s)
+    pick: int  # selected d20 (adv/dis)
+    mod: int  # ability +/- proficiency
     success: bool | None
+
 
 def compute_check(inp: CheckInput, d20_rolls: list[int]) -> CheckResult:
     a = inp.ability.upper()
@@ -34,8 +38,12 @@ def compute_check(inp: CheckInput, d20_rolls: list[int]) -> CheckResult:
     pick = max(d20_rolls) if inp.advantage else min(d20_rolls) if inp.disadvantage else d20_rolls[0]
 
     mod = ability_mod(inp.score)
-    prof = inp.proficiency_bonus * (2 if inp.expertise else 1) if inp.proficient or inp.expertise else 0
+    prof = (
+        inp.proficiency_bonus * (2 if inp.expertise else 1)
+        if inp.proficient or inp.expertise
+        else 0
+    )
 
     total = pick + mod + prof
     success = (total >= inp.dc) if inp.dc is not None else None
-    return CheckResult(total=total, d20=d20_rolls, pick=pick, mod=mod+prof, success=success)
+    return CheckResult(total=total, d20=d20_rolls, pick=pick, mod=mod + prof, success=success)
