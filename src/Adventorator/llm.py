@@ -22,7 +22,7 @@ class LLMClient:
         self.model_name = settings.llm_model_name
         self.system_prompt = settings.llm_default_system_prompt
         self.headers = {"Content-Type": "application/json"}
-        self._max_chars = getattr(settings, "llm_max_response_chars", 8000) or 8000
+        self._max_chars = getattr(settings, "llm_max_response_chars", 20000) or 20000 # TODO: this should match the set max context length for the model, maybe this is redundant here
         # We use a persistent client for connection pooling
         self._client = httpx.AsyncClient(timeout=60.0)
         log.info("LLMClient initialized", model=self.model_name, url=self.api_url)
@@ -42,11 +42,25 @@ class LLMClient:
         full_prompt.extend(messages)
 
         # Ollama API payload structure
+        # TODO: all of these values need to be parameterized
         data = {
             "model": self.model_name,
+            "think": False,
             "messages": full_prompt,
             "stream": False,  # For MVP, we'll wait for the full response
-            "temperature": 0.6,
+            "options": {
+                "temperature": 1,
+                "repeat_last_n": 50,
+                "repeat_penalty": 1.5,
+                "top_p": 0.95,
+                #"num_predict": 150,
+                "presence_penalty": 2.0,
+                #"stop": ["\n", "user:"],
+                "num_keep": 10,
+                "typical_p": 0.8,
+                "top_k": 40,
+                "frequency_penalty": 1.5,
+            }
         }
 
         try:

@@ -194,9 +194,39 @@ async def _dispatch_command(inter: Interaction):
                 await followup_message(inter.application_id, inter.token, "The narrator is silent. (No response from LLM)", ephemeral=True)
                 return
             
-            # 5. Send the LLM's response to the Discord channel
-            formatted_response = f"> **{username}:** {message}\n**Response:** {llm_response}"
-            await followup_message(inter.application_id, inter.token, formatted_response)
+            # 5. Prepend user attribution and wrap LLM response in markdown quotes for Discord
+            max_chunk_size = 2000
+            attribution = f"> **{username}**: {message}\n\n"
+            chunk_label_template = "-# [message {}/{}]\n"
+
+            # Split the LLM response into lines, wrap each with '> '
+            quoted_lines = [f"> {line}" for line in llm_response.splitlines()]
+            quoted_response = "\n".join(quoted_lines)
+
+            # Now split into chunks, but ensure each chunk starts with '> ' on every line
+            # We'll split by lines, not by characters, to avoid breaking quotes
+            available_size = max_chunk_size - len(attribution) - len(chunk_label_template.format(1, 1))
+            chunks = []
+            current_chunk = ""
+            for line in quoted_lines:
+                # +1 for the newline
+                if len(current_chunk) + len(line) + 1 > available_size and current_chunk:
+                    chunks.append(current_chunk.rstrip("\n"))
+                    current_chunk = ""
+                current_chunk += line + "\n"
+            if current_chunk:
+                chunks.append(current_chunk.rstrip("\n"))
+
+            total_chunks = len(chunks)
+            for idx, chunk in enumerate(chunks, 1):
+                chunk_label = chunk_label_template.format(idx, total_chunks)
+                # Send each chunk as a follow-up message to Discord
+                # TODO: consider sending replies in a discord thread, if not already in a thread.
+                await followup_message(
+                    inter.application_id,
+                    inter.token,
+                    attribution + chunk_label + chunk
+                )
 
             # 6. Write the LLM's response to the transcript to complete the loop
             await repos.write_transcript(s, campaign.id, scene.id, channel_id, "bot", llm_response, str(user_id))
