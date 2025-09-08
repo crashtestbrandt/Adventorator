@@ -55,22 +55,35 @@ A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in
 ```mermaid
 flowchart TD
   %% === External ===
-  U[Player on Discord]:::ext
-  DP[Discord Platform<br/>App Commands and Interactions]:::ext
-  WH[Discord Webhooks API<br/>Follow-up Messages]:::ext
+  subgraph EXTERNAL[External Systems]
+    U[Player on Discord]:::ext
+    DP[Discord Platform<br/>App Commands and Interactions]:::ext
+    WH[Discord Webhooks API<br/>Follow-up Messages]:::ext
+    LLM[LLM API<br/>e.g., Ollama]:::ext
+  end
 
   %% === Network Edge ===
   CF[cloudflared Tunnel<br/>TLS - trusted CA]:::edge
 
   %% === App ===
   subgraph APP[Adventorator Service - FastAPI]
-    A[Interactions Endpoint<br/>path: /interactions]
-    SIG[Ed25519 Verify<br/>X-Signature-* headers]
-    DISP[Command Dispatcher]
-    RESP[Responder<br/>defer and follow-up]
-    RULES[Rules Engine - Phase 1<br/>Dice, Checks, Adv/Dis]
-    CTX[Context Resolver - Phase 2<br/>Campaign, Player, Scene]
-    TRANS[Transcript Logger - Phase 2]
+    subgraph REQUEST[Request Handling]
+      A[Interactions Endpoint<br/>path: /interactions]
+      SIG[Ed25519 Verify<br/>X-Signature-* headers]
+      DISP[Command Dispatcher]
+    end
+
+    subgraph BUSINESS[Business Logic]
+      RULES[Rules Engine<br/>Dice, Checks]
+      CTX[Context Resolver<br/>Campaign, Player, Scene]
+      LLMC[LLM Client<br/>Prompting & JSON Parsing]
+      ORCH[Orchestrator<br/>Coordinates LLM + Rules]
+    end
+
+    subgraph RESPONSE[Response Handling]
+      RESP[Responder<br/>defer and follow-up]
+      TRANS[Transcript Logger]
+    end
   end
 
   %% === Data ===
@@ -80,88 +93,164 @@ flowchart TD
   end
 
   %% === Tooling ===
-  REG[scripts/register_commands.py<br/>Guild command registration]:::ops
-  LOG[Structured Logs<br/>structlog and orjson]:::ops
-  TEST[Tests<br/>pytest and hypothesis]:::ops
+  subgraph TOOLING[Tooling]
+    REG[scripts/register_commands.py<br/>Guild command registration]:::ops
+    LOG[Structured Logs<br/>structlog and orjson]:::ops
+    TEST[Tests<br/>pytest and hypothesis]:::ops
+  end
 
-  %% === Flows ===
+  %% === Ingress Flow ===
   U -->|Slash command| DP
   DP -->|POST /interactions<br/>signed| CF
   CF --> A
-
   A --> SIG
   SIG -->|valid| DISP
   A -.->|invalid| RESP
 
   %% Phase 0: immediate defer
-  DISP --> RESP
+  DISP -->|defer| RESP
 
-  %% Phase 1: deterministic mechanics
-  DISP --> RULES
+  %% === Command-Specific Flows ===
+  DISP -- "/roll" --> RULES
   RULES --> RESP
 
-  %% Phase 2: persistence and context
-  DISP --> CTX
-  CTX --> DB
-  RESP -->|write bot output| TRANS
-  TRANS --> DB
+  DISP -- "/sheet" --> CTX
+  CTX -->|reads| DB
+  CTX --> RESP
 
-  %% Follow-up delivery
+  DISP -- "/ooc: read history" --> DB
+  DISP -- "/ooc: call LLM" --> LLMC
+  LLMC --> LLM
+  LLMC -- "respond" --> RESP
+
+  DISP -- "/narrate" --> ORCH
+  ORCH -- "get facts" --> DB
+  ORCH -- "get proposal" --> LLMC
+  ORCH -- "run rules" --> RULES
+  ORCH -- "respond" --> RESP
+
+  %% === Egress & Logging (for all command flows) ===
+  RESP -- "log event" --> TRANS
+  TRANS -->|write| DB
   RESP -->|POST follow-up| WH
   WH --> DP --> U
 
-  %% Tooling edges
+  %% === Tooling Edges ===
   REG --> DP
   MIG --> DB
-  TEST -.-> RULES
-  TEST -.-> A
+  TEST -.-> RULES & ORCH & A
   LOG -.-> APP
 
-  %% Styles
+  %% === Styles ===
   classDef ext  fill:#eef7ff,stroke:#4e89ff,stroke-width:1px,color:#0d2b6b
   classDef edge fill:#efeaff,stroke:#8b5cf6,stroke-width:1px,color:#2b1b6b
   classDef data fill:#fff7e6,stroke:#f59e0b,stroke-width:1px,color:#7c3e00
-  classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46 
+  classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46
 ```
 
-**Diagram: Interaction Lifecycle (Phase 0-2)**
+**Diagram: Narrate Command Flow**
 
 ```mermaid
 sequenceDiagram
   autonumber
   participant User as Player (Discord)
   participant Discord as Discord Platform
-  participant CF as cloudflared Tunnel
-  participant API as Adventorator /interactions
-  participant SIG as Ed25519 Verify
-  participant DISP as Dispatcher
-  participant RULES as Rules Engine
-  participant CTX as Context Resolver
+  participant API as Adventorator Service
+  participant ORCH as Orchestrator
   participant DB as Database
+  participant LLM as LLM API
+  participant RULES as Rules Engine
   participant WH as Discord Webhooks
 
-  User->>Discord: /roll expr:2d6+3
-  Discord->>CF: POST /interactions (signed)
-  CF->>API: Forward request
-  API->>SIG: Verify signature
-  SIG-->>API: OK (or 401 if bad)
+  User->>Discord: /narrate message:"I try to pick the lock"
+  Discord->>API: POST /interactions (signed)
+  
+  Note over API: Verifies Ed25519 signature
 
-  API-->>Discord: Defer (type=5) ≤3s
+  API-->>Discord: ACK with Defer (type=5) in < 3s
 
-  API->>DISP: route command ("roll")
-  DISP->>RULES: parse & roll (deterministic)
-  RULES-->>DISP: result (rolls, total)
+  par Background Processing
+    API->>API: Dispatches "narrate" command
+    
+    API->>DB: write_transcript("player", "I try to pick the lock")
 
-  %% Phase 2 logging & context (optional for Phase 0/1)
-  DISP->>CTX: resolve campaign/player/scene
-  CTX->>DB: upsert/get rows
-  DISP->>DB: write transcript (player input)
-  DISP->>DB: write transcript (bot output meta)
-
-  DISP->>WH: POST follow-up message (narration + mechanics)
-  WH-->>Discord: deliver message
-  Discord-->>User: Show result
+    API->>ORCH: run_orchestrator(scene_id, player_msg)
+    
+    activate ORCH
+      ORCH->>DB: get_recent_transcripts(scene_id)
+      DB-->>ORCH: Return transcript history
+      
+      Note over ORCH: Builds facts prompt from history
+      
+      ORCH->>LLM: generate_json(prompt)
+      LLM-->>ORCH: Return JSON proposal (action, ability, dc, narration)
+      
+      Note over ORCH: Validates proposal
+      
+      ORCH->>RULES: compute_check(DEX, dc=15, ...)
+      RULES-->>ORCH: Return CheckResult (success, total, rolls)
+    deactivate ORCH
+    
+    ORCH-->>API: Return OrchestratorResult
+    
+    Note over API: Formats mechanics and narration for response
+    
+    API->>WH: POST follow-up message
+    WH-->>Discord: Delivers message
+    Discord-->>User: Shows formatted mechanics + narration
+    
+    API->>DB: write_transcript("bot", narration, meta={mechanics})
+  end
 ```
+
+**`/ooc` command flow**
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant User as Player (Discord)
+  participant Discord as Discord Platform
+  participant API as Adventorator Service
+  participant DB as Database
+  participant LLM as LLM API
+  participant WH as Discord Webhooks
+
+  User->>Discord: /ooc message:"What does the room smell like?"
+  Discord->>API: POST /interactions (signed)
+  
+  Note over API: Verifies Ed25519 signature
+
+  API-->>Discord: ACK with Defer (type=5) in < 3s
+
+  par Background Processing
+    API->>API: Dispatches "ooc" command
+    
+    Note over API: Resolves campaign, scene, player context
+    
+    API->>DB: write_transcript(author="player", content="What...")
+    
+    API->>DB: get_recent_transcripts(scene_id)
+    DB-->>API: Return transcript history
+    
+    Note over API: Formats chat history into prompt for LLM
+    
+    API->>LLM: generate_response(prompt)
+    LLM-->>API: Return full text response (potentially long)
+    
+    Note over API: Prepares attribution & splits response into chunks (max 2000 chars)
+    
+    loop For Each Chunk
+      API->>WH: POST follow-up(chunk)
+      WH-->>Discord: Delivers chunked message part
+      Discord-->>User: Shows chunk
+    end
+    
+    Note over API: After sending all chunks, logs the full original response
+    API->>DB: write_transcript(author="bot", content="<full llm response>")
+  end
+```
+
+
 
 **🔒 Design philosophy**
 

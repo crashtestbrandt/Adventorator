@@ -1,0 +1,18 @@
+-- database: ../adventorator.sqlite3
+
+-- delete all transcripts records
+DELETE FROM transcripts;
+
+-- select and remove all records in the `transcripts` table with `author_ref` of specific author
+DELETE FROM transcripts
+WHERE author_ref = 252665129206808587;
+
+-- select and remove all records in the `transcripts` table with `author_ref` of 0
+DELETE FROM transcripts
+WHERE author_ref = 0;
+
+-- Concatenate a selection of records into a single-string chat log
+-- For each record in the `transcripts` table where `author_ref` is `123173002475995136` and `id` is 257 or higher, select each record and concatenate the `author` and `content` fields into a single string in the format "author: content", and concatenate these strings with a separator of "\n\n\n".
+SELECT GROUP_CONCAT(author || ': ' || content, '\n\n\n') AS full_transcript
+FROM transcripts
+WHERE author_ref = 123173002475995136 AND id >= 257;
