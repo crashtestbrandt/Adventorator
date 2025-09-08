@@ -170,7 +170,7 @@ async def run_orchestrator(
         return OrchestratorResult(
             mechanics="LLM not configured.", narration="", rejected=True, reason="llm_unconfigured"
         )
-    out = await llm_client.generate_json(narrator_msgs)  # type: ignore[attribute-defined-outside-init]
+    out = await llm_client.generate_json(narrator_msgs)  # type: ignore[attr-defined]
     if not out:
         inc_counter("llm.parse.failed")
         log.warning("llm.parse.failed", scene_id=scene_id)
