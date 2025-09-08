@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 import Adventorator.app as appmod
 from Adventorator.app import app
+from Adventorator import responder as responder_mod
 
 client = TestClient(app)
 
@@ -104,6 +105,10 @@ def test_do_shadow_ephemeral(monkeypatch):
 def test_do_visible_post(monkeypatch):
     monkeypatch.setattr(appmod, "verify_ed25519", lambda *a, **k: True)
     monkeypatch.setattr(appmod, "session_scope", lambda: _DummyAsyncCM())
+    # The command handler imports session_scope directly from Adventorator.db,
+    # so patch the symbol in the handler module as well.
+    import Adventorator.commands.ooc_do as ooc_do_mod
+    monkeypatch.setattr(ooc_do_mod, "session_scope", lambda: _DummyAsyncCM())
     monkeypatch.setattr(
         appmod,
         "settings",
@@ -147,6 +152,15 @@ def test_do_visible_post(monkeypatch):
         },
     }
 
+    captured = {}
+
+    async def _spy_followup(app_id, token, content, ephemeral=False):  # noqa: ANN001
+        captured["content"] = content
+        return None
+
+    # Patch the symbol used in app module (imported via from Adventorator.responder import followup_message)
+    monkeypatch.setattr(appmod, "followup_message", _spy_followup)
+
     r = client.post(
         "/interactions",
         content=json.dumps(body).encode(),
@@ -155,3 +169,13 @@ def test_do_visible_post(monkeypatch):
 
     assert r.status_code == 200
     assert r.json() == {"type": 5}
+    # After deferred ack, background task should call followup with mechanics+ narration
+    # Give the background task a short window to post follow-up
+    import time as _t
+
+    for _ in range(50):  # up to ~0.5s
+        if captured.get("content"):
+            break
+        _t.sleep(0.01)
+    assert "Mechanics" in captured.get("content", "")
+    assert "Narration" in captured.get("content", "")

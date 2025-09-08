@@ -13,7 +13,12 @@ class FakeLLM:
 
 
 def _neutral_sheet(ability: str):
-    return {"score": 12, "proficient": False, "expertise": False, "prof_bonus": 2}
+    return {
+        "score": 12,
+        "proficient": False,
+        "expertise": False,
+        "prof_bonus": 2,
+    }
 
 
 @pytest.mark.asyncio
@@ -38,7 +43,7 @@ async def test_orchestrator_happy_path(monkeypatch):
     res = await run_orchestrator(
         scene_id=1,
         player_msg="I step forward.",
-        sheet_getter=_neutral_sheet,
+        sheet_info_provider=_neutral_sheet,
         rng_seed=42,
         llm_client=llm,
     )
@@ -67,7 +72,7 @@ async def test_orchestrator_rejects_bad_dc(monkeypatch):
     monkeypatch.setattr(repos, "get_recent_transcripts", fake_get_recent_transcripts)
 
     res = await run_orchestrator(
-        scene_id=1, player_msg="I lift.", sheet_getter=_neutral_sheet, rng_seed=1, llm_client=llm
+        scene_id=1, player_msg="I lift.", sheet_info_provider=_neutral_sheet, rng_seed=1, llm_client=llm
     )
     assert res.rejected
     assert "Proposal rejected" in res.mechanics or res.reason is not None
@@ -90,7 +95,7 @@ async def test_orchestrator_rejects_bad_ability(monkeypatch):
     monkeypatch.setattr(repos, "get_recent_transcripts", fake_get_recent_transcripts)
 
     res = await run_orchestrator(
-        scene_id=1, player_msg="I try.", sheet_getter=_neutral_sheet, rng_seed=1, llm_client=llm
+        scene_id=1, player_msg="I try.", sheet_info_provider=_neutral_sheet, rng_seed=1, llm_client=llm
     )
     assert res.rejected
     assert "Unknown ability" in (res.reason or "") or "Proposal rejected" in res.mechanics

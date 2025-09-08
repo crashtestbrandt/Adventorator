@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypedDict
+import time
+import re
+import structlog
 
 from Adventorator import repos
 from Adventorator.db import session_scope
@@ -12,6 +15,9 @@ from Adventorator.models import Transcript as TranscriptModel
 from Adventorator.rules.checks import ABILS, CheckInput, compute_check
 from Adventorator.rules.dice import DiceRNG
 from Adventorator.schemas import LLMOutput
+from Adventorator.metrics import inc_counter
+
+log = structlog.get_logger()
 
 
 @dataclass(frozen=True)
@@ -54,6 +60,49 @@ def _validate_proposal(out: LLMOutput) -> tuple[bool, str | None]:
     return True, None
 
 
+_BANNED_VERBS = (
+    # verbs/phrases implying state mutation, inventory, HP changes, etc.
+    "change hp",
+    "set hp",
+    "reduce hp",
+    "increase hp",
+    "heal hp",
+    "grant hp",
+    "deal damage",
+    "apply damage",
+    "modify inventory",
+    "add to inventory",
+    "remove from inventory",
+    "give item",
+    "take item",
+    "transfer item",
+)
+
+
+def _contains_banned_verbs(text: str) -> bool:
+    t = (text or "").lower()
+    return any(phrase in t for phrase in _BANNED_VERBS)
+
+
+_NAME_RE = re.compile(r"\b[A-Z][a-z]{2,}\b")
+
+
+def _unknown_actor_present(narration: str, allowed: set[str]) -> str | None:
+    if not narration:
+        return None
+    # Find proper-noun-like tokens and compare to allowed actors (case-sensitive match)
+    tokens = set(_NAME_RE.findall(narration))
+    disallowed = tokens - allowed
+    if disallowed:
+        return ", ".join(sorted(disallowed))
+    return None
+
+
+# Simple 30s prompt cache (keyed by scene and player_msg)
+_CACHE_TTL = 30.0
+_prompt_cache: dict[tuple[int, str], tuple[float, OrchestratorResult]] = {}
+
+
 async def _facts_from_transcripts(
     scene_id: int, player_msg: str | None, max_tokens: int | None = None
 ) -> list[str]:
@@ -81,10 +130,11 @@ class _SheetInfo(TypedDict, total=False):
 async def run_orchestrator(
     scene_id: int,
     player_msg: str,
-    sheet_getter: Callable[[str], _SheetInfo] | None = None,
+    sheet_info_provider: Callable[[str], _SheetInfo] | None = None,
     rng_seed: int | None = None,
-    llm_client: LLMClient | None = None,
+    llm_client: object | None = None,
     prompt_token_cap: int | None = None,
+    allowed_actors: list[str] | set[str] | None = None,
 ) -> OrchestratorResult:
     """End-to-end shadow-mode orchestration.
 
@@ -99,6 +149,18 @@ async def run_orchestrator(
     - llm_client: inject to mock in tests; construct externally from settings in app layer
     """
 
+    # Cache check to control duplicate prompts spam
+    cache_key = (scene_id, player_msg.strip())
+    now = time.time()
+    if player_msg and cache_key in _prompt_cache:
+        ts, cached = _prompt_cache[cache_key]
+        if now - ts <= _CACHE_TTL:
+            log.info("orchestrator.cache.hit", scene_id=scene_id)
+            return cached
+
+    inc_counter("llm.request.enqueued")
+    log.info("llm.request.enqueued", scene_id=scene_id)
+
     # 1) transcripts -> facts (clerk)
     facts = await _facts_from_transcripts(scene_id, player_msg, max_tokens=prompt_token_cap)
 
@@ -108,18 +170,24 @@ async def run_orchestrator(
         return OrchestratorResult(
             mechanics="LLM not configured.", narration="", rejected=True, reason="llm_unconfigured"
         )
-    out = await llm_client.generate_json(narrator_msgs)
+    out = await llm_client.generate_json(narrator_msgs)  # type: ignore[attribute-defined-outside-init]
     if not out:
+        inc_counter("llm.parse.failed")
+        log.warning("llm.parse.failed", scene_id=scene_id)
         return OrchestratorResult(
             mechanics="Unable to generate a proposal.",
             narration="",
             rejected=True,
             reason="llm_invalid_or_empty",
         )
+    inc_counter("llm.response.received")
+    log.info("llm.response.received", scene_id=scene_id)
 
     # 3) validate proposal defensively
     ok, why = _validate_proposal(out)
     if not ok:
+        inc_counter("llm.defense.rejected")
+        log.warning("llm.defense.rejected", reason=why)
         return OrchestratorResult(
             mechanics="Proposal rejected: " + (why or "invalid"),
             narration="",
@@ -127,19 +195,44 @@ async def run_orchestrator(
             reason=why,
         )
 
+    # 3b) additional defenses: banned verbs and unknown actors
+    if _contains_banned_verbs(out.proposal.reason) or _contains_banned_verbs(out.narration):
+        inc_counter("llm.defense.rejected")
+        log.warning("llm.defense.rejected", reason="unsafe_verb")
+        return OrchestratorResult(
+            mechanics="Proposal rejected: unsafe content",
+            narration="",
+            rejected=True,
+            reason="unsafe_verb",
+        )
+
+    if allowed_actors:
+        allowed_set = set(allowed_actors)
+        bad = _unknown_actor_present(out.narration, allowed_set)
+        if bad:
+            inc_counter("llm.defense.rejected")
+            log.warning("llm.defense.rejected", reason="unknown_actor", unknown=bad)
+            return OrchestratorResult(
+                mechanics="Proposal rejected: unknown actors",
+                narration="",
+                rejected=True,
+                reason="unknown_actor",
+            )
+
     # 4) map proposal -> rules.CheckInput using provided sheet_getter
     p = out.proposal
-    if sheet_getter is None:
+    if sheet_info_provider is None:
         # Default neutral sheet
-        def sheet_getter(ability: str) -> _SheetInfo:  # type: ignore[no-redef]
+        def _default_sheet_info(ability: str) -> _SheetInfo:
             return {
                 "score": 10,
                 "proficient": False,
                 "expertise": False,
                 "prof_bonus": 2,
             }
+        sheet_info_provider = _default_sheet_info
 
-    sheet_info = sheet_getter(p.ability)
+    sheet_info = sheet_info_provider(p.ability)
     score = int(sheet_info.get("score", 10))
     proficient = bool(sheet_info.get("proficient", False))
     expertise = bool(sheet_info.get("expertise", False))
@@ -164,4 +257,8 @@ async def run_orchestrator(
 
     # 6) format mechanics + narration
     mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
-    return OrchestratorResult(mechanics=mechanics, narration=out.narration)
+    final = OrchestratorResult(mechanics=mechanics, narration=out.narration)
+    inc_counter("orchestrator.format.sent")
+    log.info("orchestrator.format.sent", scene_id=scene_id)
+    _prompt_cache[cache_key] = (now, final)
+    return final
