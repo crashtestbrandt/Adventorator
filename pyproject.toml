@@ -6,6 +6,8 @@ dependencies = []
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
 select = ["E","F","I","UP","N","B"]
 
 [tool.pytest.ini_options]

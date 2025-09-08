@@ -130,6 +130,8 @@ async def _dispatch_command(inter: Interaction):
             channel_id=str(channel_id) if channel_id else None,
             guild_id=str(guild_id) if guild_id else None,
             responder=DiscordResponder(inter.application_id, inter.token),
+            settings=settings,
+            llm_client=llm_client,
         )
         try:
             opts_obj = cmd.option_model.model_validate(options)

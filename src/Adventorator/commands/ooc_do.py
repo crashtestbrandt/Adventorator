@@ -11,19 +11,9 @@ class DoOpts(Option):
     message: str = Field(description="Your action or narration message")
 
 
-async def _ensure_llm_client():
-    # Defer import to avoid circular import at module load time
-    import Adventorator.app as appmod
-
-    settings = getattr(appmod, "settings", None)
-    llm = getattr(appmod, "llm_client", None)
-    if not settings or not getattr(settings, "features_llm", False):
-        return None, settings
-    return llm, settings
-
-
 async def _handle_do_like(inv: Invocation, opts: DoOpts):
-    llm, settings = await _ensure_llm_client()
+    settings = inv.settings
+    llm = inv.llm_client if (settings and getattr(settings, "features_llm", False)) else None
     if not llm:
         await inv.responder.send(
             "❌ The LLM narrator is currently disabled.", ephemeral=True
@@ -52,8 +42,8 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
     res = await run_orchestrator(
         scene_id=scene_id,
         player_msg=message,
-        llm_client=llm,
-        prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None),
+    llm_client=llm,
+    prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None) if settings else None,
     )
 
     if res.rejected:
@@ -62,7 +52,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         )
         return
 
-    if getattr(settings, "features_llm_visible", False):
+    if settings and getattr(settings, "features_llm_visible", False):
         formatted = f"🧪 Mechanics\n{res.mechanics}\n\n📖 Narration\n{res.narration}"
         await inv.responder.send(formatted)
     else:

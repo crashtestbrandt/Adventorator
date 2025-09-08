@@ -1,49 +1,63 @@
 #!/usr/bin/env python3
 
-import httpx, os, orjson, sys
-
-from dotenv import load_dotenv
+import os
+import sys
 from pathlib import Path
 
-# Load environment variables from the project root .env file
-project_root = Path(__file__).parent.parent  # TODO: this sucks, replace this with something better
+import httpx
+import orjson
+from dotenv import load_dotenv
+
+# Load environment variables from the project root .env file and ensure src on sys.path
+project_root = Path(__file__).parent.parent
 env_path = project_root / ".env"
+sys.path.insert(0, str(project_root / "src"))
 
 if not env_path.exists():
-    print(f"Error: .env file not found at {env_path}")
-    sys.exit(1)
+  print(f"Error: .env file not found at {env_path}")
+  sys.exit(1)
 load_dotenv(dotenv_path=env_path)
 
 # Fetch required environment variables with error handling
 try:
-    APP_ID = os.environ["DISCORD_APP_ID"]
-    BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
+  # Prefer the more explicit name; fallback to legacy if present
+  APP_ID = os.environ.get("DISCORD_APPLICATION_ID") or os.environ["DISCORD_APP_ID"]
+  BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 except KeyError as e:
-    print(f"Error: Missing required environment variable: {e}")
-    print(f"Path of .env file: {env_path}")
-    print(f"contents of .env file: {env_path.read_text()}")
-    sys.exit(1)
+  print(f"Error: Missing required environment variable: {e}")
+  print(f"Path of .env file: {env_path}")
+  sys.exit(1)
 
 # Fetch optional environment variables with a default fallback
-GUILD_ID = os.environ.get("DISCORD_GUILD_ID", None)
+GUILD_ID = os.environ.get("DISCORD_GUILD_ID")
+
+from typing import Any
+
+from pydantic.fields import FieldInfo
 
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import all_commands
-from pydantic.fields import FieldInfo
-from typing import Any
+
+# Discord API constants
+CMD_CHAT_INPUT = 1
+OPT_STRING = 3
+OPT_INTEGER = 4
+OPT_BOOLEAN = 5
+OPT_NUMBER = 10
+SUB_COMMAND = 1
 
 
 def _map_pydantic_to_discord(field_name: str, f: FieldInfo) -> dict[str, Any]:
-  # Discord types: 3=STRING, 4=INTEGER, 5=BOOLEAN, 10=NUMBER
+  # Map Pydantic annotations to Discord option types
   ann = f.annotation
   if ann in (int,):
-    t = 4
+    t = OPT_INTEGER
   elif ann in (float,):
-    t = 10
+    t = OPT_NUMBER
   elif ann in (bool,):
-    t = 5
+    t = OPT_BOOLEAN
   else:
-    t = 3
+    t = OPT_STRING
   desc = (f.description or "").strip()
   required = f.is_required()
   return {"name": field_name, "description": desc or field_name, "type": t, "required": required}
@@ -71,7 +85,7 @@ def build_commands_payload() -> list[dict[str, Any]]:
           sc_opts.append(_map_pydantic_to_discord(n, f))
         sub_opts.append(
           {
-            "type": 1,  # SUB_COMMAND
+            "type": SUB_COMMAND,
             "name": c.subcommand,
             "description": c.description,
             "options": sc_opts,
@@ -81,7 +95,7 @@ def build_commands_payload() -> list[dict[str, Any]]:
         {
           "name": name,
           "description": meta_by_name[name]["description"],
-          "type": 1,
+          "type": CMD_CHAT_INPUT,
           "options": sub_opts,
         }
       )
@@ -95,23 +109,29 @@ def build_commands_payload() -> list[dict[str, Any]]:
         {
           "name": name,
           "description": c.description,
-          "type": 1,
+          "type": CMD_CHAT_INPUT,
           "options": options,
         }
       )
   return payload
 
 async def main():
-  # url = f"https://discord.com/api/v10/applications/{APP_ID}/guilds/{GUILD_ID}/commands"
-  url = f"https://discord.com/api/v10/applications/{APP_ID}/commands"
+  # Use guild-scoped registration if DISCORD_GUILD_ID is set; otherwise register globally
+  if GUILD_ID:
+    url = f"https://discord.com/api/v10/applications/{APP_ID}/guilds/{GUILD_ID}/commands"
+    scope = f"guild {GUILD_ID}"
+  else:
+    url = f"https://discord.com/api/v10/applications/{APP_ID}/commands"
+    scope = "global"
+
   headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
   async with httpx.AsyncClient(timeout=10) as client:
     for cmd in build_commands_payload():
       r = await client.post(url, headers=headers, content=orjson.dumps(cmd))
       if r.status_code in (200, 201):
-        print("Registered:", r.json().get("name", "<unknown>"), "status code:", r.status_code)
+        print(f"Registered: {cmd.get('name', '<unknown>')} ({scope}) — status {r.status_code}")
       else:
-        print(f"Failed to register command '{cmd.get('name', '<unknown>')}'. Status: {r.status_code}")
+        print(f"Failed to register command '{cmd.get('name', '<unknown>')}' to {scope}. Status: {r.status_code}")
         print("Response:", r.text)
 
 if __name__ == "__main__":

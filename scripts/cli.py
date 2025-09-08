@@ -14,7 +14,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 from enum import Enum
-from typing import Any, get_args, get_origin
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 
 import click
 
@@ -49,7 +50,7 @@ def _click_type_for(annotation: Any):
         return str
 
     # Optional/Union -> use the first arg type if simple, else str
-    if origin is getattr(__import__("typing"), "Union", None) and args:
+    if origin in (Union, UnionType) and args:
         base = next((a for a in args if a is not type(None)), str)
         return _click_type_for(base)
 
@@ -114,6 +115,8 @@ def _make_click_command(name: str, option_model: type, handler, sub: str | None 
                 channel_id="1",
                 guild_id="1",
                 responder=PrintResponder(),
+                settings=None,
+                llm_client=None,
             )
             opts = option_model.model_validate(kwargs)
             await handler(inv, opts)

@@ -21,6 +21,9 @@ class Invocation:
     channel_id: str | None
     guild_id: str | None
     responder: Responder
+    # Optional DI: settings and llm client for handlers that need them
+    settings: Any | None = None
+    llm_client: Any | None = None
     # you can add: seed, feature flags, request_id, etc.
 
 # --- Option models for compile-time safety & help text ---
@@ -49,14 +52,8 @@ def slash_command(
     **metadata: Any,
 ):
     def wrap(func: Callable[[Invocation, Option], Awaitable[None]]):
-        _REGISTRY.setdefault(
-            name,
-            Command(name, description, option_model, func, subcommand, metadata),
-        )
-        # Always store the most recent entry for (name, subcommand) combination
-        _REGISTRY[name + (f":{subcommand}" if subcommand else "")] = Command(
-            name, description, option_model, func, subcommand, metadata
-        )
+        key = name + (f":{subcommand}" if subcommand else "")
+        _REGISTRY[key] = Command(name, description, option_model, func, subcommand, metadata)
         return func
     return wrap
 
