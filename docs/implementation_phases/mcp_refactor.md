@@ -1,14 +1,30 @@
+# MCP Refactor Plan
+
+This document tracks the incremental steps to expose Adventorator via MCP while keeping
+the existing Discord integration intact.
+
+## Goals
+- Isolate pure tool handlers that wrap the existing rules and orchestrator.
+- Provide an MCP adapter with minimal new dependencies.
+- Keep tests green throughout; add unit tests for tool handlers.
+
+## Phase 1 (done here)
+- Add `adapters/mcp/` package with a framework-agnostic `roll_dice` tool.
+- Provide an optional `server.py` that wires the tool into an MCP server (lazy import).
+- Add unit tests for the tool handler.
+
+## Next steps
+- Add `compute_check` tool mapping to `rules/checks.py`.
+- Extract orchestrator dependency seams (LLM client, repos, cache) behind simple interfaces.
+- Add `orchestrate_action` tool that calls the orchestrator with those dependencies.
+- Add resource readers for transcripts and streams for orchestrator/metrics events.
+
+See `.github/copilot-instructions.md` for architectural constraints and testing patterns.
 # MCP Refactor
 
 crashtestbrandt: Perform a complete review of the project's architecture. Then, talk to me about refactoring for MCP.
 
-GitHub Copilot: Here’s a focused review of the current architecture and a concrete path to refactor for MCP. I’ll start by outlining what I’ll cover, then dive in.
-
-Checklist
-- Review the current project architecture end-to-end
-- Identify strengths, risks, and quick wins
-- Propose an MCP-oriented architecture and mappings (tools/resources/streams)
-- Lay out a phased refactor plan with minimal churn and test-first steps
+GitHub Copilot: Here’s a focused review of the current architecture and a concrete path to 
 
 ## Architecture review
 
