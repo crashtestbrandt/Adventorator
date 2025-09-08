@@ -12,6 +12,7 @@ A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in
 * [Prerequisites](#prerequisites) & [Quickstart](#quickstart)
 * [Databases & Alembic](#database--alembic)
 * [Repo Structure](#repo-structure)
+* [Add & Test New Commands](#add--test-new-commands)
 * [Contributing](./CONTRIBUTING.md)
 
 ---
@@ -307,3 +308,118 @@ That way, someone can go from `make dev` → `alembic upgrade head` → bot comm
 ```
 
 ---
+
+## Add & Test New Commands
+
+Adventorator exposes a tiny command framework. You declare commands with a decorator and a Pydantic options model; everything else (server dispatch, CLI, and Discord registration) auto-discovers them.
+
+1) Implement the command
+
+- Create a new file under `src/Adventorator/commands/`, e.g. `greet.py`:
+
+  ```python
+  # src/Adventorator/commands/greet.py
+  from pydantic import Field
+  from Adventorator.commanding import Invocation, Option, slash_command
+
+  class GreetOpts(Option):
+      name: str = Field(description="Who to greet")
+
+  @slash_command(name="greet", description="Say hello", option_model=GreetOpts)
+  async def greet(inv: Invocation, opts: GreetOpts):
+      await inv.responder.send(f"Hello, {opts.name}!")
+  ```
+
+- Subcommands: register multiple handlers under a single top-level name using `subcommand`:
+
+  ```python
+  @slash_command(name="npc", subcommand="add", description="Add an NPC", option_model=AddNPCOpts)
+  async def npc_add(inv: Invocation, opts: AddNPCOpts):
+      ...
+
+  @slash_command(name="npc", subcommand="show", description="Show an NPC", option_model=ShowNPCOpts)
+  async def npc_show(inv: Invocation, opts: ShowNPCOpts):
+      ...
+  ```
+
+Guidelines:
+- Use `Option` subclasses to define inputs with `Field(description=...)` to populate help text and Discord option descriptions.
+- For DB access, always use `async with session_scope()` and helpers in `repos.py`. Avoid inline SQL.
+- Write transcripts for meaningful player/bot messages (see existing commands for patterns).
+- If you need the LLM narrator, follow `ooc_do.py` and gate behavior behind feature flags.
+
+2) Discovery: no wiring needed
+
+- The app and tools auto-load `Adventorator.commands` on startup or invocation. Just add the file and export the handler.
+
+3) Local smoke test via dynamic CLI
+
+- The dynamic CLI mirrors the same handlers; it also supports grouped subcommands.
+- Single required string fields become positional args for friendlier UX.
+
+  ```bash
+  # Show available commands
+  PYTHONPATH=./src python scripts/cli.py --help
+
+  # Top-level command
+  PYTHONPATH=./src python scripts/cli.py greet Alice
+
+  # Subcommand
+  PYTHONPATH=./src python scripts/cli.py npc show --name Bob
+  ```
+
+4) Register slash commands with Discord
+
+- Fill out `.env` with `DISCORD_APPLICATION_ID`, `DISCORD_BOT_TOKEN`, and (for faster iteration) `DISCORD_GUILD_ID`.
+- Then run:
+
+  ```bash
+  python scripts/register_commands.py
+  ```
+
+5) Run the server (and optional tunnel)
+
+```bash
+make dev
+make run        # starts FastAPI on :18000
+# optional (for Discord to reach you):
+make tunnel
+```
+
+6) Quality gates
+
+```bash
+make format
+make lint
+make type
+make test
+```
+
+7) Minimal unit test example
+
+```python
+# tests/test_greet_command.py
+import asyncio
+from Adventorator.commanding import Invocation
+from Adventorator.commands.greet import GreetOpts, greet
+
+class CaptureResponder:
+    def __init__(self):
+        self.messages = []
+    async def send(self, content: str, *, ephemeral: bool = False) -> None:
+        self.messages.append((content, ephemeral))
+
+def test_greet_says_hello():
+    resp = CaptureResponder()
+    inv = Invocation(
+        name="greet", subcommand=None, options={"name":"Alice"},
+        user_id="1", channel_id="1", guild_id="1", responder=resp,
+    )
+    opts = GreetOpts.model_validate({"name": "Alice"})
+    asyncio.run(greet(inv, opts))
+    assert resp.messages[0][0] == "Hello, Alice!"
+```
+
+Notes
+- Option names map to CLI flags using kebab-case; if you declare a `Field(alias="json")`, the CLI flag will be `--json`.
+- For LLM-dependent commands, if `features.llm` is disabled in `config.toml`, the handlers will respond in a safe degraded mode.
