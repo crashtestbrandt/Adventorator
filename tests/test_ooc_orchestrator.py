@@ -35,10 +35,14 @@ def _stub_repos(monkeypatch):
         # Make orchestrator facts minimal
         return []
 
+    async def _list_names(*args, **kwargs):
+        return []
+
     monkeypatch.setattr(reposmod, "get_or_create_campaign", _campaign)
     monkeypatch.setattr(reposmod, "ensure_scene", _scene)
     monkeypatch.setattr(reposmod, "write_transcript", _write)
     monkeypatch.setattr(reposmod, "get_recent_transcripts", _get_recent)
+    monkeypatch.setattr(reposmod, "list_character_names", _list_names)
 
 
 def test_do_shadow_ephemeral(monkeypatch):
