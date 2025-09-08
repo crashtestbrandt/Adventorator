@@ -1,206 +1,154 @@
 #!/usr/bin/env python3
 """
-Interactive CLI harness to exercise Adventorator commands without Discord.
+Dynamic CLI that discovers Adventorator slash commands and runs the same handlers.
 
-Supports:
-- roll <expr> [--adv] [--dis]
-- check --ability STR|DEX|... --score 10 --proficient 0|1 --expertise 0|1 --pb 2 --dc 15 [--adv] [--dis]
-- narrate "your message here"  # runs LLM JSON flow + rules orchestrator
-- history [N]                  # show recent transcripts for the default scene
-- help / ? / quit / exit
+Examples:
+  PYTHONPATH=./src python scripts/cli.py roll --expr 2d6+3 --advantage
+  PYTHONPATH=./src python scripts/cli.py sheet create --json '{"name":"Aria"}'
 
-Run with PYTHONPATH pointing at src, e.g.:
-  PYTHONPATH=./src python3 scripts/cli_harness.py
-
-It uses a default campaign/scene (guild_id=1, channel_id=1) to keep things simple.
+This CLI does not mock Discord. It constructs an Invocation with a PrintResponder and
+calls the command's handler directly.
 """
 from __future__ import annotations
 
 import asyncio
-import shlex
-import sys
-from typing import Optional
+import inspect
+from enum import Enum
+from typing import Any, get_args, get_origin
 
-from Adventorator.config import load_settings
-from Adventorator.logging import setup_logging
-from Adventorator.rules.dice import DiceRNG
-from Adventorator.rules.checks import CheckInput, compute_check
-from Adventorator.db import session_scope
-from Adventorator import repos
-from Adventorator.llm import LLMClient
-from Adventorator.orchestrator import run_orchestrator
+import click
 
-DEFAULT_GUILD_ID = 1
-DEFAULT_CHANNEL_ID = 1
+from Adventorator.command_loader import load_all_commands
+from Adventorator.commanding import Invocation, all_commands
 
 
-def _print_help():
-    print(
-        """
-Commands:
-  roll <expr> [--adv] [--dis]
-  check --ability <STR|DEX|CON|INT|WIS|CHA> --score <int> --proficient <0|1> --expertise <0|1> --pb <int> --dc <int> [--adv] [--dis]
-  narrate "<message>"
-  history [N]
-  help | ?
-  quit | exit
-        """.strip()
-    )
+class PrintResponder:
+    async def send(self, content: str, *, ephemeral: bool = False) -> None:  # pragma: no cover
+        prefix = "(ephemeral) " if ephemeral else ""
+        print(prefix + str(content))
 
 
-async def _ensure_default_scene():
-    async with session_scope() as s:
-        campaign = await repos.get_or_create_campaign(s, DEFAULT_GUILD_ID, name="CLI")
-        scene = await repos.ensure_scene(s, campaign.id, DEFAULT_CHANNEL_ID)
-        return campaign, scene
+def _click_type_for(annotation: Any):
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    if origin is None:
+        # Plain types
+        if annotation in (str, int, float):
+            return {str: str, int: int, float: float}[annotation]
+        if annotation is bool:
+            return bool
+        if inspect.isclass(annotation) and issubclass(annotation, Enum):
+            choices = [e.value if isinstance(e.value, str) else e.name for e in annotation]  # type: ignore[arg-type]
+            return click.Choice(choices, case_sensitive=False)
+        # Fallback: string
+        return str
+
+    # Collections and unions -> fallback to string for simplicity
+    if origin in (list, tuple, dict):
+        return str
+
+    # Optional/Union -> use the first arg type if simple, else str
+    if origin is getattr(__import__("typing"), "Union", None) and args:
+        base = next((a for a in args if a is not type(None)), str)
+        return _click_type_for(base)
+
+    return str
 
 
-def _parse_flags(parts: list[str]) -> tuple[bool, bool, list[str]]:
-    adv = "--adv" in parts
-    dis = "--dis" in parts
-    rest = [p for p in parts if p not in ("--adv", "--dis")]
-    return adv, dis, rest
+def _params_from_model(option_model: type) -> list[click.Parameter]:
+    params: list[click.Parameter] = []
+    fields = getattr(option_model, "model_fields", {})
+    # Special-case: if the model has exactly one required string field with no alias,
+    # expose it as a positional argument (friendlier UX for commands like `do`/`ooc`).
+    if len(fields) == 1:
+        only_name, only_field = next(iter(fields.items()))
+        only_ann = getattr(only_field, "annotation", str) or str
+        only_required = getattr(only_field, "is_required", False)
+        only_alias = getattr(only_field, "alias", None)
+        if only_ann is str and only_required and not only_alias:
+            params.append(click.Argument([only_name]))
+            return params
 
+    for name, field in fields.items():
+        # Prefer alias if provided to keep external flag names stable (e.g., --json)
+        alias = getattr(field, "alias", None)
+        flag_key = (alias or name).replace("_", "-")
+        opt_name = f"--{flag_key}"
+        ann = getattr(field, "annotation", str) or str
+        required = getattr(field, "is_required", False)
+        default = getattr(field, "default", None)
+        help_text = getattr(field, "description", None) or ""
 
-def _to_bool(v: str) -> bool:
-    return v.lower() in {"1", "true", "t", "yes", "y"}
-
-
-def cmd_roll(parts: list[str], rng: DiceRNG):
-    adv, dis, rest = _parse_flags(parts)
-    expr = rest[0] if rest else "1d20"
-    res = rng.roll(expr, advantage=adv, disadvantage=dis)
-    tag = " (adv)" if adv else " (dis)" if dis else ""
-    print(f"🎲 {expr} → rolls {res.rolls}{tag} = {res.total}")
-
-
-def cmd_check(parts: list[str], rng: DiceRNG):
-    # very small flag parser
-    args = {k: None for k in ["--ability", "--score", "--proficient", "--expertise", "--pb", "--dc"]}
-    adv = dis = False
-    i = 0
-    while i < len(parts):
-        p = parts[i]
-        if p in ("--adv", "--dis"):
-            adv = adv or p == "--adv"
-            dis = dis or p == "--dis"
-            i += 1
+        if ann is bool:
+            params.append(
+                click.Option([opt_name], is_flag=True, default=bool(default) if default is not None else False, help=help_text)
+            )
             continue
-        if p in args and i + 1 < len(parts):
-            args[p] = parts[i + 1]
-            i += 2
+
+        click_type = _click_type_for(ann)
+        params.append(
+            click.Option(
+                [opt_name],
+                type=click_type,
+                required=required and default is None,
+                default=default,
+                show_default=default is not None,
+                help=help_text,
+            )
+        )
+
+    return params
+
+
+def _make_click_command(name: str, option_model: type, handler, sub: str | None = None) -> click.Command:
+    params = _params_from_model(option_model)
+
+    def _callback(**kwargs: Any):
+        async def _run():
+            inv = Invocation(
+                name=name,
+                subcommand=sub,
+                options=kwargs,
+                user_id="1",
+                channel_id="1",
+                guild_id="1",
+                responder=PrintResponder(),
+            )
+            opts = option_model.model_validate(kwargs)
+            await handler(inv, opts)
+
+        asyncio.run(_run())
+
+    return click.Command(name=sub or name, params=params, callback=_callback)
+
+
+def build_app() -> click.Group:
+    load_all_commands()
+
+    app = click.Group()
+    bucket: dict[str, list] = {}
+    for cmd in all_commands().values():
+        bucket.setdefault(cmd.name, []).append(cmd)
+
+    for name, cmds in bucket.items():
+        subs = [c for c in cmds if c.subcommand]
+        if subs:
+            grp = click.Group(name=name)
+            for c in subs:
+                grp.add_command(_make_click_command(name, c.option_model, c.handler, c.subcommand))
+            app.add_command(grp)
         else:
-            i += 1
+            c = cmds[0]
+            app.add_command(_make_click_command(name, c.option_model, c.handler))
 
-    ability = (args["--ability"] or "DEX").upper()
-    score = int(args["--score"] or 10)
-    prof = _to_bool(str(args["--proficient"] or "0"))
-    exp = _to_bool(str(args["--expertise"] or "0"))
-    pb = int(args["--pb"] or 2)
-    dc = int(args["--dc"] or 15)
-
-    res_roll = rng.roll("1d20", advantage=adv, disadvantage=dis)
-    d20s = res_roll.rolls[:2] if len(res_roll.rolls) >= 2 else [res_roll.rolls[0]]
-    ci = CheckInput(
-        ability=ability,
-        score=score,
-        proficient=prof,
-        expertise=exp,
-        proficiency_bonus=pb,
-        dc=dc,
-        advantage=adv,
-        disadvantage=dis,
-    )
-    out = compute_check(ci, d20_rolls=d20s)
-    verdict = "✅ success" if out.success else "❌ fail"
-    print(
-        f"🧪 {ability} vs DC {dc}\n"
-        f"• d20: {out.d20} → pick {out.pick}\n"
-        f"• mod: {out.mod:+}\n"
-        f"= {out.total} → {verdict}"
-    )
+    return app
 
 
-async def cmd_narrate(message: str, llm: Optional[LLMClient]):
-    if not llm:
-        print("❌ LLM narrator is disabled. Enable [features].llm=true in config.toml.")
-        return
-    campaign, scene = await _ensure_default_scene()
-    # Write player's message first so it's in context
-    async with session_scope() as s:
-        await repos.write_transcript(s, campaign.id, scene.id, DEFAULT_CHANNEL_ID, "player", message, "cli")
-    res = await run_orchestrator(scene_id=scene.id, player_msg=message, llm_client=llm)
-    if res.rejected:
-        print(f"🛑 {res.reason or 'proposal rejected'}")
-        return
-    print("🧪 Mechanics\n" + res.mechanics)
-    print("\n📖 Narration\n" + res.narration)
-    # Log bot narration
-    async with session_scope() as s:
-        await repos.write_transcript(s, campaign.id, scene.id, DEFAULT_CHANNEL_ID, "bot", res.narration, "cli", meta={"mechanics": res.mechanics})
+def main() -> None:  # pragma: no cover
+    app = build_app()
+    app()
 
 
-async def cmd_history(n: int = 10):
-    _, scene = await _ensure_default_scene()
-    async with session_scope() as s:
-        txs = await repos.get_recent_transcripts(s, scene.id, limit=n)
-    for t in txs:
-        print(f"[{t.author}] {t.content}")
-
-
-def main():
-    setup_logging()
-    settings = load_settings()
-    rng = DiceRNG()
-    llm: Optional[LLMClient] = LLMClient(settings) if settings.features_llm else None
-
-    print("Adventorator CLI — type 'help' for commands. Ctrl+C to exit.")
-    try:
-        while True:
-            try:
-                line = input("adv> ").strip()
-            except EOFError:
-                break
-            if not line:
-                continue
-            parts = shlex.split(line)
-            cmd = parts[0].lower()
-            args = parts[1:]
-
-            if cmd in ("quit", "exit"):
-                break
-            if cmd in ("help", "?"):
-                _print_help()
-                continue
-            if cmd == "roll":
-                cmd_roll(args, rng)
-                continue
-            if cmd == "check":
-                cmd_check(args, rng)
-                continue
-            if cmd == "narrate":
-                if not args:
-                    print("Usage: narrate \"your message\"")
-                    continue
-                asyncio.run(cmd_narrate(" ".join(args), llm))
-                continue
-            if cmd == "history":
-                n = int(args[0]) if args else 10
-                asyncio.run(cmd_history(n))
-                continue
-
-            print("Unknown command. Type 'help'.")
-    finally:
-        if llm:
-            try:
-                asyncio.run(llm.close())
-            except Exception:
-                pass
-
-
-if __name__ == "__main__":
-    # Ensure src/ is importable if run directly without PYTHONPATH; best-effort only.
-    if "Adventorator" not in sys.modules:
-        # User should set PYTHONPATH=./src, but we won’t hard-fail here.
-        pass
+if __name__ == "__main__":  # pragma: no cover
     main()
