@@ -1,13 +1,10 @@
-# config.py
+"""Settings loader for Adventorator."""
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, SecretStr
-import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -64,8 +61,9 @@ class Settings(BaseSettings):
     )
     llm_model_name: str = "llama3:8b"
     llm_default_system_prompt: str = "You are a helpful assistant."
-    llm_max_prompt_tokens: int = 4096 # TODO: this setting seems arbitrarily set, and should probably be coordinated with LLM model max context length
-    llm_max_response_chars: int = 8000 # TODO: this setting seems arbitrarily set, and should probably be coordinated with LLM model max context length
+    # TODO: These limits should align with the selected model's context window.
+    llm_max_prompt_tokens: int = 4096
+    llm_max_response_chars: int = 8000
 
     model_config = SettingsConfigDict(
         env_prefix="",

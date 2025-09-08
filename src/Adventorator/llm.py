@@ -4,10 +4,10 @@
 import httpx
 import orjson
 import structlog
-from typing import Union
 
 # Import the official OpenAI library and its specific error types
-from openai import AsyncOpenAI, APIError as OpenAIError
+from openai import APIError as OpenAIError
+from openai import AsyncOpenAI
 
 from Adventorator.config import Settings
 from Adventorator.llm_utils import extract_first_json, validate_llm_output
@@ -34,10 +34,11 @@ class LLMClient:
         self._max_chars = settings.llm_max_response_chars
 
         if not settings.llm_api_url:
-            raise ValueError("LLMClient requires llm_api_url to be set in configuration.")
-        
-        # The client instance will be one of two types.
-        self._client: Union[AsyncOpenAI, httpx.AsyncClient]
+            raise ValueError(
+                "LLMClient requires llm_api_url to be set in configuration."
+            )
+        # The client instance will be one of two types (set below based on provider).
+        self._client: AsyncOpenAI | httpx.AsyncClient
 
         if self.provider == "ollama":
             self.api_url = f"{settings.llm_api_url.rstrip('/')}/api/chat"
@@ -65,7 +66,7 @@ class LLMClient:
             "LLMClient initialized",
             provider=self.provider,
             model=self.model_name,
-            url=self.api_url
+            url=self.api_url,
         )
 
     async def generate_response(
@@ -121,10 +122,10 @@ class LLMClient:
 
             if isinstance(self._client, httpx.AsyncClient):  # Ollama provider
                 data = {
-                    "model": self.model_name, 
-                    "messages": full_prompt, 
-                    "stream": False, 
-                    "format": "json"
+                    "model": self.model_name,
+                    "messages": full_prompt,
+                    "stream": False,
+                    "format": "json",
                 }
                 response = await self._client.post(self.api_url, content=orjson.dumps(data))
                 response.raise_for_status()
@@ -132,7 +133,7 @@ class LLMClient:
                 raw_content = result.get("message", {}).get("content")
                 if raw_content is not None:
                     # Ollama may return the content as a dict when format=json is used
-                    if isinstance(raw_content, (dict, list)):
+                    if isinstance(raw_content, dict | list):
                         parsed_json = raw_content
                     elif isinstance(raw_content, str):
                         # Try strict load first; fall back to best-effort extractor
@@ -150,17 +151,23 @@ class LLMClient:
                         "stream": False,
                     }
                     try:
-                        resp_fb = await self._client.post(self.api_url, content=orjson.dumps(data_fallback))
+                        resp_fb = await self._client.post(
+                            self.api_url,
+                            content=orjson.dumps(data_fallback),
+                        )
                         resp_fb.raise_for_status()
                         res_fb = resp_fb.json()
                         fb_content = res_fb.get("message", {}).get("content")
-                        if isinstance(fb_content, (dict, list)):
+                        if isinstance(fb_content, dict | list):
                             parsed_json = fb_content
                         elif isinstance(fb_content, str):
                             try:
                                 parsed_json = orjson.loads(fb_content)
                             except Exception:
-                                parsed_json = extract_first_json(fb_content, max_chars=self._max_chars)
+                                parsed_json = extract_first_json(
+                                    fb_content,
+                                    max_chars=self._max_chars,
+                                )
                     except Exception:
                         # Ignore fallback errors; we'll handle as invalid below
                         pass
@@ -172,13 +179,16 @@ class LLMClient:
                 )
                 raw_content = response.choices[0].message["content"]
                 if raw_content:
-                    if isinstance(raw_content, (dict, list)):
+                    if isinstance(raw_content, dict | list):
                         parsed_json = raw_content
                     elif isinstance(raw_content, str):
                         parsed_json = orjson.loads(raw_content)
 
             if not parsed_json:
-                log.warning("LLM did not return valid JSON content", raw_preview=str(raw_content)[:200])
+                log.warning(
+                    "LLM did not return valid JSON content",
+                    raw_preview=str(raw_content)[:200],
+                )
                 return None
 
             # Validate the parsed dictionary against our Pydantic schema
@@ -188,7 +198,11 @@ class LLMClient:
             return out
 
         except OpenAIError as e:
-            log.error("OpenAI API JSON error", error=str(e), status_code=getattr(e, 'status_code', None))
+            log.error(
+                "OpenAI API JSON error",
+                error=str(e),
+                status_code=getattr(e, "status_code", None),
+            )
             return None
         except httpx.RequestError as e:
             log.error("Ollama API JSON request failed", url=e.request.url, error=str(e))
