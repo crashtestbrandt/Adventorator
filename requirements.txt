@@ -1,4 +1,4 @@
--e file:///Users/frazbot/Repos/Adventorator
+-e .
 aiosqlite==0.21.0
 alembic==1.16.5
 annotated-types==0.7.0
