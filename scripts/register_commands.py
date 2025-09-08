@@ -1,116 +1,138 @@
 #!/usr/bin/env python3
 
-import httpx, os, orjson, sys
-
-from dotenv import load_dotenv
+import os
+import sys
 from pathlib import Path
 
-# Load environment variables from the project root .env file
-project_root = Path(__file__).parent.parent  # TODO: this sucks, replace this with something better
+import httpx
+import orjson
+from dotenv import load_dotenv
+
+# Load environment variables from the project root .env file and ensure src on sys.path
+project_root = Path(__file__).parent.parent
 env_path = project_root / ".env"
+sys.path.insert(0, str(project_root / "src"))
 
 if not env_path.exists():
-    print(f"Error: .env file not found at {env_path}")
-    sys.exit(1)
+  print(f"Error: .env file not found at {env_path}")
+  sys.exit(1)
 load_dotenv(dotenv_path=env_path)
 
 # Fetch required environment variables with error handling
 try:
-    APP_ID = os.environ["DISCORD_APP_ID"]
-    BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
+  # Prefer the more explicit name; fallback to legacy if present
+  APP_ID = os.environ.get("DISCORD_APPLICATION_ID") or os.environ["DISCORD_APP_ID"]
+  BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 except KeyError as e:
-    print(f"Error: Missing required environment variable: {e}")
-    print(f"Path of .env file: {env_path}")
-    print(f"contents of .env file: {env_path.read_text()}")
-    sys.exit(1)
+  print(f"Error: Missing required environment variable: {e}")
+  print(f"Path of .env file: {env_path}")
+  sys.exit(1)
 
 # Fetch optional environment variables with a default fallback
-GUILD_ID = os.environ.get("DISCORD_GUILD_ID", None)
+GUILD_ID = os.environ.get("DISCORD_GUILD_ID")
 
-commands = [
-    {
-      "name": "roll",
-      "description": "Roll dice, e.g., 2d6+3",
-      "options": [
-        {"name": "expr", "description": "Dice expression", "type": 3, "required": False},
-        {"name": "advantage", "description": "Advantage", "type": 5, "required": False},
-        {"name": "disadvantage", "description": "Disadvantage", "type": 5, "required": False},
-      ]
-    },
-    {
-      "name": "check",
-      "description": "Ability check vs DC",
-      "options": [
-        {"name": "ability", "description":"STR/DEX/CON/INT/WIS/CHA", "type":3, "required":False},
-        {"name": "score", "description":"Ability score (10 default)", "type":4, "required":False},
-        {"name": "proficient", "description":"Proficient?", "type":5, "required":False},
-        {"name": "expertise", "description":"Expertise?", "type":5, "required":False},
-        {"name": "prof_bonus", "description":"Proficiency bonus", "type":4, "required":False},
-        {"name": "dc", "description":"Difficulty Class", "type":4, "required":False},
-        {"name": "advantage", "description":"Advantage", "type":5, "required":False},
-        {"name": "disadvantage", "description":"Disadvantage", "type":5, "required":False},
-      ]
-    },
-    {
-      "name": "do",
-      "description": "Interpret a player action with the shadow-mode narrator.",
-      "options": [
+from typing import Any
+
+from pydantic.fields import FieldInfo
+
+from Adventorator.command_loader import load_all_commands
+from Adventorator.commanding import all_commands
+
+# Discord API constants
+CMD_CHAT_INPUT = 1
+OPT_STRING = 3
+OPT_INTEGER = 4
+OPT_BOOLEAN = 5
+OPT_NUMBER = 10
+SUB_COMMAND = 1
+
+
+def _map_pydantic_to_discord(field_name: str, f: FieldInfo) -> dict[str, Any]:
+  # Map Pydantic annotations to Discord option types
+  ann = f.annotation
+  if ann in (int,):
+    t = OPT_INTEGER
+  elif ann in (float,):
+    t = OPT_NUMBER
+  elif ann in (bool,):
+    t = OPT_BOOLEAN
+  else:
+    t = OPT_STRING
+  desc = (f.description or "").strip()
+  required = f.is_required()
+  return {"name": field_name, "description": desc or field_name, "type": t, "required": required}
+
+
+def build_commands_payload() -> list[dict[str, Any]]:
+  load_all_commands()
+  by_name: dict[str, list] = {}
+  meta_by_name: dict[str, dict[str, Any]] = {}
+  # Bucket commands by top-level name and detect subcommands
+  for cmd in all_commands().values():
+    by_name.setdefault(cmd.name, []).append(cmd)
+    meta_by_name.setdefault(cmd.name, {"description": cmd.description})
+
+  payload: list[dict[str, Any]] = []
+  for name, cmds in by_name.items():
+    # If any has a subcommand, emit as SUB_COMMANDs
+    subs = [c for c in cmds if c.subcommand]
+    if subs:
+      sub_opts = []
+      for c in subs:
+        # Build subcommand option entry
+        sc_opts = []
+        for n, f in c.option_model.model_fields.items():
+          sc_opts.append(_map_pydantic_to_discord(n, f))
+        sub_opts.append(
+          {
+            "type": SUB_COMMAND,
+            "name": c.subcommand,
+            "description": c.description,
+            "options": sc_opts,
+          }
+        )
+      payload.append(
         {
-          "type": 3,  # STRING
-          "name": "message",
-          "description": "Describe what you attempt.",
-          "required": True,
+          "name": name,
+          "description": meta_by_name[name]["description"],
+          "type": CMD_CHAT_INPUT,
+          "options": sub_opts,
         }
-      ]
-    },
-    {
-      "name": "sheet",
-      "description": "Character sheet operations",
-      "options": [
+      )
+    else:
+      # Single, ungrouped command
+      c = cmds[0]
+      options = []
+      for n, f in c.option_model.model_fields.items():
+        options.append(_map_pydantic_to_discord(n, f))
+      payload.append(
         {
-          "name": "create",
-          "description": "Create or update a sheet from JSON",
-          "type": 1,  # SUB_COMMAND
-          "options": [
-            {"name":"json","description":"JSON sheet payload","type":3,"required":True}
-          ]
-        },
-        {
-          "name": "show",
-          "description": "Show a sheet by name",
-          "type": 1,
-          "options": [
-            {"name":"name","description":"Character name","type":3,"required":True}
-          ]
+          "name": name,
+          "description": c.description,
+          "type": CMD_CHAT_INPUT,
+          "options": options,
         }
-      ]
-    },
-    {
-        "name": "ooc",
-        "description": "Speak with the narrator or say something out of character.",
-        "options": [
-            {
-                "type": 3,  # STRING
-                "name": "message",
-                "description": "What you want to say or do.",
-                "required": True,
-            }
-        ]
-    }
-]
+      )
+  return payload
 
 async def main():
-#    url = f"https://discord.com/api/v10/applications/{APP_ID}/guilds/{GUILD_ID}/commands"
+  # Use guild-scoped registration if DISCORD_GUILD_ID is set; otherwise register globally
+  if GUILD_ID:
+    url = f"https://discord.com/api/v10/applications/{APP_ID}/guilds/{GUILD_ID}/commands"
+    scope = f"guild {GUILD_ID}"
+  else:
     url = f"https://discord.com/api/v10/applications/{APP_ID}/commands"
-    headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=10) as client:
-        for cmd in commands:
-            r = await client.post(url, headers=headers, content=orjson.dumps(cmd))
-            if r.status_code == 201 or r.status_code == 200:
-                print("Registered:", r.json().get("name", "<unknown>"), "status code: ", r.status_code)
-            else:
-                print(f"Failed to register command '{cmd.get('name', '<unknown>')}'. Status: {r.status_code}")
-                print("Response:", r.text)
+    scope = "global"
+
+  headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
+  async with httpx.AsyncClient(timeout=10) as client:
+    for cmd in build_commands_payload():
+      r = await client.post(url, headers=headers, content=orjson.dumps(cmd))
+      if r.status_code in (200, 201):
+        print(f"Registered: {cmd.get('name', '<unknown>')} ({scope}) — status {r.status_code}")
+      else:
+        print(f"Failed to register command '{cmd.get('name', '<unknown>')}' to {scope}. Status: {r.status_code}")
+        print("Response:", r.text)
 
 if __name__ == "__main__":
     import asyncio
