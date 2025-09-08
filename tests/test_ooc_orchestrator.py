@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 
 import Adventorator.app as appmod
 from Adventorator.app import app
-from Adventorator import responder as responder_mod
 
 client = TestClient(app)
 
@@ -162,7 +161,7 @@ def test_do_visible_post(monkeypatch):
         captured["content"] = content
         return None
 
-    # Patch the symbol used in app module (imported via from Adventorator.responder import followup_message)
+    # Patch the symbol used in app module (imported as followup_message)
     monkeypatch.setattr(appmod, "followup_message", _spy_followup)
 
     r = client.post(

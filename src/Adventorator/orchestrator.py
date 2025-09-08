@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import TypedDict
-import time
 import re
+import time
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import Any, TypedDict
+
 import structlog
 
 from Adventorator import repos
 from Adventorator.db import session_scope
-from Adventorator.llm import LLMClient
 from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messages
+from Adventorator.metrics import inc_counter
 from Adventorator.models import Transcript as TranscriptModel
 from Adventorator.rules.checks import ABILS, CheckInput, compute_check
 from Adventorator.rules.dice import DiceRNG
 from Adventorator.schemas import LLMOutput
-from Adventorator.metrics import inc_counter
 
 log = structlog.get_logger()
 
@@ -130,7 +130,7 @@ class _SheetInfo(TypedDict, total=False):
 async def run_orchestrator(
     scene_id: int,
     player_msg: str,
-    sheet_info_provider: Callable[[str], _SheetInfo] | None = None,
+    sheet_info_provider: Callable[[str], Mapping[str, Any]] | None = None,
     rng_seed: int | None = None,
     llm_client: object | None = None,
     prompt_token_cap: int | None = None,

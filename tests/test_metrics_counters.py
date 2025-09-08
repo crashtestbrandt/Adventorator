@@ -1,6 +1,6 @@
 import pytest
 
-from Adventorator.metrics import reset_counters, get_counter
+from Adventorator.metrics import get_counter, reset_counters
 from Adventorator.orchestrator import run_orchestrator
 from Adventorator.schemas import LLMOutput, LLMProposal
 

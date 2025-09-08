@@ -1,11 +1,10 @@
 # src/Adventorator/llm.py
 
+from typing import Any, cast
 
 import httpx
 import orjson
 import structlog
-
-# Import the official OpenAI library and its specific error types
 from openai import APIError as OpenAIError
 from openai import AsyncOpenAI
 
@@ -79,17 +78,18 @@ class LLMClient:
         try:
             if isinstance(self._client, httpx.AsyncClient):  # Ollama provider
                 data = {"model": self.model_name, "messages": full_prompt, "stream": False}
-                response = await self._client.post(self.api_url, content=orjson.dumps(data))
-                response.raise_for_status()
-                result = response.json()
+                httpx_resp = await self._client.post(self.api_url, content=orjson.dumps(data))
+                httpx_resp.raise_for_status()
+                result = httpx_resp.json()
                 content = result.get("message", {}).get("content")
 
             else:  # OpenAI provider
-                response = await self._client.chat.completions.create(
+                # Use loose typing to stay compatible with multiple OpenAI SDK versions
+                oai_resp: Any = await self._client.chat.completions.create(  # type: ignore[arg-type]
                     model=self.model_name,
-                    messages=full_prompt,
+                    messages=cast(Any, full_prompt),  # OpenAI SDK expects its own typed messages
                 )
-                content = response.choices[0].message.content
+                content = cast(Any, oai_resp).choices[0].message.content
 
             if not content:
                 log.error("LLM API response missing 'content'")
@@ -127,9 +127,9 @@ class LLMClient:
                     "stream": False,
                     "format": "json",
                 }
-                response = await self._client.post(self.api_url, content=orjson.dumps(data))
-                response.raise_for_status()
-                result = response.json()
+                httpx_resp = await self._client.post(self.api_url, content=orjson.dumps(data))
+                httpx_resp.raise_for_status()
+                result = httpx_resp.json()
                 raw_content = result.get("message", {}).get("content")
                 if raw_content is not None:
                     # Ollama may return the content as a dict when format=json is used
@@ -173,16 +173,20 @@ class LLMClient:
                         pass
 
             else:  # OpenAI provider
-                response = await self._client.chat.completions.create(
+                oai_resp: Any = await self._client.chat.completions.create(  # type: ignore[arg-type]
                     model=self.model_name,
-                    messages=full_prompt,
+                    messages=cast(Any, full_prompt),
                 )
-                raw_content = response.choices[0].message["content"]
+                raw_content = cast(Any, oai_resp).choices[0].message.content
                 if raw_content:
                     if isinstance(raw_content, dict | list):
                         parsed_json = raw_content
                     elif isinstance(raw_content, str):
                         parsed_json = orjson.loads(raw_content)
+
+            # Ensure we only accept object-like JSON (dict) for validation
+            if parsed_json is not None and not isinstance(parsed_json, dict):
+                parsed_json = None
 
             if not parsed_json:
                 log.warning(
@@ -192,7 +196,7 @@ class LLMClient:
                 return None
 
             # Validate the parsed dictionary against our Pydantic schema
-            out = validate_llm_output(parsed_json)
+            out = validate_llm_output(cast(dict[str, Any] | None, parsed_json))
             if not out:
                 log.warning("LLM JSON validation failed", raw_preview=str(raw_content)[:200])
             return out
@@ -213,6 +217,6 @@ class LLMClient:
 
     async def close(self):
         """Gracefully close the underlying HTTP client."""
-        if self._client:
+        if isinstance(self._client, httpx.AsyncClient):
             await self._client.aclose()
             log.info("LLMClient closed.")
