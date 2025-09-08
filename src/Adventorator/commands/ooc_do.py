@@ -37,6 +37,8 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
             s, campaign.id, scene.id, channel_id, "player", message, str(user_id)
         )
         scene_id = scene.id
+        # Derive allowed actors from characters in this campaign
+        allowed = await repos.list_character_names(s, campaign.id)
 
     # Orchestrate
     res = await run_orchestrator(
@@ -44,6 +46,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         player_msg=message,
         llm_client=llm,
         prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None) if settings else None,
+        allowed_actors=allowed,
     )
 
     if res.rejected:

@@ -83,6 +83,14 @@ async def ensure_scene(s: AsyncSession, campaign_id: int, channel_id: int) -> mo
     return sc
 
 
+async def list_character_names(s: AsyncSession, campaign_id: int) -> list[str]:
+    """Return all character names in a campaign."""
+    q = await s.execute(
+        select(models.Character.name).where(models.Character.campaign_id == campaign_id)
+    )
+    return [row[0] for row in q.all()]
+
+
 async def write_transcript(
     s: AsyncSession,
     campaign_id: int,
