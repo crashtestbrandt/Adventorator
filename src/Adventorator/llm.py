@@ -130,8 +130,40 @@ class LLMClient:
                 response.raise_for_status()
                 result = response.json()
                 raw_content = result.get("message", {}).get("content")
-                if raw_content:
-                    parsed_json = extract_first_json(raw_content, max_chars=self._max_chars)
+                if raw_content is not None:
+                    # Ollama may return the content as a dict when format=json is used
+                    if isinstance(raw_content, (dict, list)):
+                        parsed_json = raw_content
+                    elif isinstance(raw_content, str):
+                        # Try strict load first; fall back to best-effort extractor
+                        try:
+                            parsed_json = orjson.loads(raw_content)
+                        except Exception:
+                            parsed_json = extract_first_json(raw_content, max_chars=self._max_chars)
+
+                # Fallback: some models misbehave with format=json and return empty objects.
+                # Retry once without format hint and try to extract JSON from the text.
+                if not parsed_json:
+                    data_fallback = {
+                        "model": self.model_name,
+                        "messages": full_prompt,
+                        "stream": False,
+                    }
+                    try:
+                        resp_fb = await self._client.post(self.api_url, content=orjson.dumps(data_fallback))
+                        resp_fb.raise_for_status()
+                        res_fb = resp_fb.json()
+                        fb_content = res_fb.get("message", {}).get("content")
+                        if isinstance(fb_content, (dict, list)):
+                            parsed_json = fb_content
+                        elif isinstance(fb_content, str):
+                            try:
+                                parsed_json = orjson.loads(fb_content)
+                            except Exception:
+                                parsed_json = extract_first_json(fb_content, max_chars=self._max_chars)
+                    except Exception:
+                        # Ignore fallback errors; we'll handle as invalid below
+                        pass
 
             else:  # OpenAI provider
                 response = await self._client.chat.completions.create(
@@ -140,7 +172,10 @@ class LLMClient:
                 )
                 raw_content = response.choices[0].message["content"]
                 if raw_content:
-                    parsed_json = orjson.loads(raw_content)
+                    if isinstance(raw_content, (dict, list)):
+                        parsed_json = raw_content
+                    elif isinstance(raw_content, str):
+                        parsed_json = orjson.loads(raw_content)
 
             if not parsed_json:
                 log.warning("LLM did not return valid JSON content", raw_preview=str(raw_content)[:200])

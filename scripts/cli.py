@@ -21,6 +21,8 @@ import click
 
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import Invocation, all_commands
+from Adventorator.config import load_settings
+from Adventorator.llm import LLMClient
 
 
 class PrintResponder:
@@ -107,6 +109,20 @@ def _make_click_command(name: str, option_model: type, handler, sub: str | None 
 
     def _callback(**kwargs: Any):
         async def _run():
+            # Load settings and, if enabled, initialize an LLM client
+            settings = None
+            llm_client = None
+            try:
+                settings = load_settings()
+                if getattr(settings, "features_llm", False):
+                    try:
+                        llm_client = LLMClient(settings)
+                    except Exception:
+                        # Leave llm_client as None if initialization fails; handler will degrade
+                        llm_client = None
+            except Exception:
+                settings = None
+
             inv = Invocation(
                 name=name,
                 subcommand=sub,
@@ -115,8 +131,8 @@ def _make_click_command(name: str, option_model: type, handler, sub: str | None 
                 channel_id="1",
                 guild_id="1",
                 responder=PrintResponder(),
-                settings=None,
-                llm_client=None,
+                settings=settings,
+                llm_client=llm_client,
             )
             opts = option_model.model_validate(kwargs)
             await handler(inv, opts)
