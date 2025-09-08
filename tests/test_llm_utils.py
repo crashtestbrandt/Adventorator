@@ -1,9 +1,12 @@
-
 from Adventorator.llm_utils import extract_first_json, validate_llm_output
 
 
 def test_extract_first_json_happy():
-    text = 'before {"proposal": {"action": "ability_check", "ability": "DEX", "suggested_dc": 15, "reason": "well-made lock"}, "narration": "You deftly work the picks..."} after'
+    text = (
+        'before {"proposal": {"action": "ability_check", "ability": "DEX", '
+        '"suggested_dc": 15, "reason": "well-made lock"}, '
+        '"narration": "You deftly work the picks..."} after'
+    )
     data = extract_first_json(text)
     assert isinstance(data, dict)
     assert data["proposal"]["action"] == "ability_check"

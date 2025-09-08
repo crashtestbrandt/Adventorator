@@ -1,11 +1,15 @@
 # tests/conftest.py
 
-import os
 import gc
+import os
 from collections.abc import AsyncIterator
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import StaticPool
 
 # Ensure the app code (which uses Adventorator.db.get_engine) also points to an

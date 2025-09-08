@@ -1,10 +1,11 @@
-# config.py
+"""Settings loader for Adventorator."""
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
-import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+import tomllib
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _toml_settings_source() -> dict[str, Any]:
@@ -20,9 +21,11 @@ def _toml_settings_source() -> dict[str, Any]:
     out: dict[str, Any] = {
         "env": t.get("app", {}).get("env", "dev"),
         "features_llm": t.get("features", {}).get("llm", False),
+        "features_llm_visible": t.get("features", {}).get("llm_visible", True),
         "features_rules": t.get("features", {}).get("rules", False),
         "features_combat": t.get("features", {}).get("combat", False),
         "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
+        "llm_api_provider": t.get("llm", {}).get("api_provider", "ollama"),
         "llm_api_url": t.get("llm", {}).get("api_url"),
         "llm_model_name": t.get("llm", {}).get("model_name"),
         "llm_default_system_prompt": t.get("llm", {}).get("default_system_prompt"),
@@ -40,16 +43,25 @@ def _toml_settings_source() -> dict[str, Any]:
 class Settings(BaseSettings):
     env: str = Field(default="dev")
     database_url: str = Field(default="sqlite+aiosqlite:///./adventorator.sqlite3")
-    discord_public_key: str
+    # Provide a default to satisfy static type checkers; real value should come from env/TOML.
+    discord_public_key: str = ""
     discord_bot_token: str | None = None
     features_llm: bool = False
+    features_llm_visible: bool = False
     features_rules: bool = False
     features_combat: bool = False
     response_timeout_seconds: int = 3
 
+    llm_api_provider: Literal["ollama", "openai"] = Field(
+        default="ollama", description="The type of LLM API to use ('ollama' or 'openai')."
+    )
     llm_api_url: str | None = None
+    llm_api_key: SecretStr | None = Field(
+        default=None, description="API key for OpenAI-compatible services."
+    )
     llm_model_name: str = "llama3:8b"
     llm_default_system_prompt: str = "You are a helpful assistant."
+    # TODO: These limits should align with the selected model's context window.
     llm_max_prompt_tokens: int = 4096
     llm_max_response_chars: int = 8000
 

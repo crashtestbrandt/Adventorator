@@ -1,12 +1,21 @@
 # src/Adventorator/db.py
 from __future__ import annotations
+
 import contextlib
-from typing import AsyncIterator
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine, async_sessionmaker, AsyncSession
+from collections.abc import AsyncIterator
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase
+
 from Adventorator.config import load_settings
 
 settings = load_settings()
+
 
 def _normalize_url(url: str) -> str:
     # Upgrade to async drivers if user supplies sync URLs
@@ -16,19 +25,23 @@ def _normalize_url(url: str) -> str:
         return url.replace("sqlite://", "sqlite+aiosqlite://", 1)
     return url
 
+
 DATABASE_URL = _normalize_url(settings.database_url)
+
 
 class Base(DeclarativeBase):
     pass
 
+
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+
 
 def get_engine() -> AsyncEngine:
     global _engine, _sessionmaker
     if _engine is None:
         # Safer defaults per backend
-        kwargs = {}
+        kwargs: dict[str, object] = {}
         if DATABASE_URL.startswith("sqlite+aiosqlite://"):
             # SQLite ignores pool_size; keep it minimal and avoid pre_ping
             kwargs.update(connect_args={"timeout": 30})
@@ -39,10 +52,12 @@ def get_engine() -> AsyncEngine:
         _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
     return _engine
 
+
 def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     if _sessionmaker is None:
         get_engine()
     return _sessionmaker  # type: ignore[return-value]
+
 
 @contextlib.asynccontextmanager
 async def session_scope() -> AsyncIterator[AsyncSession]:

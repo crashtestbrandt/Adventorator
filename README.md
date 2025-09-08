@@ -1,6 +1,6 @@
 # Adventorator
 
-*Dungeon Master as a Service (DMaaS)*
+*The best adventures are the ones **no one** has to plan.*
 
 A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in chat. It blends deterministic game mechanics with AI-powered narration, letting players experience a text-based campaign without needing a human DM online 24/7.
 
@@ -12,6 +12,7 @@ A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in
 * [Prerequisites](#prerequisites) & [Quickstart](#quickstart)
 * [Databases & Alembic](#database--alembic)
 * [Repo Structure](#repo-structure)
+* [Add & Test New Commands](#add--test-new-commands)
 * [Contributing](./CONTRIBUTING.md)
 
 ---
@@ -54,22 +55,35 @@ A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in
 ```mermaid
 flowchart TD
   %% === External ===
-  U[Player on Discord]:::ext
-  DP[Discord Platform<br/>App Commands and Interactions]:::ext
-  WH[Discord Webhooks API<br/>Follow-up Messages]:::ext
+  subgraph EXTERNAL[External Systems]
+    U[Player on Discord]:::ext
+    DP[Discord Platform<br/>App Commands and Interactions]:::ext
+    WH[Discord Webhooks API<br/>Follow-up Messages]:::ext
+    LLM[LLM API<br/>e.g., Ollama]:::ext
+  end
 
   %% === Network Edge ===
   CF[cloudflared Tunnel<br/>TLS - trusted CA]:::edge
 
   %% === App ===
   subgraph APP[Adventorator Service - FastAPI]
-    A[Interactions Endpoint<br/>path: /interactions]
-    SIG[Ed25519 Verify<br/>X-Signature-* headers]
-    DISP[Command Dispatcher]
-    RESP[Responder<br/>defer and follow-up]
-    RULES[Rules Engine - Phase 1<br/>Dice, Checks, Adv/Dis]
-    CTX[Context Resolver - Phase 2<br/>Campaign, Player, Scene]
-    TRANS[Transcript Logger - Phase 2]
+    subgraph REQUEST[Request Handling]
+      A[Interactions Endpoint<br/>path: /interactions]
+      SIG[Ed25519 Verify<br/>X-Signature-* headers]
+      DISP[Command Dispatcher]
+    end
+
+    subgraph BUSINESS[Business Logic]
+      RULES[Rules Engine<br/>Dice, Checks]
+      CTX[Context Resolver<br/>Campaign, Player, Scene]
+      LLMC[LLM Client<br/>Prompting & JSON Parsing]
+      ORCH[Orchestrator<br/>Coordinates LLM + Rules]
+    end
+
+    subgraph RESPONSE[Response Handling]
+      RESP[Responder<br/>defer and follow-up]
+      TRANS[Transcript Logger]
+    end
   end
 
   %% === Data ===
@@ -79,88 +93,164 @@ flowchart TD
   end
 
   %% === Tooling ===
-  REG[scripts/register_commands.py<br/>Guild command registration]:::ops
-  LOG[Structured Logs<br/>structlog and orjson]:::ops
-  TEST[Tests<br/>pytest and hypothesis]:::ops
+  subgraph TOOLING[Tooling]
+    REG[scripts/register_commands.py<br/>Guild command registration]:::ops
+    LOG[Structured Logs<br/>structlog and orjson]:::ops
+    TEST[Tests<br/>pytest and hypothesis]:::ops
+  end
 
-  %% === Flows ===
+  %% === Ingress Flow ===
   U -->|Slash command| DP
   DP -->|POST /interactions<br/>signed| CF
   CF --> A
-
   A --> SIG
   SIG -->|valid| DISP
   A -.->|invalid| RESP
 
   %% Phase 0: immediate defer
-  DISP --> RESP
+  DISP -->|defer| RESP
 
-  %% Phase 1: deterministic mechanics
-  DISP --> RULES
+  %% === Command-Specific Flows ===
+  DISP -- "/roll" --> RULES
   RULES --> RESP
 
-  %% Phase 2: persistence and context
-  DISP --> CTX
-  CTX --> DB
-  RESP -->|write bot output| TRANS
-  TRANS --> DB
+  DISP -- "/sheet" --> CTX
+  CTX -->|reads| DB
+  CTX --> RESP
 
-  %% Follow-up delivery
+  DISP -- "/ooc: read history" --> DB
+  DISP -- "/ooc: call LLM" --> LLMC
+  LLMC --> LLM
+  LLMC -- "respond" --> RESP
+
+  DISP -- "/narrate" --> ORCH
+  ORCH -- "get facts" --> DB
+  ORCH -- "get proposal" --> LLMC
+  ORCH -- "run rules" --> RULES
+  ORCH -- "respond" --> RESP
+
+  %% === Egress & Logging (for all command flows) ===
+  RESP -- "log event" --> TRANS
+  TRANS -->|write| DB
   RESP -->|POST follow-up| WH
   WH --> DP --> U
 
-  %% Tooling edges
+  %% === Tooling Edges ===
   REG --> DP
   MIG --> DB
-  TEST -.-> RULES
-  TEST -.-> A
+  TEST -.-> RULES & ORCH & A
   LOG -.-> APP
 
-  %% Styles
+  %% === Styles ===
   classDef ext  fill:#eef7ff,stroke:#4e89ff,stroke-width:1px,color:#0d2b6b
   classDef edge fill:#efeaff,stroke:#8b5cf6,stroke-width:1px,color:#2b1b6b
   classDef data fill:#fff7e6,stroke:#f59e0b,stroke-width:1px,color:#7c3e00
-  classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46 
+  classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46
 ```
 
-**Diagram: Interaction Lifecycle (Phase 0-2)**
+**Diagram: Narrate Command Flow**
 
 ```mermaid
 sequenceDiagram
   autonumber
   participant User as Player (Discord)
   participant Discord as Discord Platform
-  participant CF as cloudflared Tunnel
-  participant API as Adventorator /interactions
-  participant SIG as Ed25519 Verify
-  participant DISP as Dispatcher
-  participant RULES as Rules Engine
-  participant CTX as Context Resolver
+  participant API as Adventorator Service
+  participant ORCH as Orchestrator
   participant DB as Database
+  participant LLM as LLM API
+  participant RULES as Rules Engine
   participant WH as Discord Webhooks
 
-  User->>Discord: /roll expr:2d6+3
-  Discord->>CF: POST /interactions (signed)
-  CF->>API: Forward request
-  API->>SIG: Verify signature
-  SIG-->>API: OK (or 401 if bad)
+  User->>Discord: /narrate message:"I try to pick the lock"
+  Discord->>API: POST /interactions (signed)
+  
+  Note over API: Verifies Ed25519 signature
 
-  API-->>Discord: Defer (type=5) ≤3s
+  API-->>Discord: ACK with Defer (type=5) in < 3s
 
-  API->>DISP: route command ("roll")
-  DISP->>RULES: parse & roll (deterministic)
-  RULES-->>DISP: result (rolls, total)
+  par Background Processing
+    API->>API: Dispatches "narrate" command
+    
+    API->>DB: write_transcript("player", "I try to pick the lock")
 
-  %% Phase 2 logging & context (optional for Phase 0/1)
-  DISP->>CTX: resolve campaign/player/scene
-  CTX->>DB: upsert/get rows
-  DISP->>DB: write transcript (player input)
-  DISP->>DB: write transcript (bot output meta)
-
-  DISP->>WH: POST follow-up message (narration + mechanics)
-  WH-->>Discord: deliver message
-  Discord-->>User: Show result
+    API->>ORCH: run_orchestrator(scene_id, player_msg)
+    
+    activate ORCH
+      ORCH->>DB: get_recent_transcripts(scene_id)
+      DB-->>ORCH: Return transcript history
+      
+      Note over ORCH: Builds facts prompt from history
+      
+      ORCH->>LLM: generate_json(prompt)
+      LLM-->>ORCH: Return JSON proposal (action, ability, dc, narration)
+      
+      Note over ORCH: Validates proposal
+      
+      ORCH->>RULES: compute_check(DEX, dc=15, ...)
+      RULES-->>ORCH: Return CheckResult (success, total, rolls)
+    deactivate ORCH
+    
+    ORCH-->>API: Return OrchestratorResult
+    
+    Note over API: Formats mechanics and narration for response
+    
+    API->>WH: POST follow-up message
+    WH-->>Discord: Delivers message
+    Discord-->>User: Shows formatted mechanics + narration
+    
+    API->>DB: write_transcript("bot", narration, meta={mechanics})
+  end
 ```
+
+**`/ooc` command flow**
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant User as Player (Discord)
+  participant Discord as Discord Platform
+  participant API as Adventorator Service
+  participant DB as Database
+  participant LLM as LLM API
+  participant WH as Discord Webhooks
+
+  User->>Discord: /ooc message:"What does the room smell like?"
+  Discord->>API: POST /interactions (signed)
+  
+  Note over API: Verifies Ed25519 signature
+
+  API-->>Discord: ACK with Defer (type=5) in < 3s
+
+  par Background Processing
+    API->>API: Dispatches "ooc" command
+    
+    Note over API: Resolves campaign, scene, player context
+    
+    API->>DB: write_transcript(author="player", content="What...")
+    
+    API->>DB: get_recent_transcripts(scene_id)
+    DB-->>API: Return transcript history
+    
+    Note over API: Formats chat history into prompt for LLM
+    
+    API->>LLM: generate_response(prompt)
+    LLM-->>API: Return full text response (potentially long)
+    
+    Note over API: Prepares attribution & splits response into chunks (max 2000 chars)
+    
+    loop For Each Chunk
+      API->>WH: POST follow-up(chunk)
+      WH-->>Discord: Delivers chunked message part
+      Discord-->>User: Shows chunk
+    end
+    
+    Note over API: After sending all chunks, logs the full original response
+    API->>DB: write_transcript(author="bot", content="<full llm response>")
+  end
+```
+
+
 
 **🔒 Design philosophy**
 
@@ -307,3 +397,119 @@ That way, someone can go from `make dev` → `alembic upgrade head` → bot comm
 ```
 
 ---
+
+## Add & Test New Commands
+
+Adventorator exposes a tiny command framework. You declare commands with a decorator and a Pydantic options model; everything else (server dispatch, CLI, and Discord registration) auto-discovers them.
+
+1) Implement the command
+
+- Create a new file under `src/Adventorator/commands/`, e.g. `greet.py`:
+
+  ```python
+  # src/Adventorator/commands/greet.py
+  from pydantic import Field
+  from Adventorator.commanding import Invocation, Option, slash_command
+
+  class GreetOpts(Option):
+      name: str = Field(description="Who to greet")
+
+  @slash_command(name="greet", description="Say hello", option_model=GreetOpts)
+  async def greet(inv: Invocation, opts: GreetOpts):
+      await inv.responder.send(f"Hello, {opts.name}!")
+  ```
+
+- Subcommands: register multiple handlers under a single top-level name using `subcommand`:
+
+  ```python
+  @slash_command(name="npc", subcommand="add", description="Add an NPC", option_model=AddNPCOpts)
+  async def npc_add(inv: Invocation, opts: AddNPCOpts):
+      ...
+
+  @slash_command(name="npc", subcommand="show", description="Show an NPC", option_model=ShowNPCOpts)
+  async def npc_show(inv: Invocation, opts: ShowNPCOpts):
+      ...
+  ```
+
+Guidelines:
+- Use `Option` subclasses to define inputs with `Field(description=...)` to populate help text and Discord option descriptions.
+- For DB access, always use `async with session_scope()` and helpers in `repos.py`. Avoid inline SQL.
+- Write transcripts for meaningful player/bot messages (see existing commands for patterns).
+- If you need the LLM narrator, follow `ooc_do.py` and gate behavior behind feature flags.
+
+2) Discovery: no wiring needed
+
+- The app and tools auto-load `Adventorator.commands` on startup or invocation. Just add the file and export the handler.
+
+3) Local smoke test via dynamic CLI
+
+- The dynamic CLI mirrors the same handlers; it also supports grouped subcommands.
+- Single required string field (with no alias) becomes a positional arg for friendlier UX.
+
+  ```bash
+  # Show available commands
+  PYTHONPATH=./src python scripts/cli.py --help
+
+  # Top-level command
+  PYTHONPATH=./src python scripts/cli.py greet Alice
+
+  # Subcommand
+  PYTHONPATH=./src python scripts/cli.py npc show --name Bob
+  ```
+
+4) Register slash commands with Discord
+
+- Fill out `.env` with `DISCORD_APPLICATION_ID`, `DISCORD_BOT_TOKEN`, and (for faster iteration) `DISCORD_GUILD_ID`.
+- Then run:
+
+  ```bash
+  python scripts/register_commands.py
+  ```
+
+5) Run the server (and optional tunnel)
+
+```bash
+make dev
+make run        # starts FastAPI on :18000
+# optional (for Discord to reach you):
+make tunnel
+```
+
+6) Quality gates
+
+```bash
+make format
+make lint
+make type
+make test
+```
+
+7) Minimal unit test example
+
+```python
+# tests/test_greet_command.py
+import asyncio
+from Adventorator.commanding import Invocation
+from Adventorator.commands.greet import GreetOpts, greet
+
+class CaptureResponder:
+    def __init__(self):
+        self.messages = []
+    async def send(self, content: str, *, ephemeral: bool = False) -> None:
+        self.messages.append((content, ephemeral))
+
+def test_greet_says_hello():
+    resp = CaptureResponder()
+    inv = Invocation(
+        name="greet", subcommand=None, options={"name":"Alice"},
+        user_id="1", channel_id="1", guild_id="1", responder=resp,
+    )
+    opts = GreetOpts.model_validate({"name": "Alice"})
+    asyncio.run(greet(inv, opts))
+    assert resp.messages[0][0] == "Hello, Alice!"
+```
+
+Notes
+- Option names map to CLI flags using kebab-case; if you declare a `Field(alias="json")`, the CLI flag will be `--json`.
+- For LLM-dependent commands, if `features.llm` is disabled in `config.toml`, the handlers will respond in a safe degraded mode.
+- Handlers can access server context via `Invocation`: `inv.settings` and `inv.llm_client` are provided in the FastAPI runtime; when running via the local CLI they are `None`. Gate LLM behavior behind feature flags and handle `None` safely (see `ooc_do.py`).
