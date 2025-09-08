@@ -2,6 +2,7 @@
 
 import os
 import argparse
+import sys
 
 def crawl_py_files(root: str) -> str:
     output_parts = []
@@ -28,6 +29,14 @@ def main():
 
     root = os.path.abspath(args.directory)
     md_output = crawl_py_files(root)
+    
+    # Ensure UTF-8 encoding for stdout
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    else:
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    
     print(md_output)
 
 if __name__ == "__main__":

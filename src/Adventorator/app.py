@@ -244,7 +244,82 @@ async def _dispatch_command(inter: Interaction):
             f"= **{out.total}** → {verdict}"
         )
         await followup_message(inter.application_id, inter.token, text)
-    elif name in ("ooc", "do"):
+    elif name == "ooc":
+        # Shadow-mode orchestrator path; visibility gated by features_llm_visible
+        if not settings.features_llm or not llm_client:
+            await followup_message(inter.application_id, inter.token, "❌ The LLM narrator is currently disabled.", ephemeral=True)
+            return
+
+        message = _option(inter, "message")
+        if not message:
+            await followup_message(inter.application_id, inter.token, "❌ You need to provide a message.", ephemeral=True)
+            return
+
+        guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
+
+        # Persist player's input first so it's part of the context facts builder
+        async with session_scope() as s:
+            campaign = await repos.get_or_create_campaign(s, guild_id)
+            scene = await repos.ensure_scene(s, campaign.id, channel_id)
+            await repos.write_transcript(s, campaign.id, scene.id, channel_id, "player", message, str(user_id))
+
+            # 2. Fetch recent history for context, only from this user
+            history = await repos.get_recent_transcripts(s, scene.id, limit=15, user_id=str(user_id))
+            
+            # 3. Format history for the LLM prompt
+            prompt_messages = []
+            for entry in history:
+                # Map our author types to LLM roles
+                role = "user" if entry.author == "player" else "assistant" if entry.author == "bot" else None
+                if role:
+                    prompt_messages.append({"role": role, "content": entry.content})
+            
+            # 4. Call the LLM to get a narrative response
+            log.info("Generating LLM response", scene_id=scene.id, history_len=len(prompt_messages))
+            llm_response = await llm_client.generate_response(prompt_messages)
+
+            if not llm_response:
+                # The LLM client already logs errors, just inform the user.
+                await followup_message(inter.application_id, inter.token, "The narrator is silent. (No response from LLM)", ephemeral=True)
+                return
+            
+            # 5. Prepend user attribution and wrap LLM response in markdown quotes for Discord
+            max_chunk_size = 2000
+            attribution = f"> **{username}**: {message}\n\n"
+            chunk_label_template = "-# [message {}/{}]\n"
+
+            # Split the LLM response into lines, wrap each with '> '
+            quoted_lines = [f"> {line}" for line in llm_response.splitlines()]
+            quoted_response = "\n".join(quoted_lines)
+
+            # Now split into chunks, but ensure each chunk starts with '> ' on every line
+            # We'll split by lines, not by characters, to avoid breaking quotes
+            available_size = max_chunk_size - len(attribution) - len(chunk_label_template.format(1, 1))
+            chunks = []
+            current_chunk = ""
+            for line in quoted_lines:
+                # +1 for the newline
+                if len(current_chunk) + len(line) + 1 > available_size and current_chunk:
+                    chunks.append(current_chunk.rstrip("\n"))
+                    current_chunk = ""
+                current_chunk += line + "\n"
+            if current_chunk:
+                chunks.append(current_chunk.rstrip("\n"))
+
+            total_chunks = len(chunks)
+            for idx, chunk in enumerate(chunks, 1):
+                chunk_label = chunk_label_template.format(idx, total_chunks)
+                # Send each chunk as a follow-up message to Discord
+                # TODO: consider sending replies in a discord thread, if not already in a thread.
+                await followup_message(
+                    inter.application_id,
+                    inter.token,
+                    attribution + chunk_label + chunk
+                )
+
+            # 6. Write the LLM's response to the transcript to complete the loop
+            await repos.write_transcript(s, campaign.id, scene.id, channel_id, "bot", llm_response, str(user_id))
+    elif name == "narrate":
         # Shadow-mode narrator using orchestrator (LLM JSON + rules). Behind llm feature flag.
         if not settings.features_llm or not llm_client:
             await followup_message(
