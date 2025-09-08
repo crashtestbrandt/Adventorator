@@ -42,8 +42,8 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
     res = await run_orchestrator(
         scene_id=scene_id,
         player_msg=message,
-    llm_client=llm,
-    prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None) if settings else None,
+        llm_client=llm,
+        prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None) if settings else None,
     )
 
     if res.rejected:
