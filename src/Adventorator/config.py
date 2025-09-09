@@ -63,8 +63,8 @@ class Settings(BaseSettings):
     llm_model_name: str = "llama3:8b"
     llm_default_system_prompt: str = "You are a helpful assistant."
     # TODO: These limits should align with the selected model's context window.
-    llm_max_prompt_tokens: int = 4096
-    llm_max_response_chars: int = 8000
+    llm_max_prompt_tokens: int = 2048
+    llm_max_response_chars: int = 2048
 
     model_config = SettingsConfigDict(
         env_prefix="",
