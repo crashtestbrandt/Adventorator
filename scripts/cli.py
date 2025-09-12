@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from enum import Enum
+from pathlib import Path
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
 
@@ -109,6 +110,19 @@ def _make_click_command(name: str, option_model: type, handler, sub: str | None 
 
     def _callback(**kwargs: Any):
         async def _run():
+            # pre-flight checks
+            config_path = Path("config.toml")
+            env_path = Path(".env")
+            if not config_path.exists() and not env_path.exists():
+                msg = click.style(
+                    "WARNING: Could not find 'config.toml' or '.env' in the current directory.",
+                    fg="yellow",
+                    bold=True,
+                )
+                hint = "Continuing with default settings. Some features may be disabled."
+                click.echo(f"{msg}\n{hint}", err=True)
+                # We no longer raise an exception, allowing the script to continue using defaults.
+
             # Load settings and, if enabled, initialize an LLM client
             settings = None
             llm_client = None
