@@ -146,27 +146,42 @@ Introduce an **LLM-driven planner** that can translate freeform user input into 
 
 ---
 
-## Phase 5 — Initiative & turn engine (synchronous queue) ([#10](https://github.com/crashtestbrandt/Adventorator/issues/10)) — status: open
+## Phase 5 — Solidify Foundation & Deepen Narrative AI ([#67](https://github.com/crashtestbrandt/Adventorator/issues/67)) — status: open
 
-**Goal:** Combat with strict turn order and timeouts; still minimal rules.
+**Goal:** Transition the application from a clever prototype to a stable, robust platform. Deepen the core AI's capabilities to make it a more intelligent and context-aware narrator before introducing the complexities of combat.
 
-**Deliverables**
-* Rules Service v1:
-  * Initiative queue; start/end-of-turn hooks
-  * Attacks: to-hit vs AC; damage; simple conditions (prone, restrained)
-  * HP/resource mutation endpoints
-  * Redis locks: per-scene turn lock; TTL-based timeout → auto-Dodge or configured fallback
-* Commands/UI:
-  * /start-combat (spawns a combat thread)
-  * Buttons/selects for common actions; ephemeral per-player panels
-* Recovery: if the worker dies mid-turn, lock expiry yields safe fallback
+**Deliverables:**
 
-**Exit criteria**
-* Concurrency tests (two users act “simultaneously”) don’t break the queue
-* Golden log for a canned encounter plays identically across runs
+1.  **Foundational Infrastructure (`postgres`, `containerization`):**
+    * **Migrate to Postgres:** Update `db.py` and configuration to use `postgresql+asyncpg` as the primary driver.
+    * **Full Containerization:** Create a `docker-compose.yml` file that orchestrates the FastAPI application, Postgres database, and any other services (like Redis, if planned for Phase 5). This ensures a one-command setup for development and creates a production-ready deployment artifact.
+    * **Update CI/CD:** Modify the continuous integration pipeline to build the Docker image and run tests against a containerized Postgres instance, achieving true dev/prod parity.
 
-**Rollback**
-* ff.combat=false falls back to exploration-only; command returns helpful message.
+2.  **Core Architecture Refinements (`rule engine encapsulation`, `campaign persistence`):**
+    * **Encapsulate the Rules Engine:** The `rules` package is currently a collection of functions. Formalize it. Perhaps create a `Ruleset` class that can be initialized for a specific system (e.g., `ruleset = Ruleset("5e-srd")`). This class would contain methods like `ruleset.perform_check(...)`, `ruleset.calculate_damage(...)`, etc. This makes the `orchestrator`'s dependency clearer and prepares for supporting multiple game systems.
+    * **Mature Campaign/Character Persistence:**
+        * The `/sheet create` command is good, but it's basic.
+        * Implement a `Character` class or service that can be loaded within the `orchestrator`.
+        * The `sheet_info_provider` function in `orchestrator.py` is a hint at this; make it a reality. It should load the character's full sheet from the DB based on the `player_id`.
+
+3.  **Core Capability Maturation (`context awareness`, `planner/orchestrator`):**
+    * **Context-Aware Orchestrator:** This is the most important step. Modify `run_orchestrator` to be truly context-aware.
+        * **Input:** It should accept a `character_id` or `player_id`.
+        * **Logic:** It should load the relevant `CharacterSheet` from the database.
+        * **Proposal Enhancement:** The LLM's "narrator" prompt should be enriched with key character details (e.g., ability scores, known skills). This allows the LLM to propose more intelligent checks. For example, if a character is proficient in "Stealth", the LLM should be more likely to propose a DEX (Stealth) check when the player says "I sneak past the guard."
+        * **Rules Execution:** The call to `compute_check` should now be populated with the *actual* stats from the loaded character sheet, not default values or user-provided options.
+    * **Smarter Planner:**
+        * **Disambiguation:** If the `planner` LLM returns a low-confidence plan, instead of failing, the `/act` command could respond with "Did you mean to: a) `/do I attack the goblin`, or b) `/roll for initiative`?" using Discord buttons.
+        * **Argument Extraction:** Improve the planner's prompt to not just pick a command, but also to better populate its arguments. For `create a character named Aria`, it should know to prompt for the required JSON, rather than just calling `/sheet create` with no arguments.
+
+**Exit Criteria for Phase 4.5:**
+
+* The entire application runs via a single `docker-compose up` command.
+* All tests pass against a Postgres database.
+* The `/do` command automatically loads the acting character's sheet from the DB.
+* The `orchestrator`'s LLM prompt now includes the character's core abilities, leading to more contextually relevant check proposals.
+* The outcome of a check proposed by the `orchestrator` uses the character's real stats, not defaults.
+* The `rules` logic is cleanly separated and easier to test and extend.
 
 ---
 
@@ -191,7 +206,31 @@ Introduce an **LLM-driven planner** that can translate freeform user input into 
 
 ---
 
-## Phase 7 — Modal solo scenes + merge to combat ([#12](https://github.com/crashtestbrandt/Adventorator/issues/12)) — status: open
+## Phase 7 — Initiative & turn engine (synchronous queue) ([#10](https://github.com/crashtestbrandt/Adventorator/issues/10)) — status: open
+
+**Goal:** Combat with strict turn order and timeouts; still minimal rules.
+
+**Deliverables**
+* Rules Service v1:
+  * Initiative queue; start/end-of-turn hooks
+  * Attacks: to-hit vs AC; damage; simple conditions (prone, restrained)
+  * HP/resource mutation endpoints
+  * Redis locks: per-scene turn lock; TTL-based timeout → auto-Dodge or configured fallback
+* Commands/UI:
+  * /start-combat (spawns a combat thread)
+  * Buttons/selects for common actions; ephemeral per-player panels
+* Recovery: if the worker dies mid-turn, lock expiry yields safe fallback
+
+**Exit criteria**
+* Concurrency tests (two users act “simultaneously”) don’t break the queue
+* Golden log for a canned encounter plays identically across runs
+
+**Rollback**
+* ff.combat=false falls back to exploration-only; command returns helpful message.
+
+---
+
+## Phase 8 — Modal solo scenes + merge to combat ([#12](https://github.com/crashtestbrandt/Adventorator/issues/12)) — status: open
 
 **Goal:** Players can act in personal threads; merge to shared combat when needed.
 
@@ -211,7 +250,7 @@ Introduce an **LLM-driven planner** that can translate freeform user input into 
 
 ---
 
-## Phase 8 — GM controls, overrides, & safety tooling ([#13](https://github.com/crashtestbrandt/Adventorator/issues/13)) — status: open
+## Phase 9 — GM controls, overrides, & safety tooling ([#13](https://github.com/crashtestbrandt/Adventorator/issues/13)) — status: open
 
 **Goal:** Human-in-the-loop when it matters.
 
@@ -230,7 +269,7 @@ Introduce an **LLM-driven planner** that can translate freeform user input into 
 
 ---
 
-## Phase 9 — Hardening & productionization ([#14](https://github.com/crashtestbrandt/Adventorator/issues/14)) — status: open
+## Phase 10 — Hardening & productionization ([#14](https://github.com/crashtestbrandt/Adventorator/issues/14)) — status: open
 
 **Goal:** Operate at small scale without surprises.
 
