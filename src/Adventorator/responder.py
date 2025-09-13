@@ -54,7 +54,7 @@ async def followup_message(application_id: str, token: str, content: str, epheme
         r = await client.post(
             url, content=orjson.dumps(payload), headers={"Content-Type": "application/json"}
         )
-        # Post-send structured log
+        # Post-send structured log:
         try:
             log.info(
                 "discord.followup.sent",
