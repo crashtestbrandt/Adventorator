@@ -22,7 +22,7 @@ rng = DiceRNG()  # TODO: Seed per-scene later
 
 log = structlog.get_logger()
 settings = load_settings()
-setup_logging()
+setup_logging(settings)
 app = FastAPI(title="Adventorator")
 
 llm_client = None

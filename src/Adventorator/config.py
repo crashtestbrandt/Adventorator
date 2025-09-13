@@ -30,6 +30,14 @@ def _toml_settings_source() -> dict[str, Any]:
         "llm_api_url": t.get("llm", {}).get("api_url"),
         "llm_model_name": t.get("llm", {}).get("model_name"),
         "llm_default_system_prompt": t.get("llm", {}).get("default_system_prompt"),
+        # Logging config
+        "logging_enabled": t.get("logging", {}).get("enabled", True),
+        "logging_level": t.get("logging", {}).get("level", "INFO"),
+        "logging_to_console": t.get("logging", {}).get("console", True),
+        "logging_to_file": t.get("logging", {}).get("to_file", True),
+        "logging_file_path": t.get("logging", {}).get("file_path", "logs/adventorator.jsonl"),
+        "logging_max_bytes": t.get("logging", {}).get("max_bytes", 5_000_000),
+        "logging_backup_count": t.get("logging", {}).get("backup_count", 5),
     }
 
     llm_cfg = t.get("llm", {}) or {}
@@ -65,6 +73,15 @@ class Settings(BaseSettings):
     # TODO: These limits should align with the selected model's context window.
     llm_max_prompt_tokens: int = 4096
     llm_max_response_chars: int = 4096
+
+    # Logging
+    logging_enabled: bool = True
+    logging_level: str = "INFO"
+    logging_to_console: bool = True
+    logging_to_file: bool = True
+    logging_file_path: str = "logs/adventorator.jsonl"
+    logging_max_bytes: int = 5_000_000
+    logging_backup_count: int = 5
 
     model_config = SettingsConfigDict(
         env_prefix="",

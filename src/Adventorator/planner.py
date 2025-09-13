@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import time
 
 import orjson
 
@@ -11,6 +12,32 @@ from Adventorator.llm import LLMClient
 from Adventorator.llm_utils import extract_first_json
 from Adventorator.planner_prompts import SYSTEM_PLANNER
 from Adventorator.planner_schemas import PlannerOutput
+
+
+# --- Allowlist of commands the planner may route to (defense-in-depth) ---
+_ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do", "ooc"}
+
+def _is_allowed(name: str) -> bool:
+    return name in _ALLOWED
+
+
+# --- Simple in-process cache to suppress duplicate LLM calls for 30s ---
+_CACHE_TTL = 30.0
+_plan_cache: dict[tuple[int, str], tuple[float, dict[str, Any]]] = {}
+
+def _cache_get(scene_id: int, msg: str) -> dict[str, Any] | None:
+    key = (scene_id, msg.strip())
+    now = time.time()
+    v = _plan_cache.get(key)
+    if not v:
+        return None
+    ts, payload = v
+    if now - ts <= _CACHE_TTL:
+        return payload
+    return None
+
+def _cache_put(scene_id: int, msg: str, plan_json: dict[str, Any]) -> None:
+    _plan_cache[(scene_id, msg.strip())] = (time.time(), plan_json)
 
 
 def _catalog() -> list[dict[str, Any]]:

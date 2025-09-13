@@ -209,3 +209,6 @@ __marimo__/
 # SQLite
 *.sqlite3
 *.sqlite3-journal
+
+# Adventorator specific ignores
+logs/
