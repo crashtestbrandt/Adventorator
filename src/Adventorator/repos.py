@@ -172,3 +172,8 @@ async def get_recent_transcripts(
     results = list(q.scalars().all())
     # chronological order (oldest -> newest)
     return list(results[::-1])
+
+
+async def healthcheck(s: AsyncSession) -> None:
+    """Lightweight DB check to confirm connectivity and basic query works."""
+    await s.execute(select(models.Campaign).limit(1))

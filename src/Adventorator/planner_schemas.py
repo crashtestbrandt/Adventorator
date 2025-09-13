@@ -18,5 +18,8 @@ class PlannerOutput(BaseModel):
     command: str = Field(min_length=1)
     subcommand: str | None = None
     args: dict[str, Any] = Field(default_factory=dict)
+    # Optional observability fields; ignored by dispatcher behavior
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    rationale: str | None = None
 
     model_config = dict(extra="forbid")

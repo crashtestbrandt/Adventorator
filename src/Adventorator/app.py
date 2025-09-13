@@ -16,6 +16,7 @@ from Adventorator.discord_schemas import Interaction
 from Adventorator.llm import LLMClient
 from Adventorator.logging import setup_logging
 from Adventorator.responder import followup_message, respond_deferred, respond_pong
+from Adventorator.metrics import get_counters
 from Adventorator.rules.dice import DiceRNG
 
 rng = DiceRNG()  # TODO: Seed per-scene later
@@ -207,3 +208,24 @@ async def _resolve_context(inter: Interaction):
             str(user_id),
         )
         return campaign, player, scene
+
+
+@app.get("/healthz")
+async def healthz():
+    # Basic checks: commands loaded, DB reachable
+    try:
+        load_all_commands()
+        async with session_scope() as s:
+            # lightweight query
+            await repos.healthcheck(s)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"unhealthy: {e}")
+    return {"status": "ok"}
+
+
+@app.get("/metrics")
+async def metrics():
+    if not getattr(settings, "metrics_endpoint_enabled", False):
+        raise HTTPException(status_code=404, detail="metrics disabled")
+    # Return a simple JSON dump of counters for local ops
+    return get_counters()

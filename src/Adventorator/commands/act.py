@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 import asyncio
 import structlog
+import time
 
 from pydantic import Field
 
@@ -15,6 +16,25 @@ from Adventorator.planner_schemas import PlannerOutput
 
 log = structlog.get_logger()
 
+_PLAN_TIMEOUT = 12.0    # seconds
+
+# Simple in-memory per-user rate limiter: max N requests per window
+_RL_MAX = 5
+_RL_WINDOW = 60.0
+_rl: dict[str, list[float]] = {}
+
+def _rate_limited(user_id: str) -> bool:
+    now = time.time()
+    wins = _rl.setdefault(user_id, [])
+    # Drop entries outside the window
+    cutoff = now - _RL_WINDOW
+    while wins and wins[0] < cutoff:
+        wins.pop(0)
+    if len(wins) >= _RL_MAX:
+        return True
+    wins.append(now)
+    return False
+
 
 class ActOpts(Option):
     message: str = Field(description="Freeform action/request")
@@ -23,13 +43,23 @@ class ActOpts(Option):
 @slash_command(name="act", description="Let the DM figure out what to do.", option_model=ActOpts)
 async def act(inv: Invocation, opts: ActOpts):
     # Preconditions: require LLM available
-    if not (inv.settings and getattr(inv.settings, "features_llm", False) and inv.llm_client):
+    settings = inv.settings
+    if not (settings and getattr(settings, "features_llm", False) and inv.llm_client):
         await inv.responder.send("❌ The planner/LLM is currently disabled.", ephemeral=True)
+        return
+    # Hard feature flag to disable planner instantly
+    if not getattr(settings, "feature_planner_enabled", True):
+        await inv.responder.send("❌ Planner is disabled by configuration.", ephemeral=True)
         return
 
     user_msg = (opts.message or "").strip()
     if not user_msg:
         await inv.responder.send("❌ You need to provide a message.", ephemeral=True)
+        return
+
+    # Per-user simple rate limiting
+    if inv.user_id and _rate_limited(str(inv.user_id)):
+        await inv.responder.send("⏳ You're doing that a bit too quickly. Please wait a moment.", ephemeral=True)
         return
 
     inc_counter("planner.request")
@@ -64,7 +94,7 @@ async def act(inv: Invocation, opts: ActOpts):
     else:
         # Plan using LLM with a soft timeout; fallback to roll 1d20 on timeout
         try:
-            out = await asyncio.wait_for(plan(inv.llm_client, user_msg), timeout=6.0)  # type: ignore[arg-type]
+            out = await asyncio.wait_for(plan(inv.llm_client, user_msg), timeout=_PLAN_TIMEOUT)  # type: ignore[arg-type]
         except asyncio.TimeoutError:
             # Friendly fallback
             fallback_text = "I couldn't decide in time; rolling a d20."
@@ -94,7 +124,13 @@ async def act(inv: Invocation, opts: ActOpts):
     cmd_name_flat = target_top + (f".{target_sub}" if target_sub else "")
     if not _is_allowed(cmd_name_flat):
         inc_counter("planner.decision.rejected")
-        log.info("planner.decision", cmd=cmd_name_flat, accepted=False)
+        log.info(
+            "planner.decision",
+            cmd=cmd_name_flat,
+            accepted=False,
+            confidence=getattr(out, "confidence", None),
+            rationale=(getattr(out, "rationale", None) or "")[:120],
+        )
         await inv.responder.send("⚠️ That action isn't supported yet.", ephemeral=True)
         return
 
@@ -113,7 +149,13 @@ async def act(inv: Invocation, opts: ActOpts):
         return
 
     inc_counter("planner.decision.accepted")
-    log.info("planner.decision", cmd=cmd_name_flat, accepted=True)
+    log.info(
+        "planner.decision",
+        cmd=cmd_name_flat,
+        accepted=True,
+        confidence=getattr(out, "confidence", None),
+        rationale=(getattr(out, "rationale", None) or "")[:120],
+    )
 
     # Re-dispatch to the planned command handler with the SAME invocation context
     new_inv = Invocation(

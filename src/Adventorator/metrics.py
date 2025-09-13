@@ -19,3 +19,8 @@ def get_counter(name: str) -> int:
 
 def reset_counters() -> None:
     _counters.clear()
+
+
+def get_counters() -> dict[str, int]:
+    """Return a shallow copy of all counters for diagnostics."""
+    return dict(_counters)

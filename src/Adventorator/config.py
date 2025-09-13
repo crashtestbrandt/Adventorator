@@ -23,6 +23,8 @@ def _toml_settings_source() -> dict[str, Any]:
         "features_llm": t.get("features", {}).get("llm", False),
     # Default visibility to False for safe-by-default shadow mode
     "features_llm_visible": t.get("features", {}).get("llm_visible", False),
+    # Planner hard-toggle; defaults to True so it can be disabled quickly via env
+    "feature_planner_enabled": t.get("features", {}).get("planner", True),
         "features_rules": t.get("features", {}).get("rules", False),
         "features_combat": t.get("features", {}).get("combat", False),
         "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
@@ -69,6 +71,10 @@ def _toml_settings_source() -> dict[str, Any]:
     if "max_response_chars" in llm_cfg and llm_cfg.get("max_response_chars") is not None:
         out["llm_max_response_chars"] = llm_cfg["max_response_chars"]
 
+    # Ops toggles
+    ops_cfg = t.get("ops", {}) or {}
+    out["metrics_endpoint_enabled"] = ops_cfg.get("metrics_endpoint_enabled", False)
+
     return out
 
 
@@ -80,6 +86,7 @@ class Settings(BaseSettings):
     discord_bot_token: str | None = None
     features_llm: bool = False
     features_llm_visible: bool = False
+    feature_planner_enabled: bool = True
     features_rules: bool = False
     features_combat: bool = False
     response_timeout_seconds: int = 3
@@ -109,6 +116,9 @@ class Settings(BaseSettings):
     logging_file_path: str = "logs/adventorator.jsonl"
     logging_max_bytes: int = 5_000_000
     logging_backup_count: int = 5
+
+    # Ops
+    metrics_endpoint_enabled: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="",
