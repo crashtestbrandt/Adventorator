@@ -8,6 +8,8 @@ import time
 import orjson
 
 from Adventorator.commanding import all_commands
+from Adventorator.command_loader import load_all_commands
+import structlog
 from Adventorator.llm import LLMClient
 from Adventorator.llm_utils import extract_first_json
 from Adventorator.planner_prompts import SYSTEM_PLANNER
@@ -41,8 +43,14 @@ def _cache_put(scene_id: int, msg: str, plan_json: dict[str, Any]) -> None:
 
 
 def _catalog() -> list[dict[str, Any]]:
+    # Ensure registry is populated (safe to call multiple times)
+    cmds = all_commands()
+    if not cmds:
+        load_all_commands()
+        cmds = all_commands()
+
     cat: list[dict[str, Any]] = []
-    for cmd in all_commands().values():
+    for cmd in cmds.values():
         name = cmd.name if not cmd.subcommand else f"{cmd.name}.{cmd.subcommand}"
         # Pydantic v2 schema for Option models
         try:
@@ -71,12 +79,18 @@ def build_planner_messages(user_msg: str) -> list[dict[str, Any]]:
 
 
 async def plan(llm: LLMClient, user_msg: str) -> PlannerOutput | None:
+    log = structlog.get_logger()
+    log.info("planner.request.initiated", user_msg=user_msg)
     msgs = build_planner_messages(user_msg)
     text = await llm.generate_response(msgs)
     data = extract_first_json(text or "")
     if not data or not isinstance(data, dict):
+        log.warning("planner.parse.failed", raw_text_preview=(text or "")[:200])
         return None
     try:
-        return PlannerOutput.model_validate(data)
+        out = PlannerOutput.model_validate(data)
+        log.info("planner.parse.valid", plan=out.model_dump())
+        return out
     except Exception:
+        log.warning("planner.validation.failed", raw_text_preview=(text or "")[:200])
         return None

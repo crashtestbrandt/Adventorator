@@ -136,12 +136,13 @@ class Settings(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
-        # Priority: explicit env vars > .env file > TOML file > init kwargs > file secrets
+        # Priority: init kwargs > explicit env vars > .env file > TOML file > file secrets
+        # Rationale: tests often construct Settings(...) directly and expect these to override env/config.
         return (
+            init_settings,
             env_settings,
             dotenv_settings,
             _toml_settings_source,
-            init_settings,
             file_secret_settings,
         )
 

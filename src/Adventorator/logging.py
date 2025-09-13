@@ -5,6 +5,7 @@ import os
 from logging.handlers import RotatingFileHandler
 
 import structlog
+from structlog.contextvars import merge_contextvars
 from Adventorator.config import Settings
 
 
@@ -63,8 +64,32 @@ def setup_logging(settings: Settings | None = None) -> None:
         processors=[
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.add_log_level,
+            # Pull request-local context (e.g., request_id) from contextvars into each event
+            merge_contextvars,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ],
     )
+
+
+def redact_settings(settings: Settings) -> dict:
+    """Return a redacted dict of settings safe for logging.
+
+    Secrets and tokens are replaced with "[REDACTED]".
+    """
+    data = settings.model_dump()
+    # Known sensitive fields
+    sensitive = {
+        "llm_api_key",
+        "discord_bot_token",
+        "discord_public_key",
+        # Future-proof: any field that ends with _token or _secret
+    }
+    for k in list(data.keys()):
+        if k in sensitive or k.endswith("_token") or k.endswith("_secret") or k.endswith("_key"):
+            data[k] = "[REDACTED]"
+    # Pydantic SecretStr may have been dumped as dict/str; normalize just in case
+    if isinstance(getattr(settings, "llm_api_key", None), object):
+        data["llm_api_key"] = "[REDACTED]"
+    return data

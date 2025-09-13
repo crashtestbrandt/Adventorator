@@ -1,6 +1,7 @@
 # rules/checks.py
 
 from dataclasses import dataclass
+import structlog
 
 ABILS = ("STR", "DEX", "CON", "INT", "WIS", "CHA")
 
@@ -31,6 +32,8 @@ class CheckResult:
 
 
 def compute_check(inp: CheckInput, d20_rolls: list[int]) -> CheckResult:
+    log = structlog.get_logger()
+    log.debug("rules.checks.compute.start", inputs=inp.__dict__, d20_rolls=d20_rolls)
     a = inp.ability.upper()
     if a not in ABILS:
         raise ValueError("unknown ability")
@@ -46,4 +49,6 @@ def compute_check(inp: CheckInput, d20_rolls: list[int]) -> CheckResult:
 
     total = pick + mod + prof
     success = (total >= inp.dc) if inp.dc is not None else None
-    return CheckResult(total=total, d20=d20_rolls, pick=pick, mod=mod + prof, success=success)
+    out = CheckResult(total=total, d20=d20_rolls, pick=pick, mod=mod + prof, success=success)
+    log.debug("rules.checks.compute.result", result=out.__dict__)
+    return out
