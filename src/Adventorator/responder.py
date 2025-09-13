@@ -39,7 +39,7 @@ async def followup_message(application_id: str, token: str, content: str, epheme
     url = f"https://discord.com/api/v10/webhooks/{application_id}/{token}"
     flags = 64 if ephemeral else 0  # 64 = EPHEMERAL
     payload = {"content": content, "flags": flags}
-    # Pre-send structured log (avoid logging token/URL)
+    # Pre-send structured log: (avoid logging token/URL)
     try:
         log.info(
             "discord.followup.send",
