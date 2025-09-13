@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # --- Transport-agnostic context the handler receives ---
@@ -29,6 +29,9 @@ class Invocation:
 # --- Option models for compile-time safety & help text ---
 class Option(BaseModel):
     """Base for command options; extend per command."""
+    # Allow population by either field name or alias so Discord/CLI stay compatible
+    # when commands use Field(alias=...).
+    model_config = ConfigDict(populate_by_name=True)
 
 # --- Command descriptor ---
 @dataclass
