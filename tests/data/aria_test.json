@@ -1,0 +1,64 @@
+{
+    "name": "Aria Nightwind",
+    "class": "Rogue",
+    "level": 3,
+    "abilities": {
+        "STR": 10,
+        "DEX": 16,
+        "CON": 12,
+        "INT": 13,
+        "WIS": 12,
+        "CHA": 14
+    },
+    "proficiency_bonus": 2,
+    "skills": {
+        "acrobatics": true,
+        "stealth": true,
+        "sleight_of_hand": true,
+        "perception": true,
+        "investigation": false,
+        "athletics": false,
+        "persuasion": false
+    },
+    "ac": 14,
+    "hp": {
+        "current": 21,
+        "max": 21,
+        "temp": 0
+    },
+    "speed": 30,
+    "senses": {
+        "darkvision": 60,
+        "passive_perception": 13
+    },
+    "inventory": [
+        {
+            "name": "Shortsword",
+            "qty": 1
+        },
+        {
+            "name": "Shortbow",
+            "qty": 1
+        },
+        {
+            "name": "Arrows",
+            "qty": 20
+        },
+        {
+            "name": "Thieves' Tools",
+            "qty": 1
+        },
+        {
+            "name": "Leather Armor",
+            "qty": 1
+        }
+    ],
+    "features": [
+        "Sneak Attack (2d6)",
+        "Cunning Action",
+        "Thieves' Cant"
+    ],
+    "spells": [],
+    "conditions": [],
+    "notes": "Light-footed rogue; prefers stealth."
+}
