@@ -13,8 +13,10 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from Adventorator.config import load_settings
+import structlog
 
 settings = load_settings()
+log = structlog.get_logger()
 
 
 def _normalize_url(url: str) -> str:
@@ -67,5 +69,7 @@ async def session_scope() -> AsyncIterator[AsyncSession]:
             yield s
             await s.commit()
         except:  # noqa: E722
+            # Log with full exception info for observability
+            log.error("db.session.error", exc_info=True)
             await s.rollback()
             raise

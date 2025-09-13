@@ -1,6 +1,8 @@
 # app.py
 
 import asyncio
+import time
+import uuid
 from typing import Any
 
 import structlog
@@ -14,7 +16,7 @@ from Adventorator.crypto import verify_ed25519
 from Adventorator.db import session_scope
 from Adventorator.discord_schemas import Interaction
 from Adventorator.llm import LLMClient
-from Adventorator.logging import setup_logging
+from Adventorator.logging import setup_logging, redact_settings
 from Adventorator.responder import followup_message, respond_deferred, respond_pong
 from Adventorator.metrics import get_counters
 from Adventorator.rules.dice import DiceRNG
@@ -33,6 +35,12 @@ if settings.features_llm:
 
 @app.on_event("startup")
 async def startup():
+    # Log startup configuration with secrets redacted
+    try:
+        log.info("app.startup", config=redact_settings(settings))
+    except Exception:
+        # Avoid crashing startup due to logging issues
+        pass
     load_all_commands()
 
 
@@ -51,6 +59,17 @@ async def interactions(request: Request):
     raw = await request.body()
     sig = request.headers.get(DISCORD_SIG_HEADER)
     ts = request.headers.get(DISCORD_TS_HEADER)
+    # Log receipt before signature validation
+    try:
+        log.info(
+            "discord.request.received",
+            http_path=str(request.url.path),
+            http_method=request.method,
+            has_sig=bool(sig),
+            has_ts=bool(ts),
+        )
+    except Exception:
+        pass
     if not sig or not ts:
         log.error("Missing signature headers", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="missing signature headers")
@@ -59,8 +78,14 @@ async def interactions(request: Request):
         log.error("Invalid signature", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="bad signature")
 
-    inter = Interaction.model_validate_json(raw)
-    log.info("Interaction received", inter=inter)
+    try:
+        inter = Interaction.model_validate_json(raw)
+    except Exception:
+        # Include tiny preview for debugging only; avoid full body spam
+        preview = raw[:200].decode("utf-8", errors="replace") if isinstance(raw, (bytes, bytearray)) else str(raw)[:200]
+        log.error("discord.request.parse_error", raw_body_preview=preview)
+        raise HTTPException(status_code=400, detail="invalid interaction payload")
+    log.info("discord.request.validated", interaction=inter.model_dump())
 
     async with session_scope() as s:
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
@@ -82,6 +107,43 @@ async def interactions(request: Request):
     if inter.type == 2 and inter.data is not None and inter.data.name is not None:
         asyncio.create_task(_dispatch_command(inter))
     return respond_deferred()
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Assign a request_id, bind it to structlog context, and measure duration.
+
+    Also adds X-Request-ID header to the response for correlation.
+    """
+    from structlog.contextvars import bind_contextvars, clear_contextvars
+
+    request_id = str(uuid.uuid4())
+    start = time.perf_counter()
+    bind_contextvars(request_id=request_id)
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = getattr(response, "status_code", 200)
+        return response
+    finally:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        try:
+            log.info(
+                "http.request.completed",
+                http_path=str(request.url.path),
+                http_method=request.method,
+                http_status_code=status_code,
+                duration_ms=duration_ms,
+            )
+        except Exception:
+            pass
+        try:
+            # Add header on the way out; FastAPI Response may not be available if exception
+            if 'response' in locals():
+                response.headers["X-Request-ID"] = request_id
+        except Exception:
+            pass
+        clear_contextvars()
 
 
 async def _dispatch_command(inter: Interaction):
@@ -134,18 +196,70 @@ async def _dispatch_command(inter: Interaction):
             settings=settings,
             llm_client=llm_client,
         )
+        # Structured command invocation lifecycle logging
+        import time
+        start = time.perf_counter()
+        status = "success"
         try:
             opts_obj = cmd.option_model.model_validate(options)
         except Exception as e:
+            status = "options_error"
             await followup_message(
                 inter.application_id,
                 inter.token,
                 f"❌ Invalid options for `{name}`: {e}",
                 ephemeral=True,
             )
+            try:
+                log.info(
+                    "command.completed",
+                    command_name=name,
+                    subcommand=sub,
+                    options=options,
+                    user_id=str(user_id),
+                    guild_id=str(guild_id) if guild_id else None,
+                    status=status,
+                    duration_ms=int((time.perf_counter() - start) * 1000),
+                )
+            except Exception:
+                pass
             return
-
-        await cmd.handler(inv, opts_obj)
+        try:
+            log.info(
+                "command.initiated",
+                command_name=name,
+                subcommand=sub,
+                options=options,
+                user_id=str(user_id),
+                guild_id=str(guild_id) if guild_id else None,
+            )
+            await cmd.handler(inv, opts_obj)
+        except Exception as e:  # Let FastAPI/global handlers decide further
+            status = "error"
+            log.error(
+                "command.error",
+                command_name=name,
+                subcommand=sub,
+                options=options,
+                user_id=str(user_id),
+                guild_id=str(guild_id) if guild_id else None,
+                exc_info=True,
+            )
+            raise
+        finally:
+            try:
+                log.info(
+                    "command.completed",
+                    command_name=name,
+                    subcommand=sub,
+                    options=options,
+                    user_id=str(user_id),
+                    guild_id=str(guild_id) if guild_id else None,
+                    status=status,
+                    duration_ms=int((time.perf_counter() - start) * 1000),
+                )
+            except Exception:
+                pass
     return
 
 

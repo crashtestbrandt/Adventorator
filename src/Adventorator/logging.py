@@ -5,6 +5,7 @@ import os
 from logging.handlers import RotatingFileHandler
 
 import structlog
+from structlog.contextvars import merge_contextvars
 from Adventorator.config import Settings
 
 
@@ -16,6 +17,28 @@ def setup_logging(settings: Settings | None = None) -> None:
     """
     level_name = (settings.logging_level if settings else "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
+
+    # Route Python warnings through logging so they are captured in JSON too
+    logging.captureWarnings(True)
+
+    # ProcessorFormatter renders BOTH structlog and stdlib/third-party logs as JSON
+    processor_formatter = structlog.stdlib.ProcessorFormatter(
+        # Processors applied to event-dicts prior to final render
+        processors=[
+            structlog.processors.TimeStamper(fmt="iso", utc=True),
+            structlog.processors.add_log_level,
+            # Pull request-local context (e.g., request_id) from contextvars
+            merge_contextvars,
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.JSONRenderer(),
+        ],
+        # For plain stdlib LogRecord -> turn into event-dict before processors run
+        foreign_pre_chain=[
+            structlog.processors.add_log_level,
+            merge_contextvars,
+        ],
+    )
 
     root_handlers: list[logging.Handler] = []
     # Console handler (per-handler level)
@@ -29,7 +52,7 @@ def setup_logging(settings: Settings | None = None) -> None:
     if (console_lvl_name or "").upper() != "NONE":
         ch = logging.StreamHandler()
         ch.setLevel(getattr(logging, console_lvl_name.upper(), level))
-        ch.setFormatter(logging.Formatter("%(message)s"))
+        ch.setFormatter(processor_formatter)
         root_handlers.append(ch)
 
     # Rotating file handler (Option B)
@@ -54,17 +77,52 @@ def setup_logging(settings: Settings | None = None) -> None:
             backupCount=(settings.logging_backup_count if settings else 5),
         )
         fh.setLevel(getattr(logging, file_lvl_name.upper(), level))
-        fh.setFormatter(logging.Formatter("%(message)s"))
+        fh.setFormatter(processor_formatter)
         root_handlers.append(fh)
 
-    logging.basicConfig(level=level, handlers=root_handlers)
+    # Install root handlers; force=True to replace any prior configuration
+    logging.basicConfig(level=level, handlers=root_handlers, force=True)
+
+    # Let uvicorn/asyncio loggers bubble up into our root handlers
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "asyncio"):
+        lg = logging.getLogger(name)
+        lg.handlers = []
+        lg.propagate = True
+
+    # Configure structlog to emit into stdlib; ProcessorFormatter renders final JSON
     structlog.configure(
-        wrapper_class=structlog.make_filtering_bound_logger(level),
         processors=[
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.add_log_level,
+            merge_contextvars,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer(),
+            # Hand off to ProcessorFormatter on handlers
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
     )
+
+
+def redact_settings(settings: Settings) -> dict:
+    """Return a redacted dict of settings safe for logging.
+
+    Secrets and tokens are replaced with "[REDACTED]".
+    """
+    data = settings.model_dump()
+    # Known sensitive fields
+    sensitive = {
+        "llm_api_key",
+        "discord_bot_token",
+        "discord_public_key",
+        # Future-proof: any field that ends with _token or _secret
+    }
+    for k in list(data.keys()):
+        if k in sensitive or k.endswith("_token") or k.endswith("_secret") or k.endswith("_key"):
+            data[k] = "[REDACTED]"
+    # Pydantic SecretStr may have been dumped as dict/str; normalize just in case
+    if isinstance(getattr(settings, "llm_api_key", None), object):
+        data["llm_api_key"] = "[REDACTED]"
+    return data

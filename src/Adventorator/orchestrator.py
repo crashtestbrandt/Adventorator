@@ -187,7 +187,12 @@ async def run_orchestrator(
     ok, why = _validate_proposal(out)
     if not ok:
         inc_counter("llm.defense.rejected")
-        log.warning("llm.defense.rejected", reason=why)
+        log.warning(
+            "llm.defense.rejected",
+            reason=why,
+            proposal=out.proposal.model_dump(),
+            narration=out.narration,
+        )
         return OrchestratorResult(
             mechanics="Proposal rejected: " + (why or "invalid"),
             narration="",
@@ -198,7 +203,12 @@ async def run_orchestrator(
     # 3b) additional defenses: banned verbs and unknown actors
     if _contains_banned_verbs(out.proposal.reason) or _contains_banned_verbs(out.narration):
         inc_counter("llm.defense.rejected")
-        log.warning("llm.defense.rejected", reason="unsafe_verb")
+        log.warning(
+            "llm.defense.rejected",
+            reason="unsafe_verb",
+            proposal=out.proposal.model_dump(),
+            narration=out.narration,
+        )
         return OrchestratorResult(
             mechanics="Proposal rejected: unsafe content",
             narration="",
@@ -211,7 +221,13 @@ async def run_orchestrator(
         bad = _unknown_actor_present(out.narration, allowed_set)
         if bad:
             inc_counter("llm.defense.rejected")
-            log.warning("llm.defense.rejected", reason="unknown_actor", unknown=bad)
+            log.warning(
+                "llm.defense.rejected",
+                reason="unknown_actor",
+                unknown=bad,
+                proposal=out.proposal.model_dump(),
+                narration=out.narration,
+            )
             return OrchestratorResult(
                 mechanics="Proposal rejected: unknown actors",
                 narration="",

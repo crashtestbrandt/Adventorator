@@ -9,34 +9,59 @@ A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in
 ---
 
 * [Overview](#overview)
+* [Architecture](#architecture)
 * [Prerequisites](#prerequisites) & [Quickstart](#quickstart)
-* [Databases & Alembic](#database--alembic)
+* [Database & Alembic](#database--alembic)
+* [Configuration](#configuration)
+* [Commands](#commands)
+* [Operations](#operations)
 * [Repo Structure](#repo-structure)
-* [Add & Test New Commands](#add--test-new-commands)
 * [Contributing](./CONTRIBUTING.md)
 
 ---
 
 ## Overview
 
+Adventorator is a FastAPI application that serves as a backend for a Discord bot. It receives slash command interactions, verifies their authenticity using Ed25519 signatures, and processes them asynchronously to provide a rich, interactive TTRPG experience.
+
 **✨ What it does (today)**
 
 * Discord-first gameplay with slash commands: `/roll`, `/check`, `/sheet`, `/ooc`, and the smart router `/act`.
-* Fast 3s defer on all interactions; real work happens asynchronously with webhook follow-ups.
-* Deterministic rules engine for dice and checks (advantage/disadvantage, crits, modifiers).
-* Campaign persistence: async SQLAlchemy + Alembic; transcripts for player/bot messages.
-* Optional, safety-gated AI: proposal-only LLM planner/orchestrator behind feature flags; defaults to rules-only.
-* Structured JSON logging (console and rotating file), minimal metrics counters, and feature flags via `config.toml`.
+* Fast 3-second deferral on all interactions; real work happens asynchronously with webhook follow-ups.
+* A deterministic `rules` engine for dice and ability checks (advantage/disadvantage, crits, modifiers).
+* Campaign persistence via async SQLAlchemy and Alembic, including full transcripts of player and bot messages.
+* Optional, safety-gated AI for narration and intent routing, controlled by feature flags. The bot defaults to a secure, rules-only mode.
+* Structured JSON logging, minimal in-memory metrics, and a flexible configuration system using `config.toml` and environment variables.
 
-**🏗 How it’s built**
+**🚧 Project Status**
 
-* FastAPI server implements Discord Interactions `/interactions`, verifies Ed25519 signatures, and defers within 3 seconds.
-* Command registry routes to handlers in `Adventorator.commands/*`; responders send follow-ups via Discord webhooks.
-* Rules engine (pure Python) implements dice and checks; DB access goes through `repos.py` using async SQLAlchemy.
-* Optional LLM orchestrator/planner coordinates facts → JSON proposal → rules → formatted output with strict defenses and a 30s in-process cache.
-* Config-driven logging and metrics; same logging behavior for the CLI and the server.
- 
-**Diagram: High-Level Architecture**
+* [X] Phase 0: Verified interactions endpoint, 3s deferral, logging.
+* [X] Phase 1: Deterministic dice + checks, `/roll` and `/check` commands.
+* [X] Phase 2: Persistence (campaigns, characters, transcripts).
+* [X] Phase 3: Shadow LLM narrator, proposal-only.
+* [X] Phase 4: Planner + `/act` smart routing.
+* [ ] Phase 5+: Combat system, content ingestion, GM controls, premium polish.
+
+**🔜 Roadmap**
+
+* Add `/sheet` CRUD with strict JSON schema.
+* Initiative + combat encounters with Redis turn locks.
+* Adventure ingestion pipeline for SRD or custom campaigns.
+* Optional Embedded App for lightweight maps/handouts in voice channels.
+
+---
+
+## Architecture
+
+This project follows a modular, layered architecture designed for security, testability, and extensibility, especially when integrating with LLMs.
+
+* **FastAPI** server implements the Discord Interactions endpoint, verifies signatures, and defers responses to work asynchronously.
+* A **Command Registry** (`Adventorator/commanding.py`) discovers and routes requests to handlers located in `Adventorator/commands/`.
+* A pure Python **Rules Engine** (`Adventorator/rules/`) implements deterministic game mechanics like dice rolls and ability checks.
+* An asynchronous **Data Layer** using SQLAlchemy (`repos.py`) provides structured access to the database.
+* The optional **AI Layer** is split into two distinct components: a `Planner` for routing and an `Orchestrator` for game logic.
+
+**Diagram: High-Level System Architecture**
 
 ```mermaid
 flowchart TD
@@ -115,208 +140,134 @@ flowchart TD
   classDef edge fill:#efeaff,stroke:#8b5cf6,stroke-width:1px,color:#2b1b6b
   classDef data fill:#fff7e6,stroke:#f59e0b,stroke-width:1px,color:#7c3e00
   classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46
-```
+  ```
 
-**Diagram: Act Command Flow**
+### Core AI Components: Planner and Orchestrator
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant User as Player (Discord)
-  participant Discord as Discord Platform
-  participant API as Adventorator Service
-  participant ACT as /act Handler
-  participant PLAN as Planner/Orchestrator
-  participant DB as Database
-  participant LLM as LLM API
-  participant RULES as Rules Engine
-  participant WH as Discord Webhooks
+The distinction between the `planner` and `orchestrator` is a key architectural decision that promotes security and modularity. They are intentionally separate and serve different purposes.
 
-  User->>Discord: /act message:"I try to pick the lock"
-  Discord->>API: POST /interactions (signed)
-  
-  Note over API: Verifies Ed25519 signature
+#### Planner: The Semantic Router
 
-  API-->>Discord: ACK with Defer (type=5) in ≤ 3s
+The **`planner`** (`Adventorator/planner.py`) acts as a natural language front-end to the bot's structured command system. It translates a user's freeform request from the `/act` command into a specific, validated command invocation.
 
-  par Background Processing
-    API->>API: Dispatches "act" command
+  * **Responsibilities:**
+      * Dynamically builds a catalog of available, developer-defined slash commands.
+      * Uses the LLM to analyze a user's intent and select the single best command "tool" to fulfill it.
+      * Outputs a structured JSON object (`PlannerOutput`) specifying the command and its arguments.
+  * **Analogy:** The planner is a smart switchboard operator. It listens to a request and connects the user to the correct department (the command handler).
 
-    API->>DB: write_transcript(author="player", content="I try to pick the lock")
+#### Orchestrator: The Game Engine
 
-    API->>DB: list_character_names(scene_id)
-    DB-->>API: allowed_actors
-    Note over API: Enforces allowlist and basic option validation
+The **`orchestrator`** (`Adventorator/orchestrator.py`) is the core AI Dungeon Master. It is invoked by narrative commands like `/do` to interpret a player's action within the game world and determine the outcome.
 
-    API->>ACT: check cache (scene_id, message)
-    alt Cache hit
-      ACT->>API: use cached plan
-      Note over ACT: metrics.inc("planner.cache.hit")
-    else Cache miss
-      ACT->>PLAN: plan(message, context)
-      activate PLAN
-        PLAN->>DB: get_recent_transcripts(scene_id)
-        DB-->>PLAN: transcript history
-        PLAN->>LLM: generate_json(prompt)
-        LLM-->>PLAN: JSON plan (intent, ability, dc, target, ...)
-        Note over PLAN: Strict parsing + safety checks
-      deactivate PLAN
-    end
+  * **Responsibilities:**
+      * Gathers context from recent game history (`transcripts`).
+      * Uses the LLM to propose a specific game mechanic (e.g., a "Strength check vs. DC 15") and generate descriptive narration.
+      * Performs strict validation on the LLM's proposal to prevent it from bypassing the rules (e.g., by banning verbs like "deal damage" or "add item").
+      * Executes the proposed mechanic using the deterministic `rules` engine.
+      * Combines the mechanic's outcome with the narration into a final result.
+  * **Analogy:** The orchestrator *is* the Dungeon Master. It listens to what a player wants to do, decides which dice roll is needed, and describes what happens.
 
-    alt intent == "check"
-      API->>RULES: compute_check(ability, dc, ...)
-      RULES-->>API: CheckResult (success, total, rolls, crit?)
-    else intent == "roll"
-      API->>RULES: roll("XdY+Z")
-      RULES-->>API: DiceRoll (rolls, total, crit?)
-    else intent == "ooc"
-      API->>API: delegate to /ooc handler (optional LLM text)
-    else LLM disabled/timeout
-      API->>RULES: fallback roll (e.g., 1d20)
-      Note over API: soft-timeout fallback ~6s
-    end
+This separation of concerns ensures that the flexible, high-level routing logic is decoupled from the secure, low-level game state progression.
 
-    API->>WH: POST follow-up (formatted mechanics + narration)
-    WH-->>Discord: Delivers message
-    Discord-->>User: Shows result
+### Key Command Flows
 
-    API->>DB: write_transcript(author="bot", content, meta={mechanics})
-  end
-```
+#### The `/act` Command Flow
 
-**`/ooc` command flow**
+This diagram shows how the `planner` and `orchestrator` work together when a user invokes the `/act` command to perform an in-game action.
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  participant User as Player (Discord)
-  participant Discord as Discord Platform
-  participant API as Adventorator Service
-  participant DB as Database
-  participant LLM as LLM API
-  participant WH as Discord Webhooks
+    actor User
+    participant App as Adventorator Service
+    participant Planner
+    participant Orchestrator
+    participant RulesEngine as Rules Engine
+    participant LLM
 
-  User->>Discord: /ooc message:"What does the room smell like?"
-  Discord->>API: POST /interactions (signed)
-  
-  Note over API: Verifies Ed25519 signature
-
-  API-->>Discord: ACK with Defer (type=5) in ≤ 3s
-
-  par Background Processing
-    API->>API: Dispatches "ooc" command
+    User->>App: /act "I try to pick the lock"
+    App->>Planner: plan(intent)
+    Planner->>LLM: Which command for this text?
+    LLM-->>Planner: {"command": "do", "args": ...}
+    Planner-->>App: Return planned command
     
-    Note over API: Resolves campaign, scene, player context
+    Note over App: Dispatches to /do handler
     
-    API->>DB: write_transcript(author="player", content="What...")
+    App->>Orchestrator: run_orchestrator("I try to pick the lock")
+    Orchestrator->>LLM: Propose mechanics & narration
+    LLM-->>Orchestrator: {"proposal": {"ability": "DEX", "dc": 18}, "narration": ...}
+    Orchestrator->>RulesEngine: compute_check(DEX, DC=18)
+    RulesEngine-->>Orchestrator: {total: 14, success: false}
+    Orchestrator-->>App: Return formatted result (mechanics + narration)
     
-    API->>DB: get_recent_transcripts(scene_id)
-    DB-->>API: Return transcript history
-    
-    Note over API: Formats chat history into prompt for LLM
-    
-    API->>LLM: generate_response(prompt)
-    LLM-->>API: Return full text response (potentially long)
-    
-    Note over API: Prepares attribution & splits response into chunks (max 2000 chars)
-    
-    loop For Each Chunk
-      API->>WH: POST follow-up(chunk)
-      WH-->>Discord: Delivers chunked message part
-      Discord-->>User: Shows chunk
-    end
-    
-    Note over API: After sending all chunks, logs the full original response
-    API->>DB: write_transcript(author="bot", content="<full llm response>")
-  end
+    App-->>User: Sends follow-up message with outcome
 ```
 
+#### The `/ooc` Command Flow
 
+This flow is simpler, as it bypasses the `planner` and the `rules` engine, using the LLM only for narration.
 
-**🔒 Design philosophy**
+```mermaid
+sequenceDiagram
+  participant User
+  participant App as Adventorator Service
+  participant DB as Database
+  participant LLM as LLM API
 
-* AI narrates, rules engine rules. No silent HP drops or fudged rolls.
-* Human-in-the-loop. GM override commands (/gm) and rewind via event sourcing.
-* Defensive defaults. Feature flags, degraded modes (rules-only if LLM/vector DB down).
-* Reproducible. Seeded RNG, append-only logs, golden transcripts for regression tests.
+  User->>App: /ooc "What does the room smell like?"
+  
+  Note over App: Dispatches "ooc" command
+  
+  App->>DB: get_recent_transcripts(scene_id)
+  DB-->>App: Return transcript history
+  
+  Note over App: Formats history and user message into prompt
+  
+  App->>LLM: generate_response(prompt)
+  LLM-->>App: Return text-only narration
+  
+  App-->>User: Sends follow-up message with narration
+```
 
-**🚧 Status**
-
-* [X] Phase 0: Verified interactions endpoint, 3s deferral, logging.
-* [X] Phase 1: Deterministic dice + checks, /roll and /check commands.
-* [X] Phase 2: Persistence (campaigns, characters, transcripts).
-* [X] Phase 3: Shadow LLM narrator, proposal-only.
-* [~] Phase 4: Planner + /act smart routing (in progress; feature-flagged).
-* [ ] Phase 5+: Combat system, content ingestion, GM controls, premium polish.
-
-**🔜 Roadmap**
-
-* Add /sheet CRUD with strict JSON schema.
-* Initiative + combat encounters with Redis turn locks.
-* Adventure ingestion pipeline for SRD or custom campaigns.
-* Optional Embedded App for lightweight maps/handouts in voice channels.
-
----
+-----
 
 ## Prerequisites
 
-- Bash-like environment
-- Docker
-- Python > 3.10
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
-
-    ```bash
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    ```
-
-- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
-
-    ```bash
-    # Linux
-    wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm
-    sudo cp ./cloudflared-linux-arm /usr/local/bin/cloudflared
-    sudo chmod +x /usr/local/bin/cloudflared
-    cloudflared -v
-
-    # MacOS
-    brew install cloudflared
-    ```
+  - Bash-like environment
+  - Docker
+  - Python \> 3.10
+  - [uv](https://docs.astral.sh/uv/getting-started/installation/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+  - [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (`brew install cloudflared` on macOS)
 
 ## Quickstart
 
 ```bash
 cp .env.example .env    # <-- Add secrets
 make dev                # Install Python requirements
-make run                # Start local dev server on 18000
+make db-upgrade         # Initialize the database schema
+make run                # Start local dev server on port 18000
 ```
 
-### Optional: Anonymous Cloudflare tunnel:
+To expose your local server to Discord, run the Cloudflare tunnel in a separate terminal:
 
 ```bash
 make tunnel
 ```
 
-In the output, you should see something like:
+Discord can now reach your dev server using the tunnel URL + `/interactions`.
 
-    ```
-    2025-09-05T18:57:54Z INF |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
-    2025-09-05T18:57:54Z INF |  https://rooms-mechanics-tires-mats.trycloudflare.com  
-    ---
-
-Discord can now reach your dev server using that URL + `/interactions`.
-
----
+-----
 
 ## Database & Alembic
 
-Adventorator uses SQLAlchemy with Alembic migrations. You’ll need to initialize your database schema before running commands that hit persistence (Phase 2+).
+Adventorator uses SQLAlchemy with Alembic for database migrations. Initialize your database schema before running commands that require persistence.
 
 ```bash
-# Create the database (SQLite default, Postgres if DATABASE_URL is set)
+# Apply all migrations (run this once on setup)
+make db-upgrade
+# OR
 alembic upgrade head
 ```
-
-This will apply all migrations in `migrations/versions/` to your database.
 
 Common commands:
 
@@ -324,238 +275,116 @@ Common commands:
 # Generate a new migration after editing models.py
 alembic revision --autogenerate -m "describe your change"
 
-# Apply latest migrations
-alembic upgrade head
-
 # Roll back one migration
 alembic downgrade -1
 ```
 
-By default, `alembic.ini` points at your `DATABASE_URL` (set in `.env` or config).
-For quick local dev you can rely on SQLite (`sqlite+aiosqlite:///./adventurator.sqlite3`), but Postgres is recommended for persistent campaigns.
+By default, `alembic.ini` points at the `DATABASE_URL` from your configuration. For local development, SQLite is used by default.
 
----
+-----
 
-That way, someone can go from `make dev` → `alembic upgrade head` → bot commands writing to DB.
+## Configuration
 
----
+Behavior is configured via `config.toml`, which can be overridden by environment variables or a `.env` file.
 
-## Feature flags and configuration
+**Key Toggles:**
 
-Configure behavior via `config.toml` (overridden by env/.env). Key toggles:
+  * `features.llm`: Master switch for all LLM-powered features (`/ooc`, `/act`).
+  * `features.llm_visible`: If `true`, LLM narration is posted publicly; otherwise, it runs in a "shadow mode" (logged but not sent to Discord).
+  * `features.planner`: Hard on/off switch for the `/act` planner.
+  * `ops.metrics_endpoint_enabled`: If `true`, exposes a `GET /metrics` endpoint.
 
-- features.llm: enable LLM-powered features (ooc, act routing) safely. Default false unless set in TOML.
-- features.llm_visible: if true, narration is posted publicly; otherwise stays in shadow mode.
-- features.planner: hard on/off for the `/act` planner. Toggle off to disable instantly.
-- features.rules: enable pure rules features (dice/checks). Usually true.
-- ops.metrics_endpoint_enabled: if true, exposes GET /metrics for local ops.
+**LLM Client:**
 
-LLM client:
+  * `llm.api_provider`: `"ollama"` or `"openai"`.
+  * `llm.api_url`: Base URL for your provider (e.g., `http://localhost:11434` for Ollama).
+  * `llm.model_name`: Model identifier (e.g., `"llama3:latest"`).
 
-- llm.api_url: base URL for your provider (Ollama: http://localhost:11434; OpenAI-compatible must end with /v1).
-- llm.model_name: model identifier (e.g., "llama3.2:latest").
-- llm.api_provider: "ollama" or "openai"; if openai, set an API key in env.
-- llm.default_system_prompt: default persona; planner/orchestrator add their own system prompts.
+See `src/Adventorator/config.py` for all options and default values.
 
-Logging:
+-----
 
-- logging.level: root level.
-- logging.console, logging.to_file: per-handler levels ("DEBUG"|"INFO"|...|"NONE").
-- logging.file_path, max_bytes, backup_count: rotating JSONL log file.
+## Commands
 
-See `src/Adventorator/config.py` for defaults and precedence. Env/.env override TOML.
+### Adding New Commands
 
----
+The application uses a decorator-based system to discover and register new commands.
 
-## Using the /act smart router
+1.  **Create a command file** in `src/Adventorator/commands/`, e.g., `greet.py`:
 
-`/act` lets players type freeform intents that are routed to known commands with strict validation. Examples:
+    ```python
+    # src/Adventorator/commands/greet.py
+    from pydantic import Field
+    from Adventorator.commanding import Invocation, Option, slash_command
 
-- /act "roll 2d6+3 for damage" → routes to `/roll --expr 2d6+3`
-- /act "make a dexterity check against DC 15" → `/check --ability DEX --dc 15`
-- /act "create a character named Aria the rogue" → `/sheet create --json '{...}'` (or a helpful error asking for JSON)
-- /act "I sneak along the wall, quiet as a cat" → `/do --message "..."`
+    class GreetOpts(Option):
+        name: str = Field(description="Who to greet")
 
-Safety & guardrails:
+    @slash_command(name="greet", description="Say hello", option_model=GreetOpts)
+    async def greet(inv: Invocation, opts: GreetOpts):
+        await inv.responder.send(f"Hello, {opts.name}!")
+    ```
 
-- Allowlist: only routes to {roll, check, sheet.create, sheet.show, do, ooc}.
-- Option validation: all args must pass the target command’s Pydantic option model.
-- Caching: identical (scene_id, message) is cached for 30s to reduce LLM calls.
-- Rate limiting: lightweight per-user limiter to avoid spam.
-- Fallbacks: soft timeout falls back to a friendly `/roll 1d20`.
-- Feature flags: requires `features.llm=true` and `features.planner=true`; visibility controlled by `features.llm_visible`.
+2.  **Test it locally** with the dynamic CLI:
 
-You can also use `/act` via the local CLI:
+    ```bash
+    # The CLI auto-discovers the new command
+    PYTHONPATH=./src python scripts/cli.py greet "World"
+    ```
 
-```bash
-PYTHONPATH=./src python scripts/cli.py act --message "roll 2d6+3 for damage"
-```
+3.  **Register it with Discord:**
 
----
+    ```bash
+    # Fill out DISCORD_* variables in .env first
+    python scripts/register_commands.py
+    ```
 
-## Operations: health and metrics
+### Using the `/act` Smart Router
 
-The FastAPI app exposes:
+`/act` lets players use natural language, which is routed to a known command.
 
-- GET /healthz: light check that commands load and the DB is reachable. Returns {"status":"ok"} or 500.
-- GET /metrics: JSON dump of internal counters. Disabled by default; enable with `ops.metrics_endpoint_enabled=true` for local ops.
+  * `/act "roll 2d6+3 for damage"` → routes to `/roll --expr 2d6+3`
+  * `/act "make a dexterity check against DC 15"` → `/check --ability DEX --dc 15`
+  * `/act "I sneak along the wall"` → `/do --message "I sneak along the wall"`
 
-Do not expose /metrics publicly in production unless gated.
+**Safety & Guardrails:**
 
----
+  * **Allowlist:** Only routes to a pre-defined set of safe commands.
+  * **Validation:** All arguments must pass the target command’s Pydantic option model.
+  * **Caching:** Identical messages are cached for 30 seconds to reduce LLM load.
+  * **Rate Limiting:** A lightweight per-user limiter prevents spam.
+  * **Fallbacks:** A soft timeout will fall back to a simple `/roll 1d20`.
+
+-----
+
+## Operations
+
+The FastAPI app exposes two operational endpoints:
+
+  * `GET /healthz`: A lightweight check that the application can load commands and connect to the database. Returns `{"status":"ok"}` or a 500 error.
+  * `GET /metrics`: A JSON dump of internal counters. Disabled by default; enable with `ops.metrics_endpoint_enabled=true`.
+
+-----
 
 ## Repo Structure
 
 ```
 .
 ├── alembic.ini                  # Alembic config for database migrations
-├── config.toml                  # Project-level config (env, feature flags, etc.)
-├── Dockerfile                   # Container build recipe
-├── docs                         # Documentation assets and guides
-├── Makefile                     # Common dev/test/build commands
-├── migrations                   # Alembic migration scripts
-│   ├── env.py                   # Alembic environment setup
-│   └── versions                 # Generated migration files
-├── pyproject.toml               # Build system and tooling config (ruff, pytest, etc.)
-├── README.md                    # Project overview and usage guide
-├── requirements.txt             # Python dependencies lock list
-├── scripts                      # Utility/CLI scripts
-│   ├── aicat.py                 # Quickly cat combined source files for copying to clipboard
-│   └── register_commands.py     # Registers slash commands with Discord API
-├── src                          # Application source code
-│   └── Adventorator             # Main package
-│       ├── app.py               # FastAPI entrypoint + Discord interactions handler
-│       ├── config.py            # Settings loader (TOML + .env via Pydantic)
-│       ├── crypto.py            # Ed25519 signature verification for Discord
-│       ├── db.py                # Async SQLAlchemy engine/session management
-│       ├── discord_schemas.py   # Pydantic models for Discord interaction payloads
-│       ├── logging.py           # Structlog-based logging setup
-│       ├── models.py            # SQLAlchemy ORM models (Campaign, Player, etc.)
-│       ├── repos.py             # Data access helpers (CRUD, queries, upserts)
-│       ├── responder.py         # Helpers for Discord responses and follow-ups
-│       ├── rules                # Deterministic rules engine (dice, checks)
-│       │   ├── checks.py        # Ability check logic & modifiers
-│       │   └── dice.py          # Dice expression parser and roller
-│       └── schemas.py           # Pydantic schemas (e.g., CharacterSheet)
-└── tests                        # Unit and integration tests
-    ├── conftest.py              # Pytest fixtures (async DB session, etc.)
-    └── data                     # Sample payloads/test data
+├── config.toml                  # Project-level config (feature flags, etc.)
+├── migrations/                  # Alembic migration scripts
+├── scripts/                     # Utility scripts (register commands, CLI)
+├── src/                         # Application source code
+│   └── Adventorator/
+│       ├── app.py               # FastAPI entrypoint & Discord interactions
+│       ├── commanding.py        # Core command registration framework
+│       ├── commands/            # Individual slash command handlers
+│       ├── orchestrator.py      # Core AI game engine
+│       ├── planner.py           # AI semantic router for /act
+│       ├── rules/               # Deterministic game mechanics
+│       └── ...                  # (config, db, models, repos, etc.)
+└── tests/                       # Unit and integration tests
 ```
 
----
-
-## Add & Test New Commands
-
-Adventorator exposes a tiny command framework. You declare commands with a decorator and a Pydantic options model; everything else (server dispatch, CLI, and Discord registration) auto-discovers them.
-
-1) Implement the command
-
-- Create a new file under `src/Adventorator/commands/`, e.g. `greet.py`:
-
-  ```python
-  # src/Adventorator/commands/greet.py
-  from pydantic import Field
-  from Adventorator.commanding import Invocation, Option, slash_command
-
-  class GreetOpts(Option):
-      name: str = Field(description="Who to greet")
-
-  @slash_command(name="greet", description="Say hello", option_model=GreetOpts)
-  async def greet(inv: Invocation, opts: GreetOpts):
-      await inv.responder.send(f"Hello, {opts.name}!")
-  ```
-
-- Subcommands: register multiple handlers under a single top-level name using `subcommand`:
-
-  ```python
-  @slash_command(name="npc", subcommand="add", description="Add an NPC", option_model=AddNPCOpts)
-  async def npc_add(inv: Invocation, opts: AddNPCOpts):
-      ...
-
-  @slash_command(name="npc", subcommand="show", description="Show an NPC", option_model=ShowNPCOpts)
-  async def npc_show(inv: Invocation, opts: ShowNPCOpts):
-      ...
-  ```
-
-Guidelines:
-- Use `Option` subclasses to define inputs with `Field(description=...)` to populate help text and Discord option descriptions.
-- For DB access, always use `async with session_scope()` and helpers in `repos.py`. Avoid inline SQL.
-- Write transcripts for meaningful player/bot messages (see existing commands for patterns).
-- If you need the LLM narrator, follow `ooc_do.py` and gate behavior behind feature flags.
-
-2) Discovery: no wiring needed
-
-- The app and tools auto-load `Adventorator.commands` on startup or invocation. Just add the file and export the handler.
-
-3) Local smoke test via dynamic CLI
-
-- The dynamic CLI mirrors the same handlers; it also supports grouped subcommands.
-- Single required string field (with no alias) becomes a positional arg for friendlier UX.
-
-  ```bash
-  # Show available commands
-  PYTHONPATH=./src python scripts/cli.py --help
-
-  # Top-level command
-  PYTHONPATH=./src python scripts/cli.py greet Alice
-
-  # Subcommand
-  PYTHONPATH=./src python scripts/cli.py npc show --name Bob
-  ```
-
-4) Register slash commands with Discord
-
-- Fill out `.env` with `DISCORD_APPLICATION_ID`, `DISCORD_BOT_TOKEN`, and (for faster iteration) `DISCORD_GUILD_ID`.
-- Then run:
-
-  ```bash
-  python scripts/register_commands.py
-  ```
-
-5) Run the server (and optional tunnel)
-
-```bash
-make dev
-make run        # starts FastAPI on :18000
-# optional (for Discord to reach you):
-make tunnel
 ```
-
-6) Quality gates
-
-```bash
-make format
-make lint
-make type
-make test
 ```
-
-7) Minimal unit test example
-
-```python
-# tests/test_greet_command.py
-import asyncio
-from Adventorator.commanding import Invocation
-from Adventorator.commands.greet import GreetOpts, greet
-
-class CaptureResponder:
-    def __init__(self):
-        self.messages = []
-    async def send(self, content: str, *, ephemeral: bool = False) -> None:
-        self.messages.append((content, ephemeral))
-
-def test_greet_says_hello():
-    resp = CaptureResponder()
-    inv = Invocation(
-        name="greet", subcommand=None, options={"name":"Alice"},
-        user_id="1", channel_id="1", guild_id="1", responder=resp,
-    )
-    opts = GreetOpts.model_validate({"name": "Alice"})
-    asyncio.run(greet(inv, opts))
-    assert resp.messages[0][0] == "Hello, Alice!"
-```
-
-Notes
-- Option names map to CLI flags using kebab-case; if you declare a `Field(alias="json")`, the CLI flag will be `--json`.
-- For LLM-dependent commands, if `features.llm` is disabled in `config.toml`, the handlers will respond in a safe degraded mode.
-- Handlers can access server context via `Invocation`: `inv.settings` and `inv.llm_client` are provided in the FastAPI runtime; when running via the local CLI they are `None`. Gate LLM behavior behind feature flags and handle `None` safely (see `ooc_do.py`).

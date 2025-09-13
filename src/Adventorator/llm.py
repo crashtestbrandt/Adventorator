@@ -77,7 +77,17 @@ class LLMClient:
         """Generates a text response from the LLM based on a list of messages."""
         full_prompt = [{"role": "system", "content": system_prompt or self.system_prompt}]
         full_prompt.extend(messages)
+        prompt_chars = sum(len(str(m.get("content", ""))) for m in full_prompt)
 
+        log.info(
+            "llm.call.initiated",
+            provider=self.provider,
+            model=self.model_name,
+            prompt_approx_chars=prompt_chars,
+        )
+        import time
+        start = time.perf_counter()
+        status = "success"
         try:
             if isinstance(self._client, httpx.AsyncClient):  # Ollama provider
                 data = {"model": self.model_name, "messages": full_prompt, "stream": False}
@@ -94,20 +104,34 @@ class LLMClient:
                 content = oa_resp.choices[0].message.content
 
             if not content:
+                status = "empty_content"
                 log.error("LLM API response missing 'content'")
                 return "The narrator seems lost for words..."
 
             return content.strip()
 
         except OpenAIError as e:
+            status = "api_error"
             log.error("OpenAI API error", error=str(e), status_code=getattr(e, 'status_code', None))
             return "A strange psychic interference prevents a clear response. (LLM API error)"
         except httpx.RequestError as e:
+            status = "request_error"
             log.error("Ollama API request failed", url=e.request.url, error=str(e))
             return "The connection to the ethereal plane was lost. (LLM request failed)"
         except Exception as e:
+            status = "processing_error"
             log.error("Failed to process LLM response", error=str(e), provider=self.provider)
             return "A strange psychic interference prevents a clear response. (LLM response error)"
+        finally:
+            import math
+            dur_ms = math.trunc((time.perf_counter() - start) * 1000)
+            log.info(
+                "llm.call.completed",
+                provider=self.provider,
+                model=self.model_name,
+                duration_ms=dur_ms,
+                status=status,
+            )
 
     async def generate_json(
         self,
@@ -118,6 +142,9 @@ class LLMClient:
         full_prompt = [{"role": "system", "content": system_prompt or self.system_prompt}]
         full_prompt.extend(messages)
 
+        import time
+        start = time.perf_counter()
+        status = "success"
         try:
             parsed_json = None
             raw_content = ""
@@ -188,6 +215,7 @@ class LLMClient:
                         parsed_json = orjson.loads(raw_content)
 
             if not parsed_json:
+                status = "validation_failed"
                 log.warning(
                     "LLM did not return valid JSON content",
                     raw_preview=str(raw_content)[:200],
@@ -218,10 +246,12 @@ class LLMClient:
                 )
             )
             if not out:
+                status = "validation_failed"
                 log.warning("LLM JSON validation failed", raw_preview=str(raw_content)[:200])
             return out
 
         except OpenAIError as e:
+            status = "api_error"
             log.error(
                 "OpenAI API JSON error",
                 error=str(e),
@@ -229,14 +259,38 @@ class LLMClient:
             )
             return None
         except httpx.RequestError as e:
+            status = "request_error"
             log.error("Ollama API JSON request failed", url=e.request.url, error=str(e))
             return None
         except Exception as e:
+            status = "processing_error"
             log.error("Failed to process LLM JSON response", error=str(e), provider=self.provider)
             return None
+        finally:
+            import math
+            dur_ms = math.trunc((time.perf_counter() - start) * 1000)
+            log.info(
+                "llm.call.completed",
+                provider=self.provider,
+                model=self.model_name,
+                duration_ms=dur_ms,
+                status=status,
+            )
 
     async def close(self):
         """Gracefully close the underlying HTTP client."""
-        if self._client:
-            await self._client.aclose()
+        if not getattr(self, "_client", None):
+            return
+        try:
+            # httpx.AsyncClient has aclose; OpenAI AsyncOpenAI has async close method too
+            if isinstance(self._client, httpx.AsyncClient):
+                await self._client.aclose()
+            else:
+                close = getattr(self._client, "close", None)
+                if close is not None:
+                    res = close()
+                    # Some clients return coroutine for close
+                    if hasattr(res, "__await__"):
+                        await res  # type: ignore[misc]
+        finally:
             log.info("LLMClient closed.")
