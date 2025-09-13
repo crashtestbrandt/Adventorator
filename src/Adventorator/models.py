@@ -74,7 +74,9 @@ class Turn(Base):
     scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
     # who is acting; could be a character id or an npc key
     actor_ref: Mapped[str] = mapped_column(String(64))
-    started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
     ended_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -97,6 +99,7 @@ class Transcript(Base):
     author_ref: Mapped[str | None] = mapped_column(String(64))  # e.g., discord user id
     content: Mapped[str] = mapped_column(Text)
     meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # rolls, dc, etc.
+    status: Mapped[str] = mapped_column(String(16), default="complete")  # pending|complete|error
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -1,4 +1,3 @@
-# tests/test_ooc_orchestrator.py
 import json
 from types import SimpleNamespace
 
@@ -6,7 +5,6 @@ from fastapi.testclient import TestClient
 
 import Adventorator.app as appmod
 from Adventorator.app import app
-from Adventorator import responder as responder_mod
 
 client = TestClient(app)
 
@@ -111,8 +109,8 @@ def test_do_visible_post(monkeypatch):
     monkeypatch.setattr(appmod, "session_scope", lambda: _DummyAsyncCM())
     # The command handler imports session_scope directly from Adventorator.db,
     # so patch the symbol in the handler module as well.
-    import Adventorator.commands.ooc_do as ooc_do_mod
-    monkeypatch.setattr(ooc_do_mod, "session_scope", lambda: _DummyAsyncCM())
+    import Adventorator.commands.do as do_mod
+    monkeypatch.setattr(do_mod, "session_scope", lambda: _DummyAsyncCM())
     monkeypatch.setattr(
         appmod,
         "settings",
@@ -162,7 +160,7 @@ def test_do_visible_post(monkeypatch):
         captured["content"] = content
         return None
 
-    # Patch the symbol used in app module (imported via from Adventorator.responder import followup_message)
+    # Patch the symbol used in app module (followup imported as symbol)
     monkeypatch.setattr(appmod, "followup_message", _spy_followup)
 
     r = client.post(
