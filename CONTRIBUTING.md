@@ -353,3 +353,28 @@ def downgrade() -> None:
 
 ---
 
+## Working on the Planner and /act
+
+Phase 4 adds a planner that routes freeform `/act` messages to strict, validated commands.
+
+Tips for contributors:
+
+- Feature flags
+   - Enable in `config.toml` or env: `features.llm=true`, `features.planner=true`.
+   - For safe rollout, keep `features.llm_visible=false` (shadow mode) while testing.
+- Tests
+   - Run `make test` to execute unit/integration tests including planner routing (`tests/test_act_*.py`).
+   - Use the fake LLM pattern in tests to return a JSON plan (see `_FakeLLM` fixtures in tests).
+   - Metrics assertions are available via `metrics.reset_counters()` and `metrics.get_counter()`.
+- Caching & rate limits
+   - `/act` caches decisions for 30s per (scene_id, message) and rate-limits per user (simple in-memory window).
+- Safety guardrails
+   - The planner is allowed to route only to: `roll`, `check`, `sheet.create`, `sheet.show`, `do`, `ooc`.
+   - All args must validate against the target command’s Pydantic option model; invalid → ephemeral error.
+- CLI & registration
+   - The dynamic CLI (`scripts/cli.py`) mirrors slash commands; test `/act` locally without Discord.
+   - To register commands in a dev guild, set Discord env vars and run `python scripts/register_commands.py`.
+
+When in doubt, prefer small, focused PRs and add tests alongside new behavior.
+
+

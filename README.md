@@ -245,8 +245,9 @@ sequenceDiagram
 * [X] Phase 0: Verified interactions endpoint, 3s deferral, logging.
 * [X] Phase 1: Deterministic dice + checks, /roll and /check commands.
 * [X] Phase 2: Persistence (campaigns, characters, transcripts).
-* [ ] Phase 3: Shadow LLM narrator, proposal-only.
-* [ ] Phase 4+: Combat system, content ingestion, GM controls, premium polish.
+* [X] Phase 3: Shadow LLM narrator, proposal-only.
+* [~] Phase 4: Planner + /act smart routing (in progress; feature-flagged).
+* [ ] Phase 5+: Combat system, content ingestion, GM controls, premium polish.
 
 **🔜 Roadmap**
 
@@ -336,6 +337,70 @@ For quick local dev you can rely on SQLite (`sqlite+aiosqlite:///./adventurator.
 ---
 
 That way, someone can go from `make dev` → `alembic upgrade head` → bot commands writing to DB.
+
+---
+
+## Feature flags and configuration
+
+Configure behavior via `config.toml` (overridden by env/.env). Key toggles:
+
+- features.llm: enable LLM-powered features (ooc, act routing) safely. Default false unless set in TOML.
+- features.llm_visible: if true, narration is posted publicly; otherwise stays in shadow mode.
+- features.planner: hard on/off for the `/act` planner. Toggle off to disable instantly.
+- features.rules: enable pure rules features (dice/checks). Usually true.
+- ops.metrics_endpoint_enabled: if true, exposes GET /metrics for local ops.
+
+LLM client:
+
+- llm.api_url: base URL for your provider (Ollama: http://localhost:11434; OpenAI-compatible must end with /v1).
+- llm.model_name: model identifier (e.g., "llama3.2:latest").
+- llm.api_provider: "ollama" or "openai"; if openai, set an API key in env.
+- llm.default_system_prompt: default persona; planner/orchestrator add their own system prompts.
+
+Logging:
+
+- logging.level: root level.
+- logging.console, logging.to_file: per-handler levels ("DEBUG"|"INFO"|...|"NONE").
+- logging.file_path, max_bytes, backup_count: rotating JSONL log file.
+
+See `src/Adventorator/config.py` for defaults and precedence. Env/.env override TOML.
+
+---
+
+## Using the /act smart router
+
+`/act` lets players type freeform intents that are routed to known commands with strict validation. Examples:
+
+- /act "roll 2d6+3 for damage" → routes to `/roll --expr 2d6+3`
+- /act "make a dexterity check against DC 15" → `/check --ability DEX --dc 15`
+- /act "create a character named Aria the rogue" → `/sheet create --json '{...}'` (or a helpful error asking for JSON)
+- /act "I sneak along the wall, quiet as a cat" → `/do --message "..."`
+
+Safety & guardrails:
+
+- Allowlist: only routes to {roll, check, sheet.create, sheet.show, do, ooc}.
+- Option validation: all args must pass the target command’s Pydantic option model.
+- Caching: identical (scene_id, message) is cached for 30s to reduce LLM calls.
+- Rate limiting: lightweight per-user limiter to avoid spam.
+- Fallbacks: soft timeout falls back to a friendly `/roll 1d20`.
+- Feature flags: requires `features.llm=true` and `features.planner=true`; visibility controlled by `features.llm_visible`.
+
+You can also use `/act` via the local CLI:
+
+```bash
+PYTHONPATH=./src python scripts/cli.py act --message "roll 2d6+3 for damage"
+```
+
+---
+
+## Operations: health and metrics
+
+The FastAPI app exposes:
+
+- GET /healthz: light check that commands load and the DB is reachable. Returns {"status":"ok"} or 500.
+- GET /metrics: JSON dump of internal counters. Disabled by default; enable with `ops.metrics_endpoint_enabled=true` for local ops.
+
+Do not expose /metrics publicly in production unless gated.
 
 ---
 
