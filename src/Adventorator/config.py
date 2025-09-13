@@ -33,12 +33,35 @@ def _toml_settings_source() -> dict[str, Any]:
         # Logging config
         "logging_enabled": t.get("logging", {}).get("enabled", True),
         "logging_level": t.get("logging", {}).get("level", "INFO"),
-        "logging_to_console": t.get("logging", {}).get("console", True),
-        "logging_to_file": t.get("logging", {}).get("to_file", True),
+    # Per-handler levels: strings INFO|DEBUG|WARNING|ERROR|CRITICAL|NONE
+    # Backward-compatible: if console/to_file are bools, map True->level, False->NONE
+    "logging_console": None,
+    "logging_file": None,
         "logging_file_path": t.get("logging", {}).get("file_path", "logs/adventorator.jsonl"),
         "logging_max_bytes": t.get("logging", {}).get("max_bytes", 5_000_000),
         "logging_backup_count": t.get("logging", {}).get("backup_count", 5),
     }
+
+    log_cfg = t.get("logging", {}) or {}
+    # Derive per-handler levels if provided as strings; otherwise fallback from booleans
+    console_val = log_cfg.get("console", None)
+    file_val = log_cfg.get("to_file", None)
+    overall = out["logging_level"]
+    def _norm_level(v, default):
+        if isinstance(v, str):
+            return v.upper()
+        if isinstance(v, bool):
+            return default if v else "NONE"
+        return default
+
+    out["logging_console"] = _norm_level(console_val, overall)
+    out["logging_file"] = _norm_level(file_val, overall)
+
+    # Only set legacy booleans if TOML provided booleans to avoid validation errors
+    if isinstance(console_val, bool):
+        out["logging_to_console"] = console_val
+    if isinstance(file_val, bool):
+        out["logging_to_file"] = file_val
 
     llm_cfg = t.get("llm", {}) or {}
     if "max_prompt_tokens" in llm_cfg and llm_cfg.get("max_prompt_tokens") is not None:
@@ -77,6 +100,10 @@ class Settings(BaseSettings):
     # Logging
     logging_enabled: bool = True
     logging_level: str = "INFO"
+    # Per-handler levels; use "NONE" to disable
+    logging_console: str = "INFO"
+    logging_file: str = "INFO"
+    # Legacy booleans retained for backward compatibility (unused if above present)
     logging_to_console: bool = True
     logging_to_file: bool = True
     logging_file_path: str = "logs/adventorator.jsonl"

@@ -18,9 +18,9 @@ default_system_prompt = "You are AdventureBot, an assistant for players in a tab
 [logging]
 # Enable verbose debugging during development
 enabled = true
-level = "DEBUG"
-console = true
-to_file = true
+level = "DEBUG"           # overall root filtering level for structlog
+console = "INFO"          # per-handler: "DEBUG"|"INFO"|"WARNING"|"ERROR"|"CRITICAL"|"NONE"
+to_file = "DEBUG"         # per-handler: set to "NONE" to disable file writes
 file_path = "logs/adventorator.jsonl"
 max_bytes = 5000000
 backup_count = 5

@@ -18,16 +18,29 @@ def setup_logging(settings: Settings | None = None) -> None:
     level = getattr(logging, level_name, logging.INFO)
 
     root_handlers: list[logging.Handler] = []
-    # Console handler
-    if settings is None or getattr(settings, "logging_to_console", True):
+    # Console handler (per-handler level)
+    console_lvl_name = None
+    if settings is not None:
+        console_lvl_name = getattr(settings, "logging_console", None)
+    if console_lvl_name is None:
+        # Fallback to legacy boolean
+        use_console = True if settings is None else getattr(settings, "logging_to_console", True)
+        console_lvl_name = level_name if use_console else "NONE"
+    if (console_lvl_name or "").upper() != "NONE":
         ch = logging.StreamHandler()
-        ch.setLevel(level)
+        ch.setLevel(getattr(logging, console_lvl_name.upper(), level))
         ch.setFormatter(logging.Formatter("%(message)s"))
         root_handlers.append(ch)
 
     # Rotating file handler (Option B)
-    to_file = True if settings is None else getattr(settings, "logging_to_file", True)
-    if to_file:
+    file_lvl_name = None
+    if settings is not None:
+        file_lvl_name = getattr(settings, "logging_file", None)
+    if file_lvl_name is None:
+        # Fallback to legacy boolean
+        to_file = True if settings is None else getattr(settings, "logging_to_file", True)
+        file_lvl_name = level_name if to_file else "NONE"
+    if (file_lvl_name or "").upper() != "NONE":
         path = (
             settings.logging_file_path
             if settings is not None
@@ -40,7 +53,7 @@ def setup_logging(settings: Settings | None = None) -> None:
             maxBytes=(settings.logging_max_bytes if settings else 5_000_000),
             backupCount=(settings.logging_backup_count if settings else 5),
         )
-        fh.setLevel(level)
+        fh.setLevel(getattr(logging, file_lvl_name.upper(), level))
         fh.setFormatter(logging.Formatter("%(message)s"))
         root_handlers.append(fh)
 
