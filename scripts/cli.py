@@ -24,6 +24,7 @@ from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import Invocation, all_commands
 from Adventorator.config import load_settings
 from Adventorator.llm import LLMClient
+from Adventorator.logging import setup_logging
 
 
 class PrintResponder:
@@ -128,14 +129,23 @@ def _make_click_command(name: str, option_model: type, handler, sub: str | None 
             llm_client = None
             try:
                 settings = load_settings()
-                if getattr(settings, "features_llm", False):
-                    try:
-                        llm_client = LLMClient(settings)
-                    except Exception:
-                        # Leave llm_client as None if initialization fails; handler will degrade
-                        llm_client = None
             except Exception:
                 settings = None
+
+            # Initialize logging to mirror application behavior
+            try:
+                setup_logging(settings)
+            except Exception:
+                # Fallback to defaults if logging setup fails
+                setup_logging(None)
+
+            # Optionally initialize LLM client if enabled
+            if settings and getattr(settings, "features_llm", False):
+                try:
+                    llm_client = LLMClient(settings)
+                except Exception:
+                    # Leave llm_client as None if initialization fails; handler will degrade
+                    llm_client = None
 
             inv = Invocation(
                 name=name,

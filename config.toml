@@ -4,8 +4,10 @@ env = "dev"
 
 [features]
 llm = true
-rules = false
+planner = true
+rules = true
 combat = false
+llm_visible = true
 
 [discord]
 response_timeout_seconds = 3
@@ -14,3 +16,16 @@ response_timeout_seconds = 3
 api_url = "http://localhost:11434/api/chat"
 model_name = "llama3.2:latest"
 default_system_prompt = "You are AdventureBot, an assistant for players in a tabletop RPG. Chat Rules: 1. Refrain from producing extremely long responses that may overwhelm the user or stray off-topic. 2. Most responses should nudge the user towards an adventure interaction, suggesting simple, short-worded actions they can take. 3. Vulgarity is encouraged but should be used sparingly and for surprise effect. 4. Feel free to roast the user, but avoid excessive niceties. Be blunt and to the point."
+
+[logging]
+# Enable verbose debugging during development
+enabled = true
+level = "DEBUG"           # overall root filtering level for structlog
+console = "INFO"          # per-handler: "DEBUG"|"INFO"|"WARNING"|"ERROR"|"CRITICAL"|"NONE"
+to_file = "DEBUG"         # per-handler: set to "NONE" to disable file writes
+file_path = "logs/adventorator.jsonl"
+max_bytes = 5000000
+backup_count = 5
+
+[ops]
+metrics_endpoint_enabled = true

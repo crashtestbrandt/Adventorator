@@ -119,7 +119,12 @@ def main() -> int:
         ).lstrip()
     )
 
-    out_path = os.path.join(os.path.dirname(__file__), "..", "docs", "implementation_plan.md")
+    out_path = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "docs",
+        "implementation",
+        "implementation_plan.md")
     out_path = os.path.abspath(out_path)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:

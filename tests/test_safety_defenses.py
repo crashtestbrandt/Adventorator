@@ -14,7 +14,12 @@ class _FakeLLM:
 
 def _ok_output(ability="DEX", dc=12, reason="nimble", narration="You slip by."):  # noqa: ANN001
     return LLMOutput(
-        proposal=LLMProposal(action="ability_check", ability=ability, suggested_dc=dc, reason=reason),
+        proposal=LLMProposal(
+            action="ability_check",
+            ability=ability,
+            suggested_dc=dc,
+            reason=reason,
+        ),
         narration=narration,
     )
 

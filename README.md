@@ -19,127 +19,96 @@ A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in
 
 ## Overview
 
-**✨ Features (MVP and beyond)**
+**✨ What it does (today)**
 
-* Discord-first gameplay
-* Slash commands (/roll, /check, /sheet, /act) and interactive components (buttons, modals).
-* Combat threads with initiative order, per-turn locks, and timeouts.
-* Ephemeral prompts for individual player actions.
-* Deterministic rules engine
-* Full SRD 5e dice system (advantage/disadvantage, crits, modifiers).
-* Ability checks, saving throws, AC, HP, conditions.
-* Initiative and turn management with audit logging.
-* Campaign persistence
-* JSON-schema character sheets stored in Postgres (or SQLite for dev).
-* Adventure content as structured "nodes" (locations, NPCs, encounters).
-* Automatic transcripts and neutral session summaries.
-* AI-assisted narration (behind feature flag)
-* LLM proposes DCs and narrates outcomes; Rules Service enforces mechanics.
-* Retrieval-augmented memory: previous sessions, adventure nodes, campaign facts.
-* Configurable tone, verbosity, and house rules.
-* Developer experience
-* Python 3.10+, FastAPI interactions endpoint, Redis for locks/queues.
-* Pydantic models, property-based tests for dice & checks.
-* Structured JSON logs, reproducible seeds, feature flags for every subsystem.
+* Discord-first gameplay with slash commands: `/roll`, `/check`, `/sheet`, `/ooc`, and the smart router `/act`.
+* Fast 3s defer on all interactions; real work happens asynchronously with webhook follow-ups.
+* Deterministic rules engine for dice and checks (advantage/disadvantage, crits, modifiers).
+* Campaign persistence: async SQLAlchemy + Alembic; transcripts for player/bot messages.
+* Optional, safety-gated AI: proposal-only LLM planner/orchestrator behind feature flags; defaults to rules-only.
+* Structured JSON logging (console and rotating file), minimal metrics counters, and feature flags via `config.toml`.
 
-**🏗 Architecture**
+**🏗 How it’s built**
 
-* Discord Interactions API → FastAPI app → defer in <3s → enqueue background job.
-* Rules Service (pure Python functions) → resolves rolls, DCs, initiative, mutations.
-* Database → campaign state, character sheets, transcripts.
-* Optional LLM → narrates and proposes rulings, never mutates state directly.
-* Workers → long-running tasks: narration, summarization, content ingestion.
+* FastAPI server implements Discord Interactions `/interactions`, verifies Ed25519 signatures, and defers within 3 seconds.
+* Command registry routes to handlers in `Adventorator.commands/*`; responders send follow-ups via Discord webhooks.
+* Rules engine (pure Python) implements dice and checks; DB access goes through `repos.py` using async SQLAlchemy.
+* Optional LLM orchestrator/planner coordinates facts → JSON proposal → rules → formatted output with strict defenses and a 30s in-process cache.
+* Config-driven logging and metrics; same logging behavior for the CLI and the server.
  
 **Diagram: High-Level Architecture**
 
 ```mermaid
 flowchart TD
   %% === External ===
-  subgraph EXTERNAL[External Systems]
+  subgraph EXTERNAL[External]
     U[Player on Discord]:::ext
-    DP[Discord Platform<br/>App Commands and Interactions]:::ext
+    DP[Discord Platform<br/>Commands & Interactions]:::ext
     WH[Discord Webhooks API<br/>Follow-up Messages]:::ext
     LLM[LLM API<br/>e.g., Ollama]:::ext
   end
 
   %% === Network Edge ===
-  CF[cloudflared Tunnel<br/>TLS - trusted CA]:::edge
+  CF[cloudflared Tunnel<br/>optional for local dev]:::edge
 
   %% === App ===
-  subgraph APP[Adventorator Service - FastAPI]
+  subgraph APP[Adventorator - FastAPI]
     subgraph REQUEST[Request Handling]
-      A[Interactions Endpoint<br/>path: /interactions]
-      SIG[Ed25519 Verify<br/>X-Signature-* headers]
-      DISP[Command Dispatcher]
+      A[POST /interactions]
+      SIG[Ed25519 Verify<br/>X-Signature-*]
+      DISP[Command Dispatch<br/>registry in commanding.py]
+  DEF[Deferred ACK]
     end
 
-    subgraph BUSINESS[Business Logic]
-      RULES[Rules Engine<br/>Dice, Checks]
-      CTX[Context Resolver<br/>Campaign, Player, Scene]
-      LLMC[LLM Client<br/>Prompting & JSON Parsing]
-      ORCH[Orchestrator<br/>Coordinates LLM + Rules]
+    subgraph BUSINESS[Command Logic]
+      RULES[Rules Engine<br/>dice, checks]
+      REPOS[Repos & Context<br/>session_scope + repos.py]
+      PLAN[Planner/Orchestrator<br/>JSON-only + safety + 30s cache]
     end
 
-    subgraph RESPONSE[Response Handling]
-      RESP[Responder<br/>defer and follow-up]
+    subgraph RESPONSE[Response]
+      RESP[Responder<br/>follow-up webhooks]
       TRANS[Transcript Logger]
+      MET[Metrics Counters]
+      LOGS[Structlog JSON Logs]
     end
   end
 
   %% === Data ===
-  subgraph DATA[Data Layer]
-    DB[(Postgres or SQLite<br/>campaigns, players, characters, scenes, transcripts)]:::data
+  subgraph DATA[Data]
+    DB[(Postgres or SQLite<br/>campaigns, characters, transcripts)]:::data
     MIG[Alembic Migrations]:::ops
   end
 
   %% === Tooling ===
   subgraph TOOLING[Tooling]
-    REG[scripts/register_commands.py<br/>Guild command registration]:::ops
-    LOG[Structured Logs<br/>structlog and orjson]:::ops
-    TEST[Tests<br/>pytest and hypothesis]:::ops
+    CLI[Dynamic CLI<br/>scripts/cli.py]:::ops
+    REG[scripts/register_commands.py]:::ops
+    TEST[pytest suite]:::ops
+    CFG[config.toml<br/>feature flags + logging]:::ops
   end
 
   %% === Ingress Flow ===
   U -->|Slash command| DP
-  DP -->|POST /interactions<br/>signed| CF
+  DP -->|signed request| CF
   CF --> A
   A --> SIG
   SIG -->|valid| DISP
-  A -.->|invalid| RESP
+  SIG -.->|invalid| DEF
+  DISP --> DEF
 
-  %% Phase 0: immediate defer
-  DISP -->|defer| RESP
+  %% === Command Paths (examples) ===
+  DISP -- "/roll" --> RULES --> RESP
+  DISP -- "/check" --> RULES --> RESP
+  DISP -- "/sheet" --> REPOS --> RESP
+  DISP -- "/ooc" --> REPOS --> PLAN --> LLM --> RESP
+  DISP -- "/act" --> REPOS --> PLAN -->|route| RULES --> RESP
 
-  %% === Command-Specific Flows ===
-  DISP -- "/roll" --> RULES
-  RULES --> RESP
-
-  DISP -- "/sheet" --> CTX
-  CTX -->|reads| DB
-  CTX --> RESP
-
-  DISP -- "/ooc: read history" --> DB
-  DISP -- "/ooc: call LLM" --> LLMC
-  LLMC --> LLM
-  LLMC -- "respond" --> RESP
-
-  DISP -- "/narrate" --> ORCH
-  ORCH -- "get facts" --> DB
-  ORCH -- "get proposal" --> LLMC
-  ORCH -- "run rules" --> RULES
-  ORCH -- "respond" --> RESP
-
-  %% === Egress & Logging (for all command flows) ===
-  RESP -- "log event" --> TRANS
-  TRANS -->|write| DB
-  RESP -->|POST follow-up| WH
-  WH --> DP --> U
-
-  %% === Tooling Edges ===
-  REG --> DP
-  MIG --> DB
-  TEST -.-> RULES & ORCH & A
-  LOG -.-> APP
+  %% === Egress ===
+  RESP --> TRANS -->|write| DB
+  RESP -->|POST| WH --> DP --> U
+  LOGS -.-> APP
+  MET -.-> APP
 
   %% === Styles ===
   classDef ext  fill:#eef7ff,stroke:#4e89ff,stroke-width:1px,color:#0d2b6b
@@ -148,7 +117,7 @@ flowchart TD
   classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46
 ```
 
-**Diagram: Narrate Command Flow**
+**Diagram: Act Command Flow**
 
 ```mermaid
 sequenceDiagram
@@ -156,50 +125,62 @@ sequenceDiagram
   participant User as Player (Discord)
   participant Discord as Discord Platform
   participant API as Adventorator Service
-  participant ORCH as Orchestrator
+  participant ACT as /act Handler
+  participant PLAN as Planner/Orchestrator
   participant DB as Database
   participant LLM as LLM API
   participant RULES as Rules Engine
   participant WH as Discord Webhooks
 
-  User->>Discord: /narrate message:"I try to pick the lock"
+  User->>Discord: /act message:"I try to pick the lock"
   Discord->>API: POST /interactions (signed)
   
   Note over API: Verifies Ed25519 signature
 
-  API-->>Discord: ACK with Defer (type=5) in < 3s
+  API-->>Discord: ACK with Defer (type=5) in ≤ 3s
 
   par Background Processing
-    API->>API: Dispatches "narrate" command
-    
-    API->>DB: write_transcript("player", "I try to pick the lock")
+    API->>API: Dispatches "act" command
 
-    API->>ORCH: run_orchestrator(scene_id, player_msg)
-    
-    activate ORCH
-      ORCH->>DB: get_recent_transcripts(scene_id)
-      DB-->>ORCH: Return transcript history
-      
-      Note over ORCH: Builds facts prompt from history
-      
-      ORCH->>LLM: generate_json(prompt)
-      LLM-->>ORCH: Return JSON proposal (action, ability, dc, narration)
-      
-      Note over ORCH: Validates proposal
-      
-      ORCH->>RULES: compute_check(DEX, dc=15, ...)
-      RULES-->>ORCH: Return CheckResult (success, total, rolls)
-    deactivate ORCH
-    
-    ORCH-->>API: Return OrchestratorResult
-    
-    Note over API: Formats mechanics and narration for response
-    
-    API->>WH: POST follow-up message
+    API->>DB: write_transcript(author="player", content="I try to pick the lock")
+
+    API->>DB: list_character_names(scene_id)
+    DB-->>API: allowed_actors
+    Note over API: Enforces allowlist and basic option validation
+
+    API->>ACT: check cache (scene_id, message)
+    alt Cache hit
+      ACT->>API: use cached plan
+      Note over ACT: metrics.inc("planner.cache.hit")
+    else Cache miss
+      ACT->>PLAN: plan(message, context)
+      activate PLAN
+        PLAN->>DB: get_recent_transcripts(scene_id)
+        DB-->>PLAN: transcript history
+        PLAN->>LLM: generate_json(prompt)
+        LLM-->>PLAN: JSON plan (intent, ability, dc, target, ...)
+        Note over PLAN: Strict parsing + safety checks
+      deactivate PLAN
+    end
+
+    alt intent == "check"
+      API->>RULES: compute_check(ability, dc, ...)
+      RULES-->>API: CheckResult (success, total, rolls, crit?)
+    else intent == "roll"
+      API->>RULES: roll("XdY+Z")
+      RULES-->>API: DiceRoll (rolls, total, crit?)
+    else intent == "ooc"
+      API->>API: delegate to /ooc handler (optional LLM text)
+    else LLM disabled/timeout
+      API->>RULES: fallback roll (e.g., 1d20)
+      Note over API: soft-timeout fallback ~6s
+    end
+
+    API->>WH: POST follow-up (formatted mechanics + narration)
     WH-->>Discord: Delivers message
-    Discord-->>User: Shows formatted mechanics + narration
-    
-    API->>DB: write_transcript("bot", narration, meta={mechanics})
+    Discord-->>User: Shows result
+
+    API->>DB: write_transcript(author="bot", content, meta={mechanics})
   end
 ```
 
@@ -220,7 +201,7 @@ sequenceDiagram
   
   Note over API: Verifies Ed25519 signature
 
-  API-->>Discord: ACK with Defer (type=5) in < 3s
+  API-->>Discord: ACK with Defer (type=5) in ≤ 3s
 
   par Background Processing
     API->>API: Dispatches "ooc" command
@@ -264,8 +245,9 @@ sequenceDiagram
 * [X] Phase 0: Verified interactions endpoint, 3s deferral, logging.
 * [X] Phase 1: Deterministic dice + checks, /roll and /check commands.
 * [X] Phase 2: Persistence (campaigns, characters, transcripts).
-* [ ] Phase 3: Shadow LLM narrator, proposal-only.
-* [ ] Phase 4+: Combat system, content ingestion, GM controls, premium polish.
+* [X] Phase 3: Shadow LLM narrator, proposal-only.
+* [~] Phase 4: Planner + /act smart routing (in progress; feature-flagged).
+* [ ] Phase 5+: Combat system, content ingestion, GM controls, premium polish.
 
 **🔜 Roadmap**
 
@@ -355,6 +337,70 @@ For quick local dev you can rely on SQLite (`sqlite+aiosqlite:///./adventurator.
 ---
 
 That way, someone can go from `make dev` → `alembic upgrade head` → bot commands writing to DB.
+
+---
+
+## Feature flags and configuration
+
+Configure behavior via `config.toml` (overridden by env/.env). Key toggles:
+
+- features.llm: enable LLM-powered features (ooc, act routing) safely. Default false unless set in TOML.
+- features.llm_visible: if true, narration is posted publicly; otherwise stays in shadow mode.
+- features.planner: hard on/off for the `/act` planner. Toggle off to disable instantly.
+- features.rules: enable pure rules features (dice/checks). Usually true.
+- ops.metrics_endpoint_enabled: if true, exposes GET /metrics for local ops.
+
+LLM client:
+
+- llm.api_url: base URL for your provider (Ollama: http://localhost:11434; OpenAI-compatible must end with /v1).
+- llm.model_name: model identifier (e.g., "llama3.2:latest").
+- llm.api_provider: "ollama" or "openai"; if openai, set an API key in env.
+- llm.default_system_prompt: default persona; planner/orchestrator add their own system prompts.
+
+Logging:
+
+- logging.level: root level.
+- logging.console, logging.to_file: per-handler levels ("DEBUG"|"INFO"|...|"NONE").
+- logging.file_path, max_bytes, backup_count: rotating JSONL log file.
+
+See `src/Adventorator/config.py` for defaults and precedence. Env/.env override TOML.
+
+---
+
+## Using the /act smart router
+
+`/act` lets players type freeform intents that are routed to known commands with strict validation. Examples:
+
+- /act "roll 2d6+3 for damage" → routes to `/roll --expr 2d6+3`
+- /act "make a dexterity check against DC 15" → `/check --ability DEX --dc 15`
+- /act "create a character named Aria the rogue" → `/sheet create --json '{...}'` (or a helpful error asking for JSON)
+- /act "I sneak along the wall, quiet as a cat" → `/do --message "..."`
+
+Safety & guardrails:
+
+- Allowlist: only routes to {roll, check, sheet.create, sheet.show, do, ooc}.
+- Option validation: all args must pass the target command’s Pydantic option model.
+- Caching: identical (scene_id, message) is cached for 30s to reduce LLM calls.
+- Rate limiting: lightweight per-user limiter to avoid spam.
+- Fallbacks: soft timeout falls back to a friendly `/roll 1d20`.
+- Feature flags: requires `features.llm=true` and `features.planner=true`; visibility controlled by `features.llm_visible`.
+
+You can also use `/act` via the local CLI:
+
+```bash
+PYTHONPATH=./src python scripts/cli.py act --message "roll 2d6+3 for damage"
+```
+
+---
+
+## Operations: health and metrics
+
+The FastAPI app exposes:
+
+- GET /healthz: light check that commands load and the DB is reachable. Returns {"status":"ok"} or 500.
+- GET /metrics: JSON dump of internal counters. Disabled by default; enable with `ops.metrics_endpoint_enabled=true` for local ops.
+
+Do not expose /metrics publicly in production unless gated.
 
 ---
 

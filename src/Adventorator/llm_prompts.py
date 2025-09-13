@@ -13,11 +13,18 @@ SYSTEM_PROMPT_CLERK = (
     "Do not invent details. Ignore system meta. Keep it compact."
 )
 
+# OOC narrator system prompt: produce narration only, no mechanics or dice.
+SYSTEM_PROMPT_OOC = (
+    "You are the Narrator. Write a brief, evocative narration in response to the player's input, "
+    "grounded in the provided recent facts. Do NOT mention dice, DCs, mechanics, or game rules. "
+    "Stay concise (1-3 sentences)."
+)
+
 # Narrator system prompt: strictly emit a single JSON object only.
 SYSTEM_PROMPT_NARRATOR = (
     "You are the Narrator. Using the provided facts and the player's latest input, "
     "decide if a single d20 ability check is warranted. Respond with ONLY a single JSON object, "
-    "no extra text or markdown. The JSON schema is:\n"
+    "no extra text or markdown. The JSON schema (both keys required) is:\n"
     "{\n"
     '  "proposal": {\n'
     '    "action": "ability_check",\n'
@@ -28,7 +35,7 @@ SYSTEM_PROMPT_NARRATOR = (
     '  "narration": "brief evocative narration"\n'
     "}\n"
     "Rules: If no check is needed, pick the most relevant ability and a reasonable DC anyway. "
-    "Do not include commentary outside the JSON."
+    "Always include a concise 'narration' string. Do not include commentary outside the JSON."
 )
 
 
@@ -133,4 +140,48 @@ def build_narrator_messages(
     user_content = "\n".join(content_lines)
     messages.append({"role": "user", "content": user_content})
 
+    return messages
+
+
+def build_ooc_narration_messages(
+    facts: Iterable[str],
+    player_msg: str | None,
+    max_tokens: int | None = None,
+) -> list[dict[str, Any]]:
+    """Build messages for OOC narration-only flow.
+
+    - facts: short fact strings for context
+    - player_msg: the user's latest OOC note or request
+    """
+    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT_OOC}]
+
+    budget = max_tokens or 10_000
+    used = 0
+    player_line = (player_msg or "").strip()
+    reserve = _approx_tokens(player_line) if player_line else 0
+
+    picked_facts: list[str] = []
+    for f in facts:
+        f = (f or "").strip()
+        if not f:
+            continue
+        line = f"- {f}"
+        cost = _approx_tokens(line)
+        if used + cost > max(0, budget - reserve):
+            break
+        picked_facts.append(line)
+        used += cost
+
+    content_lines: list[str] = []
+    if picked_facts:
+        content_lines.append("Facts:")
+        content_lines.extend(picked_facts)
+    if player_line:
+        content_lines.append(f"Player input: {player_line}")
+
+    if not content_lines:
+        content_lines.append("Player input: ")
+
+    user_content = "\n".join(content_lines)
+    messages.append({"role": "user", "content": user_content})
     return messages

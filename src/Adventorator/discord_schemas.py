@@ -2,7 +2,7 @@
 
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class User(BaseModel):
@@ -16,7 +16,7 @@ class User(BaseModel):
 class Member(BaseModel):
     user: User
     nick: str | None = None
-    roles: list[str] = []
+    roles: list[str] = Field(default_factory=list)
     joined_at: str | None = None
     permissions: str | None = None
 
@@ -31,7 +31,7 @@ class Channel(BaseModel):
 class Guild(BaseModel):
     id: str
     locale: str | None = None
-    features: list[str] = []
+    features: list[str] = Field(default_factory=list)
 
 
 class InteractionData(BaseModel):

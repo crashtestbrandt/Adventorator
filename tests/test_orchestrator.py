@@ -72,7 +72,11 @@ async def test_orchestrator_rejects_bad_dc(monkeypatch):
     monkeypatch.setattr(repos, "get_recent_transcripts", fake_get_recent_transcripts)
 
     res = await run_orchestrator(
-        scene_id=1, player_msg="I lift.", sheet_info_provider=_neutral_sheet, rng_seed=1, llm_client=llm
+        scene_id=1,
+        player_msg="I lift.",
+        sheet_info_provider=_neutral_sheet,
+        rng_seed=1,
+        llm_client=llm,
     )
     assert res.rejected
     assert "Proposal rejected" in res.mechanics or res.reason is not None
@@ -95,7 +99,11 @@ async def test_orchestrator_rejects_bad_ability(monkeypatch):
     monkeypatch.setattr(repos, "get_recent_transcripts", fake_get_recent_transcripts)
 
     res = await run_orchestrator(
-        scene_id=1, player_msg="I try.", sheet_info_provider=_neutral_sheet, rng_seed=1, llm_client=llm
+        scene_id=1,
+        player_msg="I try.",
+        sheet_info_provider=_neutral_sheet,
+        rng_seed=1,
+        llm_client=llm,
     )
     assert res.rejected
     assert "Unknown ability" in (res.reason or "") or "Proposal rejected" in res.mechanics

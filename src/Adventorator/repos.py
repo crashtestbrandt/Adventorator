@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Adventorator import models
@@ -18,7 +21,7 @@ async def get_or_create_campaign(
         return obj
     obj = models.Campaign(guild_id=guild_id, name=name)
     s.add(obj)
-    await s.flush()
+    await _flush_retry(s)
     return obj
 
 
@@ -33,7 +36,7 @@ async def get_or_create_player(
         return obj
     obj = models.Player(discord_user_id=discord_user_id, display_name=display_name)
     s.add(obj)
-    await s.flush()
+    await _flush_retry(s)
     return obj
 
 
@@ -49,7 +52,7 @@ async def upsert_character(
     obj = q.scalar_one_or_none()
     if obj:
         obj.sheet = sheet.model_dump(by_alias=True)
-        await s.flush()
+        await _flush_retry(s)
         return obj
     obj = models.Character(
         campaign_id=campaign_id,
@@ -58,7 +61,7 @@ async def upsert_character(
         sheet=sheet.model_dump(by_alias=True),
     )
     s.add(obj)
-    await s.flush()
+    await _flush_retry(s)
     return obj
 
 
@@ -79,7 +82,7 @@ async def ensure_scene(s: AsyncSession, campaign_id: int, channel_id: int) -> mo
         return sc
     sc = models.Scene(campaign_id=campaign_id, channel_id=channel_id)
     s.add(sc)
-    await s.flush()
+    await _flush_retry(s)
     return sc
 
 
@@ -100,7 +103,8 @@ async def write_transcript(
     content: str,
     author_ref: str | None = None,
     meta: dict | None = None,
-):
+    status: str | None = None,
+) -> models.Transcript:
     t = models.Transcript(
         campaign_id=campaign_id,
         scene_id=scene_id,
@@ -109,9 +113,48 @@ async def write_transcript(
         author_ref=author_ref,
         content=content,
         meta=meta or {},
+        status=status or "complete",
     )
     s.add(t)
-    await s.flush()
+    await _flush_retry(s)
+    return t
+
+
+async def update_transcript_status(s: AsyncSession, transcript_id: int, status: str) -> None:
+    q = await s.execute(select(models.Transcript).where(models.Transcript.id == transcript_id))
+    t = q.scalar_one_or_none()
+    if t:
+        t.status = status
+        await _flush_retry(s)
+
+
+async def update_transcript_meta(
+    s: AsyncSession, transcript_id: int, meta: dict | None = None
+) -> None:
+    q = await s.execute(select(models.Transcript).where(models.Transcript.id == transcript_id))
+    t = q.scalar_one_or_none()
+    if t:
+        t.meta = meta or {}
+        await _flush_retry(s)
+
+
+async def _flush_retry(s: AsyncSession, attempts: int = 5, delay: float = 0.2) -> None:
+    """Retry session.flush() on transient SQLite 'database is locked' errors.
+
+    Exponential backoff: delay * 2^i between attempts.
+    """
+    for i in range(attempts):
+        try:
+            await s.flush()
+            return
+        except OperationalError as e:  # pragma: no cover - timing dependent
+            msg = str(e).lower()
+            if "database is locked" in msg or "database is busy" in msg:
+                if i == attempts - 1:
+                    raise
+                await asyncio.sleep(delay * (2 ** i))
+                continue
+            raise
 
 
 async def get_recent_transcripts(
@@ -129,3 +172,8 @@ async def get_recent_transcripts(
     results = list(q.scalars().all())
     # chronological order (oldest -> newest)
     return list(results[::-1])
+
+
+async def healthcheck(s: AsyncSession) -> None:
+    """Lightweight DB check to confirm connectivity and basic query works."""
+    await s.execute(select(models.Campaign).limit(1))

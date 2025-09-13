@@ -1,5 +1,6 @@
 # src/Adventorator/llm.py
 
+from typing import Any, cast
 
 import httpx
 import orjson
@@ -38,7 +39,8 @@ class LLMClient:
                 "LLMClient requires llm_api_url to be set in configuration."
             )
         # The client instance will be one of two types (set below based on provider).
-        self._client: AsyncOpenAI | httpx.AsyncClient
+        # Use Any here to keep mypy happy across provider branches.
+        self._client: Any
 
         if self.provider == "ollama":
             self.api_url = f"{settings.llm_api_url.rstrip('/')}/api/chat"
@@ -79,17 +81,17 @@ class LLMClient:
         try:
             if isinstance(self._client, httpx.AsyncClient):  # Ollama provider
                 data = {"model": self.model_name, "messages": full_prompt, "stream": False}
-                response = await self._client.post(self.api_url, content=orjson.dumps(data))
-                response.raise_for_status()
-                result = response.json()
+                httpx_resp = await self._client.post(self.api_url, content=orjson.dumps(data))
+                httpx_resp.raise_for_status()
+                result = httpx_resp.json()
                 content = result.get("message", {}).get("content")
 
             else:  # OpenAI provider
-                response = await self._client.chat.completions.create(
+                oa_resp = await self._client.chat.completions.create(
                     model=self.model_name,
-                    messages=full_prompt,
+                    messages=cast(Any, full_prompt),
                 )
-                content = response.choices[0].message.content
+                content = oa_resp.choices[0].message.content
 
             if not content:
                 log.error("LLM API response missing 'content'")
@@ -127,9 +129,9 @@ class LLMClient:
                     "stream": False,
                     "format": "json",
                 }
-                response = await self._client.post(self.api_url, content=orjson.dumps(data))
-                response.raise_for_status()
-                result = response.json()
+                httpx_resp = await self._client.post(self.api_url, content=orjson.dumps(data))
+                httpx_resp.raise_for_status()
+                result = httpx_resp.json()
                 raw_content = result.get("message", {}).get("content")
                 if raw_content is not None:
                     # Ollama may return the content as a dict when format=json is used
@@ -173,11 +175,12 @@ class LLMClient:
                         pass
 
             else:  # OpenAI provider
-                response = await self._client.chat.completions.create(
+                oa_resp = await self._client.chat.completions.create(
                     model=self.model_name,
-                    messages=full_prompt,
+                    messages=cast(Any, full_prompt),
                 )
-                raw_content = response.choices[0].message["content"]
+                # Use attribute access per OpenAI SDK; dict-like access may fail
+                raw_content = oa_resp.choices[0].message.content
                 if raw_content:
                     if isinstance(raw_content, dict | list):
                         parsed_json = raw_content
@@ -191,8 +194,29 @@ class LLMClient:
                 )
                 return None
 
+            # Gentle fallback: some models omit 'narration' but include a proposal.
+            if (
+                isinstance(parsed_json, dict)
+                and "proposal" in parsed_json
+                and "narration" not in parsed_json
+            ):
+                try:
+                    reason = ""
+                    prop = parsed_json.get("proposal")
+                    if isinstance(prop, dict):
+                        reason = str(prop.get("reason") or "").strip()
+                    parsed_json["narration"] = reason or ""
+                except Exception:
+                    # If anything goes wrong, proceed to normal validation which may fail
+                    pass
+
             # Validate the parsed dictionary against our Pydantic schema
-            out = validate_llm_output(parsed_json)
+            out = validate_llm_output(
+                cast(
+                    dict[str, Any] | None,
+                    parsed_json if isinstance(parsed_json, dict) else None,
+                )
+            )
             if not out:
                 log.warning("LLM JSON validation failed", raw_preview=str(raw_content)[:200])
             return out
