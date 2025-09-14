@@ -55,6 +55,6 @@ jobs:
         env:
           ENV: dev
           DISCORD_PUBLIC_KEY: dummy
-          DATABASE_URL: ${{ matrix.db == 'postgres' && 'postgresql+asyncpg://adventorator:adventorator@localhost:5432/adventorator' || 'sqlite+aiosqlite:///./adventurator_test.sqlite3' }}
+          DATABASE_URL: ${{ matrix.db == 'postgres' && 'postgresql+asyncpg://adventorator:adventorator@localhost:5432/adventorator' || 'sqlite+aiosqlite:///./adventorator_test.sqlite3' }}
         run: |
           pytest -q

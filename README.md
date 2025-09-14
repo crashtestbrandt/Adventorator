@@ -283,6 +283,8 @@ alembic downgrade -1
 
 By default, `alembic.ini` points at the `DATABASE_URL` from your configuration. For local development, SQLite is used by default.
 
+See also: `migrations/README` for deeper Alembic usage, driver notes, and troubleshooting.
+
 -----
 
 ## Configuration
