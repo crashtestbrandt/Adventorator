@@ -353,9 +353,9 @@ def downgrade() -> None:
 
 ---
 
-## Working on the Planner and /act
+## Working on the Planner and /plan
 
-Phase 4 adds a planner that routes freeform `/act` messages to strict, validated commands.
+Phase 4 adds a planner that routes freeform `/plan` messages to strict, validated commands.
 
 Tips for contributors:
 
@@ -367,12 +367,12 @@ Tips for contributors:
    - Use the fake LLM pattern in tests to return a JSON plan (see `_FakeLLM` fixtures in tests).
    - Metrics assertions are available via `metrics.reset_counters()` and `metrics.get_counter()`.
 - Caching & rate limits
-   - `/act` caches decisions for 30s per (scene_id, message) and rate-limits per user (simple in-memory window).
+   - `/plan` caches decisions for 30s per (scene_id, message) and rate-limits per user (simple in-memory window).
 - Safety guardrails
    - The planner is allowed to route only to: `roll`, `check`, `sheet.create`, `sheet.show`, `do`, `ooc`.
    - All args must validate against the target command’s Pydantic option model; invalid → ephemeral error.
 - CLI & registration
-   - The dynamic CLI (`scripts/cli.py`) mirrors slash commands; test `/act` locally without Discord.
+   - The dynamic CLI (`scripts/cli.py`) mirrors slash commands; test `/plan` locally without Discord.
    - To register commands in a dev guild, set Discord env vars and run `python scripts/register_commands.py`.
 
 When in doubt, prefer small, focused PRs and add tests alongside new behavior.

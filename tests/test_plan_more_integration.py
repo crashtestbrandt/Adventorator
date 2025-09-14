@@ -24,16 +24,16 @@ class _FakeLLM:
 
 
 @pytest.mark.asyncio
-async def test_act_routes_check():
+async def test_plan_routes_check():
     reset_counters()
     load_all_commands()
-    cmd = find_command("act", None)
+    cmd = find_command("plan", None)
     assert cmd is not None
 
     llm = _FakeLLM('{"command": "check", "args": {"ability": "DEX", "dc": 10}}')
     responder = _SpyResponder()
     inv = Invocation(
-        name="act",
+        name="plan",
         subcommand=None,
         options={"message": "make a dexterity check vs 10"},
         user_id="2",
@@ -51,15 +51,15 @@ async def test_act_routes_check():
 
 
 @pytest.mark.asyncio
-async def test_act_routes_ooc():
+async def test_plan_routes_ooc():
     reset_counters()
     load_all_commands()
-    cmd = find_command("act", None)
+    cmd = find_command("plan", None)
     assert cmd is not None
 
     responder = _SpyResponder()
     inv = Invocation(
-        name="act",
+        name="plan",
         subcommand=None,
         options={"message": "narrate something out of character"},
         user_id="3",
@@ -77,16 +77,16 @@ async def test_act_routes_ooc():
 
 
 @pytest.mark.asyncio
-async def test_act_sheet_show_and_create_invalid_args():
+async def test_plan_sheet_show_and_create_invalid_args():
     reset_counters()
     load_all_commands()
-    cmd = find_command("act", None)
+    cmd = find_command("plan", None)
     assert cmd is not None
 
     # sheet.show with missing name (invalid args for option model)
     responder1 = _SpyResponder()
     inv1 = Invocation(
-        name="act",
+        name="plan",
         subcommand=None,
         options={"message": "show the sheet"},
         user_id="4",
@@ -105,7 +105,7 @@ async def test_act_sheet_show_and_create_invalid_args():
     bad_json = "{"  # invalid JSON
     responder2 = _SpyResponder()
     inv2 = Invocation(
-        name="act",
+        name="plan",
         subcommand=None,
         options={"message": "create a character named Aria"},
         user_id="5",

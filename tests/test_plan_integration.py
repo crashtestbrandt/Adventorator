@@ -22,17 +22,17 @@ class _FakeLLM:
 
 
 @pytest.mark.asyncio
-async def test_act_routes_roll_happy_path(monkeypatch):
+async def test_plan_routes_roll_happy_path(monkeypatch):
     reset_counters()
     load_all_commands()
-    cmd = find_command("act", None)
+    cmd = find_command("plan", None)
     assert cmd is not None
 
     # Mock planner via LLM: choose roll 2d6+3
     llm = _FakeLLM('{"command": "roll", "args": {"expr": "2d6+3"}}')
 
     inv = Invocation(
-        name="act",
+        name="plan",
         subcommand=None,
         options={"message": "roll 2d6+3 for damage"},
         user_id="1",
@@ -54,10 +54,10 @@ async def test_act_routes_roll_happy_path(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_act_rejects_unknown_tool(monkeypatch):
+async def test_plan_rejects_unknown_tool(monkeypatch):
     reset_counters()
     load_all_commands()
-    cmd = find_command("act", None)
+    cmd = find_command("plan", None)
     assert cmd is not None
 
     # Mock planner via LLM: choose unknown command
@@ -65,7 +65,7 @@ async def test_act_rejects_unknown_tool(monkeypatch):
 
     responder = _SpyResponder()
     inv = Invocation(
-        name="act",
+        name="plan",
         subcommand=None,
         options={"message": "do something weird"},
         user_id="1",

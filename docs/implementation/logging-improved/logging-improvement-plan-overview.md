@@ -96,8 +96,8 @@ This work is divided into five distinct phases, which should be implemented in o
         1.  Inside the `plan` function, log the initiation of a planning request with the user's message.
         2.  Log the successfully parsed and validated `PlannerOutput` object.
         3.  Log any failures during JSON extraction or Pydantic validation of the LLM's response.
-        4.  Review the existing `planner.decision` logs in `commands/act.py` and ensure they correctly inherit the `request_id` from the context.
-    *   **Location(s):** `Adventorator/planner.py`; `Adventorator/commands/act.py`.
+    4.  Review the existing `planner.decision` logs in `commands/plan.py` and ensure they correctly inherit the `request_id` from the context.
+    *   **Location(s):** `Adventorator/planner.py`; `Adventorator/commands/plan.py`.
     *   **Key Log Fields:** `user_msg`, `plan` (the full output object), `raw_text_preview` (on failure).
     *   **Success Criteria:** We can follow the data flow from a raw user string to a validated `PlannerOutput` object and see the final accepted/rejected decision.
 
@@ -158,7 +158,7 @@ This work is divided into five distinct phases, which should be implemented in o
 
 Upon completion of all phases, a final validation pass is required:
 
-1.  **Run a Suite of Commands:** Execute every major command in the application (`/act`, `/do`, `/roll`, `/sheet`, etc.).
+1.  **Run a Suite of Commands:** Execute every major command in the application (`/plan`, `/do`, `/roll`, `/sheet`, etc.).
 2.  **Review Log Output:** Inspect the generated `adventorator.jsonl` file.
 3.  **Confirm against Checklist:**
     *   [ ] Does every log entry related to a request have a `request_id`?
@@ -166,4 +166,4 @@ Upon completion of all phases, a final validation pass is required:
     *   [ ] Are log levels used appropriately (e.g., no `DEBUG` messages at `INFO` level)?
     *   [ ] Is all log output valid JSON?
     *   [ ] Are there any instances of sensitive information being leaked?
-    *   [ ] Can you successfully trace a single `/act` command from the initial Discord request through the Planner, LLM calls, and final command dispatch using its `request_id`?
+    *   [ ] Can you successfully trace a single `/plan` command from the initial Discord request through the Planner, LLM calls, and final command dispatch using its `request_id`?

@@ -51,7 +51,7 @@ Safety notes:
 ## Commands / Settings Threading
 
 - `/do` calls `run_orchestrator(..., settings=inv.settings)` so retrieval flags are honored.
-- `/act` routes to `/do` (or others) and preserves `inv.settings` when redispatching.
+- `/plan` routes to `/do` (or others) and preserves `inv.settings` when redispatching.
 - `app.py` constructs `Invocation` with `settings=load_settings()` and injects it into responders and handlers.
 
 ## Tests

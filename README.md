@@ -31,7 +31,7 @@ Adventorator is a FastAPI application that serves as a backend for a Discord bot
 
 **✨ What it does (today)**
 
-* Discord-first gameplay with slash commands: `/roll`, `/check`, `/sheet`, `/ooc`, and the smart router `/act`.
+* Discord-first gameplay with slash commands: `/roll`, `/check`, `/sheet`, `/ooc`, and the smart router `/plan`.
 * Fast 3-second deferral on all interactions; real work happens asynchronously with webhook follow-ups.
 * A deterministic `rules` engine for dice and ability checks (advantage/disadvantage, crits, modifiers).
 * Campaign persistence via async SQLAlchemy and Alembic, including full transcripts of player and bot messages.
@@ -42,7 +42,7 @@ Adventorator is a FastAPI application that serves as a backend for a Discord bot
 * [X] Phase 1: Deterministic dice + checks, `/roll` and `/check` commands.
 * [X] Phase 2: Persistence (campaigns, characters, transcripts).
 * [X] Phase 3: Shadow LLM narrator, proposal-only.
-* [X] Phase 4: Planner + `/act` smart routing.
+* [X] Phase 4: Planner + `/plan` smart routing.
 * [ ] Phase 5+: Combat system, content ingestion, GM controls, premium polish.
 
 **🔜 Roadmap**
@@ -134,7 +134,7 @@ flowchart TD
   DISP -- "/check" --> RULES --> RESP
   DISP -- "/sheet" --> REPOS --> RESP
   DISP -- "/ooc" --> REPOS --> PLAN --> LLM --> RESP
-  DISP -- "/act" --> REPOS --> PLAN -->|route| RULES --> RESP
+  DISP -- "/plan" --> REPOS --> PLAN -->|route| RULES --> RESP
   DISP -- "/do" --> REPOS --> PLAN --> LLM --> RESP
 
   %% === Orchestrator Augmentation (Phase 6) ===
@@ -164,7 +164,7 @@ The distinction between the `planner` and `orchestrator` is a key architectural 
 
 #### Planner: The Semantic Router
 
-The **`planner`** (`Adventorator/planner.py`) acts as a natural language front-end to the bot's structured command system. It translates a user's freeform request from the `/act` command into a specific, validated command invocation.
+The **`planner`** (`Adventorator/planner.py`) acts as a natural language front-end to the bot's structured command system. It translates a user's freeform request from the `/plan` command into a specific, validated command invocation.
 
   * **Responsibilities:**
       * Dynamically builds a catalog of available, developer-defined slash commands.
@@ -188,9 +188,9 @@ This separation of concerns ensures that the flexible, high-level routing logic 
 
 ### Key Command Flows
 
-#### The `/act` Command Flow
+#### The `/plan` Command Flow
 
-This diagram shows how the `planner` and `orchestrator` work together when a user invokes the `/act` command to perform an in-game action.
+This diagram shows how the `planner` and `orchestrator` work together when a user invokes the `/plan` command to perform an in-game action.
 
 ```mermaid
 sequenceDiagram
@@ -201,7 +201,7 @@ sequenceDiagram
     participant RulesEngine as Rules Engine
     participant LLM
 
-    User->>App: /act "I try to pick the lock"
+  User->>App: /plan "I try to pick the lock"
     App->>Planner: plan(intent)
     Planner->>LLM: Which command for this text?
     LLM-->>Planner: {"command": "do", "args": ...}
@@ -307,9 +307,9 @@ Behavior is configured via `config.toml`, which can be overridden by environment
 
 **Key Toggles:**
 
-  * `features.llm`: Master switch for all LLM-powered features (`/ooc`, `/act`).
+  * `features.llm`: Master switch for all LLM-powered features (`/ooc`, `/plan`).
   * `features.llm_visible`: If `true`, LLM narration is posted publicly; otherwise, it runs in a "shadow mode" (logged but not sent to Discord).
-  * `features.planner`: Hard on/off switch for the `/act` planner.
+  * `features.planner`: Hard on/off switch for the `/plan` planner.
   * `ops.metrics_endpoint_enabled`: If `true`, exposes a `GET /metrics` endpoint.
 
 **LLM Client:**
@@ -403,13 +403,13 @@ The application uses a decorator-based system to discover and register new comma
     python scripts/register_commands.py
     ```
 
-### Using the `/act` Smart Router
+### Using the `/plan` Smart Router
 
-`/act` lets players use natural language, which is routed to a known command.
+`/plan` lets players use natural language, which is routed to a known command.
 
-  * `/act "roll 2d6+3 for damage"` → routes to `/roll --expr 2d6+3`
-  * `/act "make a dexterity check against DC 15"` → `/check --ability DEX --dc 15`
-  * `/act "I sneak along the wall"` → `/do --message "I sneak along the wall"`
+  * `/plan "roll 2d6+3 for damage"` → routes to `/roll --expr 2d6+3`
+  * `/plan "make a dexterity check against DC 15"` → `/check --ability DEX --dc 15`
+  * `/plan "I sneak along the wall"` → `/do --message "I sneak along the wall"`
 
 **Safety & Guardrails:**
 
@@ -510,7 +510,7 @@ Notes
 │       ├── commanding.py        # Core command registration framework
 │       ├── commands/            # Individual slash command handlers
 │       ├── orchestrator.py      # Core AI game engine
-│       ├── planner.py           # AI semantic router for /act
+│       ├── planner.py           # AI semantic router for /plan
 │       ├── rules/               # Deterministic game mechanics
 │       └── ...                  # (config, db, models, repos, etc.)
 └── tests/                       # Unit and integration tests

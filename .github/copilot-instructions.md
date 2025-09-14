@@ -35,7 +35,7 @@ Key files/dirs
 - Core: `app.py`, `command_loader.py`, `commanding.py`, `responder.py`, `discord_schemas.py`, `config.py`, `logging.py`.
 - Rules: `rules/dice.py`, `rules/checks.py`, `rules/engine.py`.
 - AI: `llm.py`, `llm_utils.py`, `llm_prompts.py`, `planner.py`, `orchestrator.py`, `planner_prompts.py`, `planner_schemas.py`.
-- Commands: `commands/act.py` (planner), `commands/do.py` (orchestrator), `commands/roll.py`, `commands/check.py`, `commands/ooc.py`, `commands/sheet.py`.
+- Commands: `commands/plan.py` (planner), `commands/do.py` (orchestrator), `commands/roll.py`, `commands/check.py`, `commands/ooc.py`, `commands/sheet.py`.
 - Tests: `tests/` (see `test_dice.py`, `test_checks.py`, `test_planner.py`, `test_orchestrator.py`, `test_metrics_counters.py`, `test_interactions*.py`).
 
 Examples

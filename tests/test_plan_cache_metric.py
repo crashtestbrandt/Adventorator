@@ -22,16 +22,16 @@ class _FakeLLM:
 
 
 @pytest.mark.asyncio
-async def test_act_planner_cache_hit_increments():
+async def test_plan_planner_cache_hit_increments():
     reset_counters()
     load_all_commands()
-    cmd = find_command("act", None)
+    cmd = find_command("plan", None)
     assert cmd is not None
 
     # First invocation seeds the cache
     responder = _SpyResponder()
     inv1 = Invocation(
-        name="act",
+        name="plan",
         subcommand=None,
         options={"message": "roll a d20"},
         user_id="10",
@@ -46,7 +46,7 @@ async def test_act_planner_cache_hit_increments():
 
     # Second identical invocation within TTL should hit cache
     inv2 = Invocation(
-        name="act",
+        name="plan",
         subcommand=None,
         options={"message": "roll a d20"},
         user_id="10",
