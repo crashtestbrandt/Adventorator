@@ -206,7 +206,7 @@ Introduce an **LLM-driven planner** that can translate freeform user input into 
 
 ---
 
-## Phase 7 — Introduce Executor (dry-run only) ([#10](https://github.com/crashtestbrandt/Adventorator/issues/10)) — status: open
+## Phase 7 — Introduce Executor (dry-run only) ([#10](https://github.com/crashtestbrandt/Adventorator/issues/10)) — status: closed
 
 Goal
 - Establish the Executor and ToolRegistry contracts without allowing state mutations. Orchestrator uses Executor.dry_run to produce previews; all outputs remain ephemeral.
@@ -264,15 +264,9 @@ DoD
 RB
 - Disable `features.executor` to drop back to non-mutating previews only.
 
-Status notes
-- Implemented app- and DB-level idempotency for `PendingAction` using a normalized `dedup_hash` and a composite unique index `(scene_id, user_id, dedup_hash)` (dialect-aware migration).
-- Added feature flag `features.executor_confirm`; orchestrator/commands persist pendings only when any step requires confirmation.
-- Repos handle `IntegrityError` by fetching the existing pending and incrementing duplicate metrics. TTL expiry helper and CLI included.
-- Tests, lint, and type checks pass consistently; coverage includes dedup, expiry, confirm/cancel flows.
-
 ---
 
-## Phase 9 — Event-Sourced Mutations (Ledger foundation) ([#13](https://github.com/crashtestbrandt/Adventorator/issues/13)) — status: open
+## Phase 9 — Event-Sourced Mutations (Ledger foundation) ([#13](https://github.com/crashtestbrandt/Adventorator/issues/13)) — status: closed
 
 Goal
 - Make all state changes append-only events; current state is derived by folding events where needed.
