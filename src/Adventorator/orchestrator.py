@@ -62,7 +62,7 @@ def _validate_proposal(out: LLMOutput) -> tuple[bool, str | None]:
     # DC guard (narrator can propose 1-40; orchestrator narrows to sane 5-30)
     if not (5 <= p.suggested_dc <= 30):
         return False, "DC out of acceptable range"
-    # reason is optional; defenses below handle unsafe phrasing if provided
+    # reason is optional
     return True, None
 
 
