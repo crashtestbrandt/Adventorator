@@ -90,7 +90,6 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                 keyword_to_skill = {
                     "lockpick": "sleight of hand",
                     "pick lock": "sleight of hand",
-                    "sleight of hand": "sleight of hand",
                     "sneak": "stealth",
                     "hide": "stealth",
                     "move quietly": "stealth",
