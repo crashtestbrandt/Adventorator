@@ -64,34 +64,35 @@ This project follows a modular, layered architecture designed for security, test
 * An asynchronous **Data Layer** using SQLAlchemy (`repos.py`) provides structured access to the database.
 * The optional **AI Layer** is split into two distinct components: a `Planner` for routing and an `Orchestrator` for game logic.
 
-**Diagram: High-Level System Architecture**
+**Diagram: High-Level System Architecture (current)**
 
 ```mermaid
 flowchart TD
   %% === External ===
   subgraph EXTERNAL[External]
     U[Player on Discord]:::ext
-    DP[Discord Platform<br/>Commands & Interactions]:::ext
-    WH[Discord Webhooks API<br/>Follow-up Messages]:::ext
-    LLM[LLM API<br/>e.g., Ollama]:::ext
+    DP[Discord Platform - Commands & Interactions]:::ext
+    WH[Discord Webhooks API - Follow-up Messages]:::ext
+  LLM[LLM API]:::ext
   end
 
   %% === Network Edge ===
-  CF[cloudflared Tunnel<br/>optional for local dev]:::edge
+  CF[cloudflared Tunnel optional for local dev]:::edge
 
   %% === App ===
   subgraph APP[Adventorator - FastAPI]
     subgraph REQUEST[Request Handling]
       A[POST /interactions]
-      SIG[Ed25519 Verify<br/>X-Signature-*]
-      DISP[Command Dispatch<br/>registry in commanding.py]
-  DEF[Deferred ACK]
+  SIG[Ed25519 Verify and headers]
+      DISP[Command Dispatch - registry in commanding.py]
+      DEF[Deferred ACK]
     end
 
     subgraph BUSINESS[Command Logic]
-      RULES[Rules Engine<br/>dice, checks]
-      REPOS[Repos & Context<br/>session_scope + repos.py]
-      PLAN[Planner/Orchestrator<br/>JSON-only + safety + 30s cache]
+      RULES[Rules Engine - dice and ability checks]:::biz
+      REPOS[Repos & Context - session_scope + repos.py]:::biz
+      PLAN[Planner/Orchestrator - JSON-only + safety + 30s cache]:::biz
+  RETR[Retrieval Layer - SQL LIKE player-only]:::biz
     end
 
     subgraph RESPONSE[Response]
@@ -104,16 +105,19 @@ flowchart TD
 
   %% === Data ===
   subgraph DATA[Data]
-    DB[(Postgres or SQLite<br/>campaigns, characters, transcripts)]:::data
+    DB[(Primary DB)]:::data
+    CN[(Content Nodes Table)]:::data
     MIG[Alembic Migrations]:::ops
+    %% Optional future vector store (pgvector/Qdrant)
+    VEC[(Vector Store - future)]:::data
   end
 
   %% === Tooling ===
   subgraph TOOLING[Tooling]
-    CLI[Dynamic CLI<br/>scripts/cli.py]:::ops
+    CLI[Dynamic CLI - scripts/cli.py]:::ops
     REG[scripts/register_commands.py]:::ops
     TEST[pytest suite]:::ops
-    CFG[config.toml<br/>feature flags + logging]:::ops
+    CFG[config.toml - feature flags + logging]:::ops
   end
 
   %% === Ingress Flow ===
@@ -131,8 +135,16 @@ flowchart TD
   DISP -- "/sheet" --> REPOS --> RESP
   DISP -- "/ooc" --> REPOS --> PLAN --> LLM --> RESP
   DISP -- "/act" --> REPOS --> PLAN -->|route| RULES --> RESP
+  DISP -- "/do" --> REPOS --> PLAN --> LLM --> RESP
 
-  %% === Egress ===
+  %% === Orchestrator Augmentation (Phase 6) ===
+  PLAN -->|if enabled| RETR
+  RETR -->|query| CN
+  CN --> DB
+  RETR -.->|future| VEC
+
+  %% === Data Access & Egress ===
+  REPOS --> DB
   RESP --> TRANS -->|write| DB
   RESP -->|POST| WH --> DP --> U
   LOGS -.-> APP
@@ -143,7 +155,8 @@ flowchart TD
   classDef edge fill:#efeaff,stroke:#8b5cf6,stroke-width:1px,color:#2b1b6b
   classDef data fill:#fff7e6,stroke:#f59e0b,stroke-width:1px,color:#7c3e00
   classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46
-  ```
+  classDef biz  fill:#f0f5ff,stroke:#3b82f6,stroke-width:1px,color:#1e3a8a
+```
 
 ### Core AI Components: Planner and Orchestrator
 
