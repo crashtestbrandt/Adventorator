@@ -567,4 +567,3 @@ def fold_initiative_view(events: list[models.Event]) -> list[tuple[str, int]]:
                     pass
     # sort by descending init then id for stability
     return sorted(order.items(), key=lambda kv: (-kv[1], kv[0]))
-
