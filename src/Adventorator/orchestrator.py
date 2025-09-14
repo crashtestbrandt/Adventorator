@@ -4,7 +4,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import structlog
 
@@ -87,13 +87,15 @@ def _contains_banned_verbs(text: str) -> bool:
 
 
 _NAME_RE = re.compile(r"\b[A-Z][a-z]{2,}\b")
+_PRONOUNS = {"You", "Your", "Yours", "They", "Them", "Their"}
 
 
 def _unknown_actor_present(narration: str, allowed: set[str]) -> str | None:
     if not narration:
         return None
     # Tokenize proper-noun-like words from narration
-    nar_tokens = {t.lower() for t in _NAME_RE.findall(narration)}
+    nar_tokens = {t for t in _NAME_RE.findall(narration) if t not in _PRONOUNS}
+    nar_tokens = {t.lower() for t in nar_tokens}
     if not nar_tokens:
         return None
     # Build an allowed token set from provided actor names (supports full names)
@@ -149,7 +151,7 @@ async def run_orchestrator(
     llm_client: object | None = None,
     prompt_token_cap: int | None = None,
     allowed_actors: list[str] | set[str] | None = None,
-    settings: object | None = None,
+    settings: Any | None = None,
 ) -> OrchestratorResult:
     """End-to-end shadow-mode orchestration.
 
@@ -178,18 +180,25 @@ async def run_orchestrator(
 
     # 0) Optional: retrieval augmentation (Phase 6, feature-flagged)
     retrieval_snippets: list[ContentSnippet] = []
-    if settings is not None and getattr(settings, "retrieval", None):
+    if settings is not None and getattr(settings, "retrieval", None) is not None:
         try:
             # Fetch campaign_id for the scene
             async with session_scope() as s:
                 sc = await s.get(_models.Scene, scene_id)
-                if sc is not None and getattr(settings.retrieval, "enabled", False):
+                if sc is not None and bool(getattr(settings.retrieval, "enabled", False)):
                     retriever = build_retriever(settings)
                     retrieval_snippets = await retriever.retrieve(
                         sc.campaign_id, player_msg, k=getattr(settings.retrieval, "top_k", 4)
                     )
+                    log.info(
+                        "retrieval.ok",
+                        scene_id=scene_id,
+                        campaign_id=sc.campaign_id,
+                        count=len(retrieval_snippets),
+                    )
         except Exception:
             # Non-fatal: log and proceed without retrieval
+            inc_counter("retrieval.errors")
             log.warning("retrieval.error", scene_id=scene_id, exc_info=True)
 
     # 1) transcripts -> facts (clerk), augmented by retrieval player-safe text

@@ -9,6 +9,13 @@ rules = true
 combat = false
 llm_visible = true
 
+# Retrieval-augmented orchestration.
+# Note: provider "none" uses the built-in SQL fallback retriever.
+[features.retrieval]
+enabled = false            # Set true to enable retrieval
+provider = "none"          # Options: "none" | "pgvector" | "qdrant"
+top_k = 4                  # Number of snippets to include per query
+
 [discord]
 response_timeout_seconds = 3
 

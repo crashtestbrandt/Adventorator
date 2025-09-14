@@ -20,6 +20,9 @@ test:
 lint:
 	. .venv/bin/activate && ruff check src tests
 
+lint-fix:
+	. .venv/bin/activate && ruff check --fix src tests
+
 type:
 	. .venv/bin/activate && mypy src
 

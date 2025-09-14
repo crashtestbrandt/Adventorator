@@ -17,6 +17,7 @@ A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in
 * [Prerequisites](#prerequisites) & [Quickstart](#quickstart)
 * [Database & Alembic](#database--alembic)
 * [Configuration](#configuration)
+* [Retrieval & Safety](#retrieval--safety)
 * [Commands](#commands)
 * [Operations](#operations)
 * [Repo Structure](#repo-structure)
@@ -305,6 +306,52 @@ Behavior is configured via `config.toml`, which can be overridden by environment
   * `llm.model_name`: Model identifier (e.g., `"llama3:latest"`).
 
 See `src/Adventorator/config.py` for all options and default values.
+
+-----
+
+## Retrieval & Safety
+
+Phase 6 adds a simple, safe retrieval layer to augment the Orchestrator with player-visible lore snippets.
+
+- Storage: `ContentNode` records with separate `player_text` and `gm_text`. Only `player_text` is ever returned to users or sent to the LLM.
+- Retriever: A SQL LIKE fallback searches over `title`, `player_text`, and (for matching only) `gm_text` to improve recall. GM text is never surfaced.
+- Feature flags (config.toml):
+  - `features.retrieval.enabled` (bool): turn retrieval on/off.
+  - `features.retrieval.provider` ("none" for SQL fallback; future: pgvector/qdrant).
+  - `features.retrieval.top_k` (int): number of snippets to include.
+- Orchestrator integration: when enabled, the top-k snippets for the active campaign are appended to the facts bundle as `[ref] <title>: <player_text>`.
+- Safety defenses in the orchestrator:
+  - Only allows the action `ability_check` with whitelisted abilities and a bounded DC (5–30).
+  - Bans verbs implying state mutation (e.g., “deal damage”, “modify inventory”).
+  - Detects unknown proper-noun actors, ignoring pronouns like “You/They”.
+
+Content ingestion (CLI):
+
+```bash
+# Import a Markdown file as a content node
+PYTHONPATH=./src python scripts/import_content.py \
+  --campaign-id 1 \
+  --node-type lore \
+  --title "Ancient Door" \
+  --file docs/examples/ancient-door.md
+```
+
+Metrics and logging:
+
+- Retrieval counters: `retrieval.calls`, `retrieval.snippets`, `retrieval.errors`, `retrieval.latency_ms`.
+- Orchestrator counters: `llm.request.enqueued`, `llm.response.received`, `llm.defense.rejected`, `orchestrator.format.sent`.
+- JSON logs with context-rich events at boundaries; see `logs/adventorator.jsonl`.
+
+Dev headers (local web CLI):
+
+- `X-Adventorator-Use-Dev-Key`: trusts a development public key for local testing.
+- `X-Adventorator-Webhook-Base`: reroutes follow-ups to a local sink during dev.
+
+Tests & in-memory DB notes:
+
+- The test suite uses a pure in-memory SQLite URL with a shared connection pool so schema persists across async sessions.
+- A schema guard ensures tables are created before per-test purges; do not rely on Alembic for tests.
+- If you see `no such table` in tests, ensure you’re not changing the test engine URL or pool configuration.
 
 -----
 
