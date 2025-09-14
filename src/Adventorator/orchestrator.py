@@ -8,11 +8,13 @@ from typing import TypedDict
 
 import structlog
 
+from Adventorator import models as _models
 from Adventorator import repos
 from Adventorator.db import session_scope
 from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messages
 from Adventorator.metrics import inc_counter
 from Adventorator.models import Transcript as TranscriptModel
+from Adventorator.retrieval import ContentSnippet, build_retriever
 from Adventorator.rules.checks import ABILS, CheckInput, compute_check
 from Adventorator.rules.dice import DiceRNG
 from Adventorator.schemas import LLMOutput
@@ -147,6 +149,7 @@ async def run_orchestrator(
     llm_client: object | None = None,
     prompt_token_cap: int | None = None,
     allowed_actors: list[str] | set[str] | None = None,
+    settings: object | None = None,
 ) -> OrchestratorResult:
     """End-to-end shadow-mode orchestration.
 
@@ -173,8 +176,27 @@ async def run_orchestrator(
     inc_counter("llm.request.enqueued")
     log.info("llm.request.enqueued", scene_id=scene_id)
 
-    # 1) transcripts -> facts (clerk)
+    # 0) Optional: retrieval augmentation (Phase 6, feature-flagged)
+    retrieval_snippets: list[ContentSnippet] = []
+    if settings is not None and getattr(settings, "retrieval", None):
+        try:
+            # Fetch campaign_id for the scene
+            async with session_scope() as s:
+                sc = await s.get(_models.Scene, scene_id)
+                if sc is not None and getattr(settings.retrieval, "enabled", False):
+                    retriever = build_retriever(settings)
+                    retrieval_snippets = await retriever.retrieve(
+                        sc.campaign_id, player_msg, k=getattr(settings.retrieval, "top_k", 4)
+                    )
+        except Exception:
+            # Non-fatal: log and proceed without retrieval
+            log.warning("retrieval.error", scene_id=scene_id, exc_info=True)
+
+    # 1) transcripts -> facts (clerk), augmented by retrieval player-safe text
     facts = await _facts_from_transcripts(scene_id, player_msg, max_tokens=prompt_token_cap)
+    if retrieval_snippets:
+        # Add retrieval snippets as facts (player-visible only)
+        facts.extend([f"[ref] {snip.title}: {snip.text}" for snip in retrieval_snippets])
 
     # 2) narrator -> JSON output
     char_summary = character_summary_provider() if character_summary_provider else None

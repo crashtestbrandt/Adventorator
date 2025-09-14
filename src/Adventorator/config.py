@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -109,6 +109,14 @@ class Settings(BaseSettings):
     response_timeout_seconds: int = 3
     app_port: int = 18000
     planner_timeout_seconds: int = 12
+
+    # --- Retrieval (Phase 6) ---
+    class RetrievalConfig(BaseModel):
+        enabled: bool = False
+        provider: Literal["none", "pgvector", "qdrant"] = "none"
+        top_k: int = 4
+
+    retrieval: RetrievalConfig = RetrievalConfig()
 
     # --- LLM Configuration ---
     llm_api_provider: Literal["ollama", "openai"] = Field(
