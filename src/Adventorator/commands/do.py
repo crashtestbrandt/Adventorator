@@ -83,11 +83,46 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
             def _provider(ability: str):
                 a = (ability or "").upper()
                 score = int(sheet.abilities.get(a, 10))
-                # For now, neutral prof flags; later evolve from sheet skills
+                # Infer proficiency/expertise from skills if message hints at a skill
+                txt = message.lower()
+                # Map simple keywords -> canonical skill keys used by CharacterService
+                KEYWORD_TO_SKILL = {
+                    "lockpick": "sleight of hand",
+                    "pick lock": "sleight of hand",
+                    "sleight of hand": "sleight of hand",
+                    "sneak": "stealth",
+                    "hide": "stealth",
+                    "move quietly": "stealth",
+                    "climb": "athletics",
+                    "jump": "athletics",
+                    "convince": "persuasion",
+                    "persuade": "persuasion",
+                    "lie": "deception",
+                    "deceive": "deception",
+                    "recall lore": "history",
+                    "recall": "history",
+                    "notice": "perception",
+                    "spot": "perception",
+                    "search": "investigation",
+                    "investigate": "investigation",
+                }
+                skill_key = None
+                for k, skill_name in KEYWORD_TO_SKILL.items():
+                    if k in txt:
+                        skill_key = skill_name
+                        break
+                prof = False
+                exp = False
+                if skill_key and hasattr(sheet, "skills") and sheet.skills:
+                    s_info = sheet.skills.get(skill_key)
+                    if s_info:
+                        prof = bool(s_info.get("proficient", False))
+                        exp = bool(s_info.get("expertise", False))
+                        # If skill's governing ability differs and matches the requested, keep; else just use ability score above
                 return {
                     "score": score,
-                    "proficient": False,
-                    "expertise": False,
+                    "proficient": prof,
+                    "expertise": exp,
                     "prof_bonus": int(sheet.proficiency_bonus),
                 }
 
