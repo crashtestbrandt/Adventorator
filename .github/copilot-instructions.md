@@ -1,51 +1,51 @@
 
 # Copilot Instructions for Adventorator
 
-## Purpose
-Enable AI agents to quickly and safely contribute to Adventorator by following project-specific architecture, workflow, and conventions. Keep edits small, match existing patterns, and always verify with tests.
+Purpose
+- Make agents productive fast by codifying THIS repo’s architecture, workflows, and conventions. Keep edits small, match patterns, and verify with tests.
 
-## Architecture Overview
-- **FastAPI backend**: `src/Adventorator/app.py` exposes `/interactions` for Discord/CLI. All requests are signature-verified (`crypto.verify_ed25519`) and must respond within 3s (defer, then follow-up).
-- **Command routing**: `app._dispatch_command()` uses the registry in `commanding.py` to dispatch to handlers in `commands/`.
-- **Responder pattern**: Handlers use `await responder.send()` or `await responder.followup_message()` for Discord/webhook replies.
-- **Rules engine**: Deterministic mechanics in `rules/dice.py` and `rules/checks.py`. Use `DiceRNG.roll()` and `compute_check()` for all dice logic.
-- **Planner/LLM orchestration**: `planner.py` and `orchestrator.py` coordinate LLM intent mapping, rules application, and narration. LLM proposals are JSON-only, parsed strictly in `llm_utils.py`/`schemas.py`.
-- **Persistence**: Async SQLAlchemy in `db.py`, ORM in `models.py`, helpers in `repos.py`. Always use `async with session_scope()` in handlers.
-- **Metrics**: Minimal counters in `metrics.py` (e.g., `llm.request.enqueued`).
+Architecture (big picture)
+- FastAPI edge: `src/Adventorator/app.py` exposes `/interactions`; verify Discord Ed25519 signatures and always defer within ~3s, then follow up via webhook.
+- Command registry: `commanding.py` (`@slash_command`) + `command_loader.py`; handlers live in `commands/` and receive an `Invocation` with a transport-agnostic `responder`.
+- Responder: Use `await inv.responder.send(content, ephemeral=...)` for all replies (never return raw FastAPI responses from handlers).
+- Rules: Deterministic engine in `rules/` (`dice.py`, `checks.py`, `engine.py`). Prefer the injected `inv.ruleset` (default `Dnd5eRuleset`) over ad‑hoc dice math.
+- AI split: `planner.py` (intent → command) and `orchestrator.py` (narration + mechanics). All LLM output is JSON-only and strictly parsed (`llm_utils.py`/schemas).
+- Data layer: Async SQLAlchemy via `db.session_scope()`, models in `models.py`, helpers in `repos.py`. Never inline SQL in handlers.
+- Ops: Minimal counters in `metrics.py`; JSON logging via `logging.py`; endpoints `GET /healthz`, `GET /metrics` (feature-flagged).
 
-## Developer Workflow
-- **Install & run**: Use `make dev` for setup, `make run` to start Uvicorn on :18000, and `make tunnel` for Discord integration.
-- **Database**: `make alembic-up` for migrations, `make db-up` for local Postgres. Use `DATABASE_URL` for SQLite fallback.
-- **Testing**: Run `make test` (pytest, async supported). Seed RNG in rules tests (see `tests/test_dice.py`).
-- **Slash command registration**: `python scripts/register_commands.py` (requires `DISCORD_*` in `.env`).
+Developer workflow
+- Bootstrap/run: `make dev`, `make run` (port 18000), `make tunnel` (cloudflared). Register slash commands with `python scripts/register_commands.py`.
+- DB: `make alembic-up` (aka `make db-upgrade`); start local Postgres with `make db-up`. SQLite is default when `DATABASE_URL` is unset.
+- Quality: `make test`, `make lint` (ruff), `make type` (mypy), `make format`.
+- CLI: `scripts/cli.py` dynamically discovers commands for local testing (set `PYTHONPATH=./src`).
 
-## Project Conventions & Patterns
-- **Handlers**: Always defer immediately, then follow up via webhook.
-- **Data access**: Only use `repos.py` helpers inside `async with session_scope()`; never inline SQL.
-- **Discord payloads**: Parse with `discord_schemas.Interaction`. Use `_subcommand()`/`_option()` helpers in `app.py` for options.
-- **Settings**: Use `config.load_settings()` and feature flags in `config.toml` (`[features].llm`, `[features].llm_visible`).
-- **Pydantic v2**: Character sheet uses alias `class` → `class_name` (`populate_by_name=True`).
-- **Testing**: End-to-end tests assert deferred ack and follow-up (see `tests/test_ooc_orchestrator.py`). Patch at import site. Orchestrator tests inject fake LLM clients. Metrics can be asserted via `metrics.reset_counters()` and `metrics.get_counter()`.
+Conventions & patterns
+- Handlers: validate options via Pydantic v2 `Option` models (`populate_by_name=True`), then use `inv.responder.send()`; keep I/O thin, move logic to rules/services.
+- Scene/persistence: In handlers that write/read, wrap calls in `async with session_scope()` and use `repos.*` helpers.
+- Discord parsing: Use `discord_schemas.Interaction`; see `app._subcommand()` for nested option parsing.
+- Feature flags (from `config.toml`): `features.llm`, `features.llm_visible`, `features.planner` (`feature_planner_enabled`), `ops.metrics_endpoint_enabled`.
+- Ruleset injection: `Invocation.ruleset` is passed from `app.py` so commands can call `inv.ruleset.perform_check(...)` and `inv.ruleset.roll_dice(...)`.
+- Dev headers: `X-Adventorator-Use-Dev-Key` (trusted dev public key) and `X-Adventorator-Webhook-Base` (route follow-ups to a local sink in dev).
 
-## Key Files & Directories
-- **Core**: `app.py`, `command_loader.py`, `commanding.py`, `responder.py`, `discord_schemas.py`
-- **Rules**: `rules/dice.py`, `rules/checks.py`, `rules/engine.py`
-- **Data**: `db.py`, `models.py`, `repos.py`
-- **LLM/Planner**: `llm.py`, `llm_utils.py`, `llm_prompts.py`, `planner.py`, `orchestrator.py`, `planner_prompts.py`, `planner_schemas.py`
-- **Commands**: `commands/` (see `ooc_do.py` for orchestrator integration)
-- **Tests**: `tests/` (see `test_dice.py`, `test_checks.py`, `test_ooc_orchestrator.py`, `test_metrics_counters.py`)
+AI specifics (planner/orchestrator)
+- Planner allowlist: only routes to `roll`, `check`, `sheet.create`, `sheet.show`, `do`, `ooc`. 30s cache by `(scene_id, message)`; per-user RL ~5/min; soft timeout falls back to `/roll 1d20`.
+- Orchestrator defenses: require action `ability_check`, ability in whitelist, DC 5–30; reject banned verbs (e.g., “deal damage”, “modify inventory”) and unknown actors (vs. allowed names from campaign). Uses `CharacterService` to derive sheet/proficiency context when available. Visibility controlled by `features.llm_visible`.
 
-## Integration & Gotchas
-- **LLM**: All LLM output must be JSON and parsed strictly. Orchestrator applies safety gates (action whitelist, DC bounds, verb blacklist, etc.). LLM visibility is feature-flagged.
-- **Caching**: 30s in-process cache on `(scene_id, player_msg)` to suppress duplicate prompts.
-- **Metrics**: Use `metrics.py` for counters; assert in tests as needed.
-- **Secrets**: Never commit secrets; update `.env.example` for new keys.
+Key files/dirs
+- Core: `app.py`, `command_loader.py`, `commanding.py`, `responder.py`, `discord_schemas.py`, `config.py`, `logging.py`.
+- Rules: `rules/dice.py`, `rules/checks.py`, `rules/engine.py`.
+- AI: `llm.py`, `llm_utils.py`, `llm_prompts.py`, `planner.py`, `orchestrator.py`, `planner_prompts.py`, `planner_schemas.py`.
+- Commands: `commands/act.py` (planner), `commands/do.py` (orchestrator), `commands/roll.py`, `commands/check.py`, `commands/ooc.py`, `commands/sheet.py`.
+- Tests: `tests/` (see `test_dice.py`, `test_checks.py`, `test_planner.py`, `test_orchestrator.py`, `test_metrics_counters.py`, `test_interactions*.py`).
 
-## Example Patterns
-- **Dice roll**: `DiceRNG.roll("1d20+3", advantage=True)`
-- **Check**: `compute_check(CheckInput(...), d20_rolls=[...])`
-- **Handler**: `async def handle_do(...): await responder.send(...); ...`
-- **Test**: Patch at import site, stub `session_scope`, inject fake LLM client.
+Examples
+- Dice: `DiceRNG.roll("1d20+3", advantage=True)`; Checks: `compute_check(CheckInput(...), d20_rolls=[...])`.
+- Handler shape: `@slash_command(...)
+	async def mycmd(inv, opts): await inv.responder.send("...")`.
+- Orchestrator entry: call `run_orchestrator(scene_id, player_msg, sheet_info_provider, llm_client=inv.llm_client, allowed_actors=...)` and persist transcripts via `repos`.
 
----
-Keep PRs focused; prefer pure rules and thin I/O layers. When in doubt, match the style and structure of the most recent code in `commands/`, `rules/`, and `tests/`.
+Testing notes
+- Patch at import site; inject fake LLM clients; seed RNG for deterministic rules tests. Use `metrics.reset_counters()` and assert via `get_counter()`.
+- End-to-end tests expect deferred ACK then follow-up; see `tests/test_interactions*.py`.
+
+Keep PRs focused; prefer pure rules and thin I/O layers. When unsure, mirror the latest patterns in `commands/`, `rules/`, and `tests/`.
