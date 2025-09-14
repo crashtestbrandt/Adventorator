@@ -394,6 +394,46 @@ Tip: For local-only dev without containers, set `DATABASE_URL=sqlite+aiosqlite:/
 
 -----
 
+## Development Setup: Postgres
+
+Use Postgres locally either via Docker Compose or a standalone container.
+
+Option A — docker compose (recommended)
+
+```bash
+# Start DB and app
+docker compose up -d --build db app
+
+# Set DATABASE_URL in .env to the db service hostname
+# DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
+
+# Apply migrations from your host (or inside the app container)
+make alembic-up
+```
+
+Option B — standalone Postgres container
+
+```bash
+# Start a local Postgres 16 container
+docker run --rm -d --name advdb \
+  -e POSTGRES_PASSWORD=adventorator \
+  -e POSTGRES_USER=adventorator \
+  -e POSTGRES_DB=adventorator \
+  -p 5432:5432 postgres:16
+
+# Point DATABASE_URL at localhost
+# DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@localhost:5432/adventorator
+
+# Apply migrations
+make alembic-up
+```
+
+Notes
+- You can switch back to SQLite any time by setting `DATABASE_URL=sqlite+aiosqlite:///./adventorator.sqlite3`.
+- Alembic reads `DATABASE_URL` (via `.env`), and will choose the proper sync driver under the hood for migrations.
+
+-----
+
 ## Repo Structure
 
 ```

@@ -1,7 +1,8 @@
 """System prompt for the planner layer (Phase 4)."""
 
 SYSTEM_PLANNER = (
-    "You are the Planner. Translate the user's freeform request into exactly ONE Adventorator command. "
+    "You are the Planner. Translate the user's freeform request into exactly ONE "
+    "Adventorator command. "
     "Use the provided TOOLS catalog to pick a valid command and JSON argument shape. "
     "Rules:\n"
     "- Output ONLY a single JSON object with keys: command, subcommand (optional), args (object).\n"

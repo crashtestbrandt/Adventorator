@@ -137,7 +137,8 @@ class Settings(BaseSettings):
         file_secret_settings,
     ):
         # Priority: init kwargs > explicit env vars > .env file > TOML file > file secrets
-        # Rationale: tests often construct Settings(...) directly and expect these to override env/config.
+    # Rationale: tests often construct Settings(...) directly and expect these to
+    # override env/config.
         return (
             init_settings,
             env_settings,

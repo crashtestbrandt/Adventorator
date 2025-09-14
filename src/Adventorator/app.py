@@ -1,4 +1,4 @@
-# app.py
+"""FastAPI app entrypoint for Adventorator."""
 
 import asyncio
 import time
@@ -80,11 +80,15 @@ async def interactions(request: Request):
 
     try:
         inter = Interaction.model_validate_json(raw)
-    except Exception:
+    except Exception as err:
         # Include tiny preview for debugging only; avoid full body spam
-        preview = raw[:200].decode("utf-8", errors="replace") if isinstance(raw, (bytes, bytearray)) else str(raw)[:200]
+        preview = (
+            raw[:200].decode("utf-8", errors="replace")
+            if isinstance(raw, (bytes | bytearray))
+            else str(raw)[:200]
+        )
         log.error("discord.request.parse_error", raw_body_preview=preview)
-        raise HTTPException(status_code=400, detail="invalid interaction payload")
+        raise HTTPException(status_code=400, detail="invalid interaction payload") from err
     log.info("discord.request.validated", interaction=inter.model_dump())
 
     async with session_scope() as s:
@@ -197,17 +201,16 @@ async def _dispatch_command(inter: Interaction):
             llm_client=llm_client,
         )
         # Structured command invocation lifecycle logging
-        import time
         start = time.perf_counter()
         status = "success"
         try:
             opts_obj = cmd.option_model.model_validate(options)
-        except Exception as e:
+        except Exception:
             status = "options_error"
             await followup_message(
                 inter.application_id,
                 inter.token,
-                f"❌ Invalid options for `{name}`: {e}",
+                f"❌ Invalid options for `{name}`.",
                 ephemeral=True,
             )
             try:
@@ -332,8 +335,8 @@ async def healthz():
         async with session_scope() as s:
             # lightweight query
             await repos.healthcheck(s)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"unhealthy: {e}")
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"unhealthy: {err}") from err
     return {"status": "ok"}
 
 

@@ -60,7 +60,10 @@ async def followup_message(application_id: str, token: str, content: str, epheme
                 "discord.followup.sent",
                 http_status_code=r.status_code,
                 rate_remaining=r.headers.get("X-RateLimit-Remaining"),
-                rate_reset_after=r.headers.get("X-RateLimit-Reset-After") or r.headers.get("X-RateLimit-Reset"),
+                    rate_reset_after=(
+                        r.headers.get("X-RateLimit-Reset-After")
+                        or r.headers.get("X-RateLimit-Reset")
+                    ),
             )
         except Exception:
             pass

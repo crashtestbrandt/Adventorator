@@ -58,7 +58,10 @@ async def act(inv: Invocation, opts: ActOpts):
 
     # Per-user simple rate limiting
     if inv.user_id and _rate_limited(str(inv.user_id)):
-        await inv.responder.send("⏳ You're doing that a bit too quickly. Please wait a moment.", ephemeral=True)
+        await inv.responder.send(
+            "⏳ You're doing that a bit too quickly. Please wait a moment.",
+            ephemeral=True,
+        )
         return
 
     inc_counter("planner.request")

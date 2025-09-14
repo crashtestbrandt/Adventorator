@@ -32,7 +32,12 @@ class DiceRNG:
         Supports: XdY+Z
         Special case: d20 with adv/dis
         """
-        self._log.debug("rules.dice.roll.start", expr=expr, advantage=advantage, disadvantage=disadvantage)
+        self._log.debug(
+            "rules.dice.roll.start",
+            expr=expr,
+            advantage=advantage,
+            disadvantage=disadvantage,
+        )
         m = _DICE_RE.match(expr.replace(" ", ""))
         if not m:
             raise ValueError(f"Bad dice expression: {expr}")
