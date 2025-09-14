@@ -85,8 +85,9 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                 score = int(sheet.abilities.get(a, 10))
                 # Infer proficiency/expertise from skills if message hints at a skill
                 txt = message.lower()
-                # Map simple keywords -> canonical skill keys used by CharacterService
-                KEYWORD_TO_SKILL = {
+                # Map simple keywords -> canonical skill keys used by
+                # CharacterService
+                keyword_to_skill = {
                     "lockpick": "sleight of hand",
                     "pick lock": "sleight of hand",
                     "sleight of hand": "sleight of hand",
@@ -107,7 +108,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                     "investigate": "investigation",
                 }
                 skill_key = None
-                for k, skill_name in KEYWORD_TO_SKILL.items():
+                for k, skill_name in keyword_to_skill.items():
                     if k in txt:
                         skill_key = skill_name
                         break
@@ -118,7 +119,9 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                     if s_info:
                         prof = bool(s_info.get("proficient", False))
                         exp = bool(s_info.get("expertise", False))
-                        # If skill's governing ability differs and matches the requested, keep; else just use ability score above
+                        # If the skill's governing ability differs and matches the
+                        # requested, keep; otherwise just use the ability score
+                        # above.
                 return {
                     "score": score,
                     "proficient": prof,

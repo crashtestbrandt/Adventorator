@@ -2,8 +2,8 @@
 from pydantic import Field
 
 from Adventorator.commanding import Invocation, Option, slash_command
-from Adventorator.rules.checks import CheckInput
 from Adventorator.db import session_scope
+from Adventorator.rules.checks import CheckInput
 from Adventorator.services.character_service import CharacterService
 
 
@@ -30,7 +30,8 @@ async def check_command(inv: Invocation, opts: CheckOpts):
     proficient = opts.proficient
     expertise = opts.expertise
 
-    # If score/proficiency flags or prof bonus not provided explicitly, try to default from active character
+    # If score/proficiency flags or prof bonus not provided explicitly,
+    # try to default from the active character
     need_sheet = (
         score in (None, 0, 10) and not opts.proficient and not opts.expertise
     ) or (prof_bonus in (None, 0, 2))
@@ -47,9 +48,10 @@ async def check_command(inv: Invocation, opts: CheckOpts):
             # Override score and prof bonus from sheet
             score = int(sheet.abilities.get(ability, score))
             prof_bonus = int(sheet.proficiency_bonus or prof_bonus)
-            # If a commonly mapped skill implies proficiency/expertise, respect it
-            # Try to infer skill name from ability if possible (no direct mapping here), so leave flags unless user set them
-            # But if user left both False, keep as False; detailed skill flags are handled in /do via narrator flow
+            # If a commonly mapped skill implies proficiency/expertise, respect it.
+            # Try to infer skill name from ability if possible (no direct mapping here),
+            # so leave flags unless the user set them explicitly. If both flags are false,
+            # keep them as False; detailed skill flags are handled in /do via narrator flow.
 
     ci = CheckInput(
         ability=ability,

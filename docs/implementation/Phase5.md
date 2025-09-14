@@ -122,8 +122,6 @@ These locked-in values are a starting point. The operational plan should include
 
 #### **Milestone 5.3: Rules Engine Encapsulation**
 
-See: [Milestone 5.3 Low-Level Implementation Plan](./Phase5_Milestone3.md)
-
 * **Goal:** Refactor the procedural rules functions into a formal, object-oriented `Ruleset` class to improve modularity, testability, and prepare for future multi-system support.
 * **Key Tasks:**
     1.  Create a new module: `Adventorator/rules/engine.py`.

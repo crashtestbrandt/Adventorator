@@ -159,8 +159,9 @@ async def act(inv: Invocation, opts: ActOpts):
         guidance: str | None = None
         if cmd_name_flat in {"sheet.create"}:
             guidance = (
-                "To create a character, use /sheet create and provide the json option with your "
-                "character sheet JSON. Example: {\"name\": \"Aria\", \"class\": \"Fighter\", \"level\": 1, ...}"
+                "To create a character, use /sheet create and provide the json option with "
+                "your character sheet JSON. Example: {\"name\": \"Aria\", "
+                "\"class\": \"Fighter\", \"level\": 1, ...}"
             )
         elif cmd_name_flat in {"sheet.show"}:
             guidance = (
@@ -177,7 +178,8 @@ async def act(inv: Invocation, opts: ActOpts):
             )
         elif cmd_name_flat == "do":
             guidance = (
-                "Use /do with a short action description. Example: message: \"I sneak along the wall\""
+                "Use /do with a short action description. Example: message: "
+                "\"I sneak along the wall\""
             )
 
         msg = guidance or "⚠️ Planned arguments were invalid."

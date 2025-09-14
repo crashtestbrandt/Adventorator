@@ -1,13 +1,12 @@
 # test_check_defaults.py
 
-import asyncio
 
 import pytest
 
+from Adventorator import models, repos
 from Adventorator.commanding import Invocation
-from Adventorator.commands.check import check_command, CheckOpts
+from Adventorator.commands.check import CheckOpts, check_command
 from Adventorator.db import session_scope
-from Adventorator import repos, models
 
 
 class _SpyResponder:
@@ -58,8 +57,11 @@ async def test_check_defaults_from_character(db):
     opts = CheckOpts(ability="DEX")
 
     await check_command(inv, opts)
-    # Validate that the responder got a message including mod for DEX 16 (mod +3) and PB 3 only applies if proficient, which defaults to False.
-    # We at least ensure the text contains "DEX" and a total consistent with d20 +/- mod cannot be easily asserted since RNG is in ruleset; but we can ensure the header is correct.
+    # Validate that the responder got a message including mod for DEX 16
+    # (mod +3) and PB 3 only applies if proficient, which defaults to
+    # False. We at least ensure the text contains "DEX" and a total
+    # consistent with d20 +/- mod cannot be easily asserted since RNG is
+    # in the ruleset; but we can ensure the header is correct.
     assert len(inv.responder.messages) == 1
     assert "DEX" in inv.responder.messages[0]
     assert "DC" in inv.responder.messages[0]
