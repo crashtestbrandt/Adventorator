@@ -1,9 +1,12 @@
 # src/Adventorator/commands/ooc_do.py
+from typing import Any, cast
+
 from pydantic import Field
 
 from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.db import session_scope
+from Adventorator.metrics import inc_counter
 from Adventorator.orchestrator import run_orchestrator
 from Adventorator.services.character_service import CharacterService
 
@@ -170,9 +173,43 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         await inv.responder.send(
             f"🛑 Proposal rejected: {res.reason or 'invalid'}", ephemeral=True
         )
+        inc_counter("pending.rejected")
         return
 
-    # Prepare bot transcript (pending)
+    # Pending actions flow: if enabled and a chain is present, persist PendingAction and
+    # present confirmation instructions; leave transcripts in pending status.
+    pending_enabled = bool(getattr(settings, "features_executor", False))
+    if pending_enabled and getattr(res, "chain_json", None):
+        async with session_scope() as s:
+            campaign = await repos.get_or_create_campaign(s, guild_id)
+            scene = await repos.ensure_scene(s, campaign.id, channel_id)
+            # Do not create bot transcript yet; we'll confirm it upon /confirm
+            chain_json = cast(dict[str, Any], res.chain_json)
+            pa = await repos.create_pending_action(
+                s,
+                campaign_id=campaign.id,
+                scene_id=scene.id,
+                channel_id=channel_id,
+                user_id=str(user_id),
+                request_id=chain_json.get("request_id", f"orc-{scene_id}"),
+                chain=chain_json,
+                mechanics=res.mechanics,
+                narration=res.narration,
+                player_tx_id=player_tx_id,
+                bot_tx_id=None,
+            )
+            await inv.responder.send(
+                (
+                    "🧪 Mechanics\n" + res.mechanics +
+                    "\n\n📖 Narration (pending)\n" + res.narration +
+                    f"\n\nConfirm with /confirm, or cancel with /cancel. [id {pa.id}]"
+                ),
+                ephemeral=not bool(getattr(settings, "features_llm_visible", False)),
+            )
+            inc_counter("pending.presented")
+            return
+
+    # Otherwise: legacy immediate output path
     async with session_scope() as s:
         campaign = await repos.get_or_create_campaign(s, guild_id)
         scene = await repos.ensure_scene(s, campaign.id, channel_id)

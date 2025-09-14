@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Adventorator import models
+from Adventorator.metrics import inc_counter
 from Adventorator.schemas import CharacterSheet
 
 
@@ -177,3 +179,102 @@ async def get_recent_transcripts(
 async def healthcheck(s: AsyncSession) -> None:
     """Lightweight DB check to confirm connectivity and basic query works."""
     await s.execute(select(models.Campaign).limit(1))
+
+
+# -----------------------------
+# Pending Actions (Phase 8)
+# -----------------------------
+
+
+async def create_pending_action(
+    s: AsyncSession,
+    *,
+    campaign_id: int,
+    scene_id: int,
+    channel_id: int,
+    user_id: str,
+    request_id: str,
+    chain: dict,
+    mechanics: str,
+    narration: str,
+    player_tx_id: int | None,
+    bot_tx_id: int | None,
+    ttl_seconds: int | None = 300,
+) -> models.PendingAction:
+    expires_at = None
+    if ttl_seconds and ttl_seconds > 0:
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+    pa = models.PendingAction(
+        campaign_id=campaign_id,
+        scene_id=scene_id,
+        channel_id=channel_id,
+        user_id=user_id,
+        request_id=request_id,
+        chain=chain,
+        mechanics=mechanics,
+        narration=narration,
+        player_tx_id=player_tx_id,
+        bot_tx_id=bot_tx_id,
+        status="pending",
+        expires_at=expires_at,
+    )
+    s.add(pa)
+    await _flush_retry(s)
+    inc_counter("pending.create")
+    return pa
+
+
+async def get_latest_pending_for_user(
+    s: AsyncSession, *, scene_id: int, user_id: str
+) -> models.PendingAction | None:
+    stmt = (
+        select(models.PendingAction)
+        .where(
+            models.PendingAction.scene_id == scene_id,
+            models.PendingAction.user_id == user_id,
+            models.PendingAction.status == "pending",
+        )
+        .order_by(models.PendingAction.created_at.desc())
+        .limit(1)
+    )
+    q = await s.execute(stmt)
+    pa = q.scalar_one_or_none()
+    if pa is not None:
+        inc_counter("pending.fetch.latest")
+    return pa
+
+
+async def mark_pending_action_status(
+    s: AsyncSession, pending_id: int, status: str
+) -> None:
+    q = await s.execute(
+        select(models.PendingAction).where(models.PendingAction.id == pending_id)
+    )
+    pa = q.scalar_one_or_none()
+    if pa:
+        pa.status = status
+        await _flush_retry(s)
+    inc_counter(f"pending.status.{status}")
+
+
+async def expire_stale_pending_actions(s: AsyncSession) -> int:
+    """Mark expired pending actions as 'expired'. Returns count marked.
+
+    This is a best-effort helper; a periodic task/CLI can call it.
+    """
+    from datetime import datetime, timezone
+    # SQLite lacks server-side now(); do expiration in Python on fetched rows
+    stmt = select(models.PendingAction).where(
+        models.PendingAction.status == "pending"
+    )
+    q = await s.execute(stmt)
+    count = 0
+    now = datetime.now(timezone.utc)
+    for pa in q.scalars().all():
+        if pa.expires_at is not None and pa.expires_at <= now:
+            pa.status = "expired"
+            count += 1
+    if count:
+        await _flush_retry(s)
+        inc_counter("pending.expired", count)
+    return count

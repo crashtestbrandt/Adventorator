@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import structlog
 
+from Adventorator.metrics import inc_counter
 from Adventorator.rules.checks import CheckInput, compute_check
 from Adventorator.rules.dice import DiceRNG
 from Adventorator.tool_registry import InMemoryToolRegistry, ToolSpec
@@ -109,6 +111,7 @@ class Executor:
         )
 
     async def execute_chain(self, chain: ToolCallChain, dry_run: bool = True) -> Preview:
+        start = time.monotonic()
         items: list[PreviewItem] = []
         for step in chain.steps:
             spec = self.registry.get(step.tool)
@@ -118,4 +121,23 @@ class Executor:
                 continue
             out = spec.handler(step.args, dry_run)
             items.append(PreviewItem(tool=step.tool, mechanics=str(out.get("mechanics", ""))))
+        inc_counter("executor.preview.ok")
+        try:
+            dur_ms = int((time.monotonic() - start) * 1000)
+            inc_counter("executor.preview.duration_ms", dur_ms)
+        except Exception:
+            pass
         return Preview(items=items)
+
+    async def apply_chain(self, chain: ToolCallChain) -> Preview:
+        """Phase 8+: Apply a chain. For now, identical to preview (no mutation)."""
+        # Placeholder: in future, will emit events / mutate state in a single path
+        start = time.monotonic()
+        res = await self.execute_chain(chain, dry_run=False)
+        inc_counter("executor.apply.ok")
+        try:
+            dur_ms = int((time.monotonic() - start) * 1000)
+            inc_counter("executor.apply.duration_ms", dur_ms)
+        except Exception:
+            pass
+        return res

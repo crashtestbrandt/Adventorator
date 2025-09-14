@@ -29,6 +29,10 @@ type:
 format:
 	. .venv/bin/activate && ruff format src tests
 
+# --- Pending expiration helper ---
+expire-pending:
+	. .venv/bin/activate && python -m Adventorator.scripts.expire_pending
+
 clean:
 	rm -rf .venv
 

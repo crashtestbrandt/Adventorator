@@ -33,6 +33,7 @@ class OrchestratorResult:
     narration: str
     rejected: bool = False
     reason: str | None = None
+    chain_json: dict | None = None
 
 
 def _format_mechanics_block(result, ability: str, dc: int) -> str:
@@ -61,9 +62,7 @@ def _validate_proposal(out: LLMOutput) -> tuple[bool, str | None]:
     # DC guard (narrator can propose 1-40; orchestrator narrows to sane 5-30)
     if not (5 <= p.suggested_dc <= 30):
         return False, "DC out of acceptable range"
-    # reason non-empty
-    if not p.reason or not p.reason.strip():
-        return False, "Missing reason"
+    # reason is optional; defenses below handle unsafe phrasing if provided
     return True, None
 
 
@@ -234,6 +233,7 @@ async def run_orchestrator(
     """
 
     # Cache check to control duplicate prompts spam
+    _orc_start = time.monotonic()
     cache_key = (scene_id, player_msg.strip())
     now = time.time()
     if player_msg and cache_key in _prompt_cache:
@@ -313,7 +313,7 @@ async def run_orchestrator(
             narration=out.narration,
         )
         return OrchestratorResult(
-            mechanics="Proposal rejected: " + (why or "invalid"),
+            mechanics="Proposal rejected: invalid",
             narration="",
             rejected=True,
             reason=why,
@@ -378,6 +378,7 @@ async def run_orchestrator(
         settings is not None
     ) else False
     mechanics: str
+    chain_json: dict | None = None
     if use_executor and (_executor_mod is not None) and hasattr(_executor_mod, "Executor"):
         try:
             ex = _executor_mod.Executor()
@@ -399,8 +400,29 @@ async def run_orchestrator(
                     )
                 ],
             )
+            _exec_start = time.monotonic()
             prev = await ex.execute_chain(chain, dry_run=True)
+            try:
+                inc_counter(
+                    "orchestrator.executor.preview_ms",
+                    int((time.monotonic() - _exec_start) * 1000),
+                )
+            except Exception:
+                pass
             mechanics = prev.items[0].mechanics if prev.items else ""
+            chain_json = {
+                "request_id": chain.request_id,
+                "scene_id": chain.scene_id,
+                "steps": [
+                    {
+                        "tool": st.tool,
+                        "args": st.args,
+                        "requires_confirmation": st.requires_confirmation,
+                        "visibility": st.visibility,
+                    }
+                    for st in chain.steps
+                ],
+            }
         except Exception:
             log.warning("executor.preview.error", scene_id=scene_id, exc_info=True)
             use_executor = False
@@ -419,8 +441,12 @@ async def run_orchestrator(
         d20_rolls = [rng.roll("1d20").rolls[0]]
         result = compute_check(check_inp, d20_rolls=d20_rolls)
         mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
-    final = OrchestratorResult(mechanics=mechanics, narration=out.narration)
+    final = OrchestratorResult(mechanics=mechanics, narration=out.narration, chain_json=chain_json)
     inc_counter("orchestrator.format.sent")
+    try:
+        inc_counter("orchestrator.total_ms", int((time.monotonic() - _orc_start) * 1000))
+    except Exception:
+        pass
     log.info("orchestrator.format.sent", scene_id=scene_id)
     _prompt_cache[cache_key] = (now, final)
     return final
