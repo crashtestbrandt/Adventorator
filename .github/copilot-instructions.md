@@ -49,3 +49,14 @@ Testing notes
 - End-to-end tests expect deferred ACK then follow-up; see `tests/test_interactions*.py`.
 
 Keep PRs focused; prefer pure rules and thin I/O layers. When unsure, mirror the latest patterns in `commands/`, `rules/`, and `tests/`.
+
+Migration & Rollout Notes
+- Alembic: add migrations alongside each data-bearing phase; up/down scripts tested against SQLite and Postgres.
+- Backfills: where needed (e.g., tokens from characters), write idempotent backfill scripts and gate behind a CLI.
+- Feature flags: default new features to disabled; enable per-env; never gate fixes.
+- Logging: use structured logs with `request_id`, `scene_id`, and `encounter_id` across all layers.
+- Security: maintain allowlists in planner; Executor validates tool names/args against registry; no direct SQL in orchestrator/commands.
+
+Open Risks & Mitigations
+- Locking correctness: verify with targeted contention tests; prefer DB advisory locks as the authority.
+- Planner drift: keep strict JSON schema; add a legacy adapter for stability; log rejections with actionable reasons.
