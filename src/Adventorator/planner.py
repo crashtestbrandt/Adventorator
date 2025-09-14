@@ -68,8 +68,18 @@ def _catalog() -> list[dict[str, Any]]:
 
 def build_planner_messages(user_msg: str) -> list[dict[str, Any]]:
     tools_json = orjson.dumps(_catalog()).decode("utf-8")
+    # Dynamically enumerate available rules from the rules engine (Dnd5eRuleset)
+    from Adventorator.rules.engine import Dnd5eRuleset
+    ruleset = Dnd5eRuleset()
+    # List available rules as method names (excluding dunder and private)
+    rule_methods = [
+        m for m in dir(ruleset)
+        if not m.startswith("_") and callable(getattr(ruleset, m))
+    ]
+    rules_list = "\n".join(f"- {m}" for m in rule_methods)
+    rules_text = f"AVAILABLE RULES:\n{rules_list}\n"
     return [
-        {"role": "system", "content": SYSTEM_PLANNER},
+        {"role": "system", "content": SYSTEM_PLANNER + "\n" + rules_text},
         {
             "role": "user",
             "content": f"TOOLS:\n{tools_json}\n\nUSER:\n{user_msg}",

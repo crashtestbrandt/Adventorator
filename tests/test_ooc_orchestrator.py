@@ -57,6 +57,8 @@ def test_do_shadow_ephemeral(monkeypatch):
             features_llm_visible=False,
             llm_max_prompt_tokens=256,
             discord_public_key="",
+            env="test",
+            discord_dev_public_key="",
         ),
     )
 
@@ -119,6 +121,8 @@ def test_do_visible_post(monkeypatch):
             features_llm_visible=True,
             llm_max_prompt_tokens=256,
             discord_public_key="",
+            env="test",
+            discord_dev_public_key="",
         ),
     )
 

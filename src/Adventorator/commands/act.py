@@ -41,6 +41,8 @@ class ActOpts(Option):
 
 @slash_command(name="act", description="Let the DM figure out what to do.", option_model=ActOpts)
 async def act(inv: Invocation, opts: ActOpts):
+    # TODO: If/when multiple rulesets are supported, pass ruleset context to the planner prompt.
+    # For now, the planner prompt enumerates rules from the default Dnd5eRuleset.
     # Preconditions: require LLM available
     settings = inv.settings
     if not (settings and getattr(settings, "features_llm", False) and inv.llm_client):

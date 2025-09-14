@@ -24,6 +24,7 @@ class Invocation:
     # Optional DI: settings and llm client for handlers that need them
     settings: Any | None = None
     llm_client: Any | None = None
+    ruleset: Any | None = None  # Injected ruleset object
     # you can add: seed, feature flags, request_id, etc.
 
 # --- Option models for compile-time safety & help text ---

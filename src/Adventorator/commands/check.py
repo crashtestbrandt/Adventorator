@@ -2,8 +2,8 @@
 from pydantic import Field
 
 from Adventorator.commanding import Invocation, Option, slash_command
-from Adventorator.rules.checks import CheckInput, compute_check
-from Adventorator.rules.dice import DiceRNG
+from Adventorator.rules.checks import CheckInput
+from Adventorator.rules.engine import Dnd5eRuleset
 
 
 class CheckOpts(Option):
@@ -24,9 +24,7 @@ class CheckOpts(Option):
 )
 async def check_command(inv: Invocation, opts: CheckOpts):
     ability = (opts.ability or "DEX").upper()
-    rng = DiceRNG()
-    d20 = rng.roll("1d20", advantage=opts.advantage, disadvantage=opts.disadvantage)
-
+    ruleset = Dnd5eRuleset()
     ci = CheckInput(
         ability=ability,
         score=int(opts.score),
@@ -37,9 +35,7 @@ async def check_command(inv: Invocation, opts: CheckOpts):
         advantage=bool(opts.advantage),
         disadvantage=bool(opts.disadvantage),
     )
-
-    d20_rolls = d20.rolls[:2] if len(d20.rolls) >= 2 else [d20.rolls[0]]
-    out = compute_check(ci, d20_rolls)
+    out = ruleset.perform_check(ci)
     verdict = "✅ success" if out.success else "❌ fail"
     text = (
         f"🧪 **{ability}** check vs DC {opts.dc}\n"

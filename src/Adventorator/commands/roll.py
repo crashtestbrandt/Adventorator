@@ -2,7 +2,7 @@
 from pydantic import Field
 
 from Adventorator.commanding import Invocation, Option, slash_command
-from Adventorator.rules.dice import DiceRNG
+from Adventorator.rules.engine import Dnd5eRuleset
 
 
 class RollOpts(Option):
@@ -17,8 +17,8 @@ class RollOpts(Option):
     # you could include Discord-only metadata here too
 )
 async def roll(inv: Invocation, opts: RollOpts):
-    rng = DiceRNG()
-    res = rng.roll(opts.expr or "1d20", advantage=opts.advantage, disadvantage=opts.disadvantage)
+    ruleset = Dnd5eRuleset()
+    res = ruleset.roll_dice(opts.expr or "1d20", advantage=opts.advantage, disadvantage=opts.disadvantage)
     suffix = "(adv)" if opts.advantage else "(dis)" if opts.disadvantage else ""
     text = f"🎲 `{opts.expr}` → rolls {res.rolls} {suffix} = **{res.total}**"
     await inv.responder.send(text)

@@ -214,6 +214,7 @@ async def _dispatch_command(inter: Interaction):
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
         # Allow a trusted caller to provide a one-off webhook base via header
         webhook_base_url = request_header_override()
+        from Adventorator.rules.engine import Dnd5eRuleset
         inv = Invocation(
             name=name,
             subcommand=sub,
@@ -224,6 +225,7 @@ async def _dispatch_command(inter: Interaction):
             responder=DiscordResponder(inter.application_id, inter.token, settings, webhook_base_url),
             settings=settings,
             llm_client=llm_client,
+            ruleset=Dnd5eRuleset(),
         )
         start = time.perf_counter()
         status = "success"
