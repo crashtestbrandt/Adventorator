@@ -5,6 +5,7 @@ env = "dev"
 [features]
 llm = true
 planner = true
+executor = true
 rules = true
 combat = false
 llm_visible = true

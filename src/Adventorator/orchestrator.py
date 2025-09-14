@@ -15,6 +15,11 @@ from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messag
 from Adventorator.metrics import inc_counter
 from Adventorator.models import Transcript as TranscriptModel
 from Adventorator.retrieval import ContentSnippet, build_retriever
+
+try:  # Optional: Phase 7 Executor preview path (module-level)
+    from Adventorator import executor as _executor_mod  # type: ignore
+except Exception:  # pragma: no cover - phased rollout, executor may not exist
+    _executor_mod = None  # type: ignore[assignment]
 from Adventorator.rules.checks import ABILS, CheckInput, compute_check
 from Adventorator.rules.dice import DiceRNG
 from Adventorator.schemas import LLMOutput
@@ -368,25 +373,52 @@ async def run_orchestrator(
     expertise = bool(sheet_info.get("expertise", False))
     prof_bonus = int(sheet_info.get("prof_bonus", 2))
 
-    check_inp = CheckInput(
-        ability=p.ability,
-        score=score,
-        proficient=proficient,
-        expertise=expertise,
-        proficiency_bonus=prof_bonus,
-        dc=p.suggested_dc,
-        advantage=False,
-        disadvantage=False,
-    )
-
-    # 5) compute mechanics via DiceRNG on a single d20
-    rng = DiceRNG(seed=rng_seed)
-    # We pass two d20s to compute_check to support adv/dis selection; here both same seed path
-    d20_rolls = [rng.roll("1d20").rolls[0]]
-    result = compute_check(check_inp, d20_rolls=d20_rolls)
-
-    # 6) format mechanics + narration
-    mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
+    # 5) If Executor preview is enabled, use it for mechanics; otherwise, compute locally
+    use_executor = bool(getattr(settings, "features_executor", False)) if (
+        settings is not None
+    ) else False
+    mechanics: str
+    if use_executor and (_executor_mod is not None) and hasattr(_executor_mod, "Executor"):
+        try:
+            ex = _executor_mod.Executor()
+            chain = _executor_mod.ToolCallChain(
+                request_id=f"orc-{scene_id}-{int(now*1000)}",
+                scene_id=scene_id,
+                steps=[
+                    _executor_mod.ToolStep(
+                        tool="check",
+                        args={
+                            "ability": p.ability,
+                            "score": score,
+                            "dc": p.suggested_dc,
+                            "proficient": proficient,
+                            "expertise": expertise,
+                            "prof_bonus": prof_bonus,
+                            "seed": rng_seed,
+                        },
+                    )
+                ],
+            )
+            prev = await ex.execute_chain(chain, dry_run=True)
+            mechanics = prev.items[0].mechanics if prev.items else ""
+        except Exception:
+            log.warning("executor.preview.error", scene_id=scene_id, exc_info=True)
+            use_executor = False
+    if not use_executor:
+        check_inp = CheckInput(
+            ability=p.ability,
+            score=score,
+            proficient=proficient,
+            expertise=expertise,
+            proficiency_bonus=prof_bonus,
+            dc=p.suggested_dc,
+            advantage=False,
+            disadvantage=False,
+        )
+        rng = DiceRNG(seed=rng_seed)
+        d20_rolls = [rng.roll("1d20").rolls[0]]
+        result = compute_check(check_inp, d20_rolls=d20_rolls)
+        mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
     final = OrchestratorResult(mechanics=mechanics, narration=out.narration)
     inc_counter("orchestrator.format.sent")
     log.info("orchestrator.format.sent", scene_id=scene_id)

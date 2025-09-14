@@ -26,7 +26,9 @@ def _toml_settings_source() -> dict[str, Any]:
     # Planner hard-toggle; defaults to True so it can be disabled quickly via env
     "feature_planner_enabled": t.get("features", {}).get("planner", True),
         "features_rules": t.get("features", {}).get("rules", False),
-        "features_combat": t.get("features", {}).get("combat", False),
+    "features_combat": t.get("features", {}).get("combat", False),
+    # Executor (Phase 7+) — default disabled
+    "features_executor": t.get("features", {}).get("executor", False),
     "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
     # When set, app will post follow-ups to this base URL instead of Discord.
     # Example: "http://host.docker.internal:19000"
@@ -120,6 +122,7 @@ class Settings(BaseSettings):
     feature_planner_enabled: bool = True
     features_rules: bool = False
     features_combat: bool = False
+    features_executor: bool = False
     response_timeout_seconds: int = 3
     app_port: int = 18000
     planner_timeout_seconds: int = 12
