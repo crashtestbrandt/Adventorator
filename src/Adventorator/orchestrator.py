@@ -87,14 +87,76 @@ def _contains_banned_verbs(text: str) -> bool:
 
 
 _NAME_RE = re.compile(r"\b[A-Z][a-z]{2,}\b")
-_PRONOUNS = {"You", "Your", "Yours", "They", "Them", "Their"}
+# Common pronouns and sentence-starters to ignore in name detection
+_PRONOUNS = {
+    # second person
+    "You",
+    "Your",
+    "Yours",
+    "Yourself",
+    "Yourselves",
+    # third person plural
+    "They",
+    "Them",
+    "Their",
+    "Theirs",
+    "Themselves",
+    # third person singular
+    "She",
+    "Her",
+    "Hers",
+    "Herself",
+    "He",
+    "Him",
+    "His",
+    "Himself",
+    "It",
+    "Its",
+    "Itself",
+    # first person
+    "We",
+    "Us",
+    "Our",
+    "Ours",
+    "Ourselves",
+    "I",
+    "Me",
+    "My",
+    "Mine",
+    "Myself",
+    # common capitalized determiners/conjunctions at sentence start
+    "The",
+    "A",
+    "An",
+    "This",
+    "That",
+    "These",
+    "Those",
+    "And",
+    "But",
+    "Then",
+    "However",
+    "Meanwhile",
+}
 
 
 def _unknown_actor_present(narration: str, allowed: set[str]) -> str | None:
     if not narration:
         return None
     # Tokenize proper-noun-like words from narration
-    nar_tokens = {t for t in _NAME_RE.findall(narration) if t not in _PRONOUNS}
+    # Heuristic: ignore the first token of each sentence to avoid false positives
+    # from sentence-initial capitalization (e.g., "Dust motes ...").
+    sentences = re.split(r"(?<=[.!?])\s+", narration)
+    tokens: list[str] = []
+    for s in sentences:
+        words = _NAME_RE.findall(s)
+        if not words:
+            continue
+        # Skip the first candidate in this sentence; take the rest
+        for w in words[1:]:
+            if w not in _PRONOUNS:
+                tokens.append(w)
+    nar_tokens = set(tokens)
     nar_tokens = {t.lower() for t in nar_tokens}
     if not nar_tokens:
         return None

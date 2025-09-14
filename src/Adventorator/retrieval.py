@@ -46,14 +46,46 @@ class SqlFallbackRetriever(BaseRetriever):
         q = q[:128]
         try:
             async with self._sm() as s:
-                # Tokenize query into alphanumeric terms and require all terms to match
+                # Tokenize query into alphanumeric terms and filter common stopwords
                 terms = [t for t in re.findall(r"[A-Za-z0-9]+", q.lower()) if t]
+                STOPWORDS = {
+                    "the",
+                    "a",
+                    "an",
+                    "and",
+                    "or",
+                    "of",
+                    "to",
+                    "in",
+                    "on",
+                    "with",
+                    "at",
+                    "by",
+                    "for",
+                    "from",
+                    "is",
+                    "are",
+                    "be",
+                    "was",
+                    "were",
+                    # common chatty verbs/prompts
+                    "please",
+                    "describe",
+                    "tell",
+                    "show",
+                    "about",
+                    "look",
+                    "examine",
+                    "inspect",
+                }
+                terms = [t for t in terms if t not in STOPWORDS]
                 if not terms:
                     return []
-                and_clauses = []
+                # Build a broad OR across tokens (each token matches title/player/gm_text)
+                or_clauses = []
                 for t in terms:
                     pat = f"%{t}%"
-                    and_clauses.append(
+                    or_clauses.append(
                         sa.or_(
                             ContentNode.title.ilike(pat),
                             ContentNode.player_text.ilike(pat),
@@ -63,8 +95,8 @@ class SqlFallbackRetriever(BaseRetriever):
                         )
                     )
                 stmt = sa.select(ContentNode).where(ContentNode.campaign_id == campaign_id)
-                if and_clauses:
-                    stmt = stmt.where(sa.and_(*and_clauses))
+                if or_clauses:
+                    stmt = stmt.where(sa.or_(*or_clauses))
                 stmt = stmt.limit(k)
                 result = await s.execute(stmt)
                 rows = list(result.scalars().all())
