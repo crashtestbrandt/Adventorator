@@ -131,6 +131,7 @@ async def run_orchestrator(
     scene_id: int,
     player_msg: str,
     sheet_info_provider: Callable[[str], _SheetInfo] | None = None,
+    character_summary_provider: Callable[[], str | None] | None = None,
     rng_seed: int | None = None,
     llm_client: object | None = None,
     prompt_token_cap: int | None = None,
@@ -165,7 +166,13 @@ async def run_orchestrator(
     facts = await _facts_from_transcripts(scene_id, player_msg, max_tokens=prompt_token_cap)
 
     # 2) narrator -> JSON output
-    narrator_msgs = build_narrator_messages(facts, player_msg, max_tokens=prompt_token_cap)
+    char_summary = character_summary_provider() if character_summary_provider else None
+    narrator_msgs = build_narrator_messages(
+        facts,
+        player_msg,
+        max_tokens=prompt_token_cap,
+        character_summary=char_summary,
+    )
     if not llm_client:
         return OrchestratorResult(
             mechanics="LLM not configured.", narration="", rejected=True, reason="llm_unconfigured"

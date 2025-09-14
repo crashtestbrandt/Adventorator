@@ -100,6 +100,7 @@ def build_narrator_messages(
     facts: Iterable[str],
     player_msg: str | None,
     max_tokens: int | None = None,
+    character_summary: str | None = None,
 ) -> list[dict[str, Any]]:
     """Build messages for the narrator in JSON-only mode.
 
@@ -130,6 +131,9 @@ def build_narrator_messages(
     if picked_facts:
         content_lines.append("Facts:")
         content_lines.extend(picked_facts)
+    if character_summary:
+        content_lines.append("Character:")
+        content_lines.append(f"- {character_summary.strip()}")
     if player_line:
         content_lines.append(f"Player input: {player_line}")
 

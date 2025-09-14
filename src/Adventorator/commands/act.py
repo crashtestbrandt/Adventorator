@@ -155,7 +155,33 @@ async def act(inv: Invocation, opts: ActOpts):
     except Exception as e:
         inc_counter("planner.decision.rejected")
         log.info("planner.decision", cmd=cmd_name_flat, accepted=False, error=str(e))
-        await inv.responder.send("⚠️ Planned arguments were invalid.", ephemeral=True)
+        # Provide targeted guidance for common commands with missing args (Phase 5.6)
+        guidance: str | None = None
+        if cmd_name_flat in {"sheet.create"}:
+            guidance = (
+                "To create a character, use /sheet create and provide the json option with your "
+                "character sheet JSON. Example: {\"name\": \"Aria\", \"class\": \"Fighter\", \"level\": 1, ...}"
+            )
+        elif cmd_name_flat in {"sheet.show"}:
+            guidance = (
+                "To show a character, use /sheet show with the name option. Example: name: Aria"
+            )
+        elif cmd_name_flat == "check":
+            guidance = (
+                "Use /check with at least ability (STR/DEX/...). Optionally include dc. "
+                "Example: ability: DEX dc: 12"
+            )
+        elif cmd_name_flat == "roll":
+            guidance = (
+                "Use /roll with an expr like 1d20 or 2d6+3. Example: expr: \"1d20\""
+            )
+        elif cmd_name_flat == "do":
+            guidance = (
+                "Use /do with a short action description. Example: message: \"I sneak along the wall\""
+            )
+
+        msg = guidance or "⚠️ Planned arguments were invalid."
+        await inv.responder.send(msg, ephemeral=True)
         return
 
     inc_counter("planner.decision.accepted")
@@ -178,5 +204,7 @@ async def act(inv: Invocation, opts: ActOpts):
         responder=inv.responder,
         settings=inv.settings,
         llm_client=inv.llm_client,
+    # Preserve injected ruleset so planned commands can use it
+    ruleset=inv.ruleset,
     )
     await cmd.handler(new_inv, option_obj)

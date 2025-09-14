@@ -29,6 +29,9 @@ settings = load_settings()
 setup_logging(settings)
 app = FastAPI(title="Adventorator")
 
+# Stash the current request for downstream helpers (initialized in middleware)
+_current_request_var: contextvars.ContextVar | None = None
+
 llm_client = None
 if settings.features_llm:
     llm_client = LLMClient(settings)
@@ -78,17 +81,24 @@ async def interactions(request: Request):
 
     # Allow a trusted dev header to opt-in to an alternate public key for local CLI
     use_dev_key = request.headers.get(DEV_KEY_HEADER) == "1"
-    pubkey = settings.discord_public_key
+    # Compute which public key will be used (dev key allowed only in dev)
+    use_dev_pub = (
+        use_dev_key
+        and getattr(settings, "env", None) == "dev"
+        and bool(getattr(settings, "discord_dev_public_key", None))
+    )
+    dev_key: str = getattr(settings, "discord_dev_public_key", "") or ""
+    prod_key: str = getattr(settings, "discord_public_key", "") or ""
+    pubkey_used: str = dev_key if use_dev_pub else prod_key
+    pubkey = pubkey_used
     log.info(
         "signature.verification",
         use_dev_key=use_dev_key,
-        env=settings.env,
-        has_dev_public_key=bool(settings.discord_dev_public_key),
-        pubkey_used=(settings.discord_dev_public_key if use_dev_key and settings.env == "dev" and settings.discord_dev_public_key else settings.discord_public_key),
+        env=getattr(settings, "env", None),
+        has_dev_public_key=bool(getattr(settings, "discord_dev_public_key", None)),
+        pubkey_used=pubkey_used,
         dev_header=request.headers.get(DEV_KEY_HEADER),
     )
-    if use_dev_key and settings.env == "dev" and settings.discord_dev_public_key:
-        pubkey = settings.discord_dev_public_key
     if not verify_ed25519(pubkey, ts, raw, sig):
         log.error("Invalid signature", sig=sig, ts=ts, pubkey_used=pubkey, use_dev_key=use_dev_key)
         raise HTTPException(status_code=401, detail="bad signature")
@@ -129,9 +139,7 @@ async def request_id_middleware(request: Request, call_next):
 
     # Stash request in a ContextVar for downstream helpers that need headers
     global _current_request_var
-    try:
-        _current_request_var
-    except NameError:
+    if _current_request_var is None:
         _current_request_var = contextvars.ContextVar("current_request")
 
     req_token = _current_request_var.set(request)
@@ -182,7 +190,13 @@ async def _dispatch_command(inter: Interaction):
                 options[n] = o.get("value")
 
         class DiscordResponder(Responder):  # type: ignore[misc]
-            def __init__(self, application_id: str, token: str, settings: Settings, webhook_base_url: str | None = None):
+            def __init__(
+                self,
+                application_id: str,
+                token: str,
+                settings: Settings,
+                webhook_base_url: str | None = None,
+            ):
                 self.application_id = application_id
                 self.token = token
                 self.settings = settings
@@ -222,7 +236,12 @@ async def _dispatch_command(inter: Interaction):
             user_id=str(user_id),
             channel_id=str(channel_id) if channel_id else None,
             guild_id=str(guild_id) if guild_id else None,
-            responder=DiscordResponder(inter.application_id, inter.token, settings, webhook_base_url),
+            responder=DiscordResponder(
+                inter.application_id,
+                inter.token,
+                settings,
+                webhook_base_url,
+            ),
             settings=settings,
             llm_client=llm_client,
             ruleset=Dnd5eRuleset(),
@@ -286,12 +305,11 @@ def request_header_override() -> str | None:
     and the app falls back to Discord.
     """
     try:
-        import contextvars
         # A small shim: stash the current request in a contextvar in middleware
-        current_request_var: contextvars.ContextVar | None = globals().get("_current_request_var")  # type: ignore[assignment]
-        if not current_request_var:
+        global _current_request_var
+        if _current_request_var is None:
             return None
-        req = current_request_var.get(None)
+        req = _current_request_var.get(None)
         if not req:
             return None
         val = req.headers.get("X-Adventorator-Webhook-Base")

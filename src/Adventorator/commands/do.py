@@ -5,6 +5,7 @@ from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.db import session_scope
 from Adventorator.orchestrator import run_orchestrator
+from Adventorator.services.character_service import CharacterService
 
 
 class DoOpts(Option):
@@ -39,6 +40,8 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
     bot_tx_id = None
     scene_id = None
     allowed: list[str] = []
+    sheet_provider = None
+    char_summary_provider = None
     # Resolve scene and write the player transcript within the same session
     async with session_scope() as s:
         campaign = await repos.get_or_create_campaign(s, guild_id)
@@ -57,12 +60,50 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         scene_id = scene.id
         # Derive allowed actors from characters in this campaign
         allowed = await repos.list_character_names(s, campaign.id)
+        # Build a sheet provider from CharacterService for this user
+        cs = CharacterService()
+        sheet = await cs.get_active_sheet_info(
+            s,
+            user_id=user_id,
+            guild_id=guild_id,
+            channel_id=channel_id,
+        )
+        if sheet is not None:
+            # Map to the orchestrator's per-ability callable
+            def _provider(ability: str):
+                a = (ability or "").upper()
+                score = int(sheet.abilities.get(a, 10))
+                # For now, neutral prof flags; later evolve from sheet skills
+                return {
+                    "score": score,
+                    "proficient": False,
+                    "expertise": False,
+                    "prof_bonus": int(sheet.proficiency_bonus),
+                }
+
+            sheet_provider = _provider
+            # Build a compact character summary for prompts
+            def _summary() -> str:
+                parts = [sheet.name]
+                if sheet.class_name:
+                    parts.append(str(sheet.class_name))
+                if sheet.level:
+                    parts.append(f"Lv {sheet.level}")
+                # Include two key stats for brevity
+                dex = sheet.abilities.get("DEX", 10)
+                str_ = sheet.abilities.get("STR", 10)
+                parts.append(f"STR {str_}, DEX {dex}, PB {sheet.proficiency_bonus}")
+                return " ".join(str(p) for p in parts if p)
+
+            char_summary_provider = _summary
 
     # Orchestrate
     try:
         res = await run_orchestrator(
             scene_id=scene_id or 0,
             player_msg=message,
+            sheet_info_provider=sheet_provider,
+            character_summary_provider=char_summary_provider,
             llm_client=llm,
             prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None) if settings else None,
             allowed_actors=allowed,

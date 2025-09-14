@@ -3,7 +3,6 @@ from pydantic import Field
 
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.rules.checks import CheckInput
-from Adventorator.rules.engine import Dnd5eRuleset
 
 
 class CheckOpts(Option):
@@ -24,7 +23,6 @@ class CheckOpts(Option):
 )
 async def check_command(inv: Invocation, opts: CheckOpts):
     ability = (opts.ability or "DEX").upper()
-    ruleset = Dnd5eRuleset()
     ci = CheckInput(
         ability=ability,
         score=int(opts.score),
@@ -35,7 +33,13 @@ async def check_command(inv: Invocation, opts: CheckOpts):
         advantage=bool(opts.advantage),
         disadvantage=bool(opts.disadvantage),
     )
-    out = ruleset.perform_check(ci)
+    if inv.ruleset is None:
+        from Adventorator.rules.engine import Dnd5eRuleset
+
+        rs = Dnd5eRuleset()
+    else:
+        rs = inv.ruleset
+    out = rs.perform_check(ci)
     verdict = "✅ success" if out.success else "❌ fail"
     text = (
         f"🧪 **{ability}** check vs DC {opts.dc}\n"
