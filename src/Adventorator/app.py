@@ -16,9 +16,9 @@ from Adventorator.crypto import verify_ed25519
 from Adventorator.db import session_scope
 from Adventorator.discord_schemas import Interaction
 from Adventorator.llm import LLMClient
-from Adventorator.logging import setup_logging, redact_settings
-from Adventorator.responder import followup_message, respond_deferred, respond_pong
+from Adventorator.logging import redact_settings, setup_logging
 from Adventorator.metrics import get_counters
+from Adventorator.responder import followup_message, respond_deferred, respond_pong
 from Adventorator.rules.dice import DiceRNG
 
 rng = DiceRNG()  # TODO: Seed per-scene later
@@ -234,7 +234,7 @@ async def _dispatch_command(inter: Interaction):
                 guild_id=str(guild_id) if guild_id else None,
             )
             await cmd.handler(inv, opts_obj)
-        except Exception as e:  # Let FastAPI/global handlers decide further
+        except Exception:  # Let FastAPI/global handlers decide further
             status = "error"
             log.error(
                 "command.error",

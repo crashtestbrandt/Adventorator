@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass
+
 import structlog
 
 _DICE_RE = re.compile(r"^\s*(?P<count>\d+)?d(?P<sides>\d+)\s*(?P<mod>[+\-]\s*\d+)?\s*$")

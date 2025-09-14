@@ -2,8 +2,8 @@
 
 import httpx
 import orjson
-from fastapi import Response
 import structlog
+from fastapi import Response
 
 # Keep this module dependency-free of Settings to avoid import-time env errors
 # (we don't actually need settings here)

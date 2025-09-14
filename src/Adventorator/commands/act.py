@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
 import asyncio
-import structlog
 import time
 
+import structlog
 from pydantic import Field
 
+from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, find_command, slash_command
 from Adventorator.db import session_scope
-from Adventorator import repos
 from Adventorator.metrics import inc_counter
-from Adventorator.planner import plan, _cache_get, _cache_put, _is_allowed
+from Adventorator.planner import _cache_get, _cache_put, _is_allowed, plan
 from Adventorator.planner_schemas import PlannerOutput
 
 log = structlog.get_logger()

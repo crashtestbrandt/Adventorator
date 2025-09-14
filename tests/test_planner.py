@@ -1,6 +1,6 @@
 import pytest
 
-from Adventorator.planner import _catalog, build_planner_messages, plan
+from Adventorator.planner import _catalog, plan
 from Adventorator.planner_schemas import PlannerOutput
 
 

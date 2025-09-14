@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any
 import time
+from typing import Any
 
 import orjson
-
-from Adventorator.commanding import all_commands
-from Adventorator.command_loader import load_all_commands
 import structlog
+
+from Adventorator.command_loader import load_all_commands
+from Adventorator.commanding import all_commands
 from Adventorator.llm import LLMClient
 from Adventorator.llm_utils import extract_first_json
 from Adventorator.planner_prompts import SYSTEM_PLANNER
 from Adventorator.planner_schemas import PlannerOutput
-
 
 # --- Allowlist of commands the planner may route to (defense-in-depth) ---
 _ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do", "ooc"}

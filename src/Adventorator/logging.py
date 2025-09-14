@@ -6,6 +6,7 @@ from logging.handlers import RotatingFileHandler
 
 import structlog
 from structlog.contextvars import merge_contextvars
+
 from Adventorator.config import Settings
 
 

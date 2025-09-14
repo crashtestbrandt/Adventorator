@@ -1,4 +1,5 @@
 import json
+
 import pytest
 
 from Adventorator.command_loader import load_all_commands

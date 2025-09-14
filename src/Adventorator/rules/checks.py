@@ -1,6 +1,7 @@
 # rules/checks.py
 
 from dataclasses import dataclass
+
 import structlog
 
 ABILS = ("STR", "DEX", "CON", "INT", "WIS", "CHA")
