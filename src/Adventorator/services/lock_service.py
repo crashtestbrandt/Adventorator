@@ -68,7 +68,7 @@ async def acquire_encounter_locks(
                     await asyncio.sleep(step_ms / 1000)
                     waited_ms += step_ms
                 inc_counter("locks.acquire.success")
-                inc_counter("locks.mode.pg", 1)
+                inc_counter("locks.mode.pg")
                 observe_histogram("locks.wait_ms", waited_ms)
             except Exception:
                 # If advisory lock cannot be acquired, release local and re-raise
