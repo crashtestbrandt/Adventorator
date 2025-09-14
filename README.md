@@ -1,156 +1,133 @@
 # Adventorator
 
-*The best adventures are the ones **no one** has to plan.*
+The best adventures are the ones no one has to plan.
 
-A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in chat. It blends deterministic game mechanics with AI-powered narration, letting players experience a text-based campaign without needing a human DM online 24/7.
+A Discord-native Dungeon Master bot that blends deterministic 5e mechanics with AI-powered narration. Play end-to-end inside a Discord channel with party character sheets, campaign data, exploration or encounter modes, and safe preview→confirm flows for state changes.
 
----
-
-## Development
-
-### Quick Dev Setup
+- [MVP Definition](#mvp-definition)
+- [Overview](#overview)
+- [Prerequisites](#prerequisites) & [Quickstart](#quickstart)
+- [Docker Compose Dev (with Feature Flags)](#docker-compose-dev-with-feature-flags)
+- [Database & Alembic](#database--alembic)
+- [Configuration](#configuration)
+- [Retrieval & Safety](#retrieval--safety)
+- [Key Command Flows](#key-command-flows)
+- [Operations](#operations)
+- [Repo Structure](#repo-structure)
+- [Contributing](./CONTRIBUTING.md)
 
 ![](/docs/images/usage-slash-check.jpeg)
 
-
-* [Overview](#overview)
-* [Prerequisites](#prerequisites) & [Quickstart](#quickstart)
-* [Database & Alembic](#database--alembic)
-* [Configuration](#configuration)
-* [Retrieval & Safety](#retrieval--safety)
-* [Commands](#commands)
-* [Operations](#operations)
-* [Repo Structure](#repo-structure)
-* [Contributing](./CONTRIBUTING.md)
-
 ---
 
-## Overview
+## MVP Definition
 
-Adventorator is a FastAPI application that serves as a backend for a Discord bot. It receives slash command interactions, verifies their authenticity using Ed25519 signatures, and processes them asynchronously to provide a rich, interactive TTRPG experience.
+End-to-end automated DnD 5e campaign management within a Discord channel for all members with an assigned character sheet (a party):
 
-**✨ What it does (today)**
-
-* Discord-first gameplay with slash commands: `/roll`, `/check`, `/sheet`, `/ooc`, and the smart router `/plan`.
-* Fast 3-second deferral on all interactions; real work happens asynchronously with webhook follow-ups.
-* A deterministic `rules` engine for dice and ability checks (advantage/disadvantage, crits, modifiers).
-* Campaign persistence via async SQLAlchemy and Alembic, including full transcripts of player and bot messages.
-
-**🚧 Project Status**
-
-* [X] Phase 0: Verified interactions endpoint, 3s deferral, logging.
-* [X] Phase 1: Deterministic dice + checks, `/roll` and `/check` commands.
-* [X] Phase 2: Persistence (campaigns, characters, transcripts).
-* [X] Phase 3: Shadow LLM narrator, proposal-only.
-* [X] Phase 4: Planner + `/plan` smart routing.
-* [ ] Phase 5+: Combat system, content ingestion, GM controls, premium polish.
-
-**🔜 Roadmap**
-
-* Add `/sheet` CRUD with strict JSON schema.
-* Initiative + combat encounters with Redis turn locks.
-* Adventure ingestion pipeline for SRD or custom campaigns.
-* Optional Embedded App for lightweight maps/handouts in voice channels.
+- Campaign data uploaded as a .zip via `/campaign upload` with well-formed definitions for important people, places/geography, history, theme, etc. LLM tools can safely fill reasonable gaps.
+- Gameplay swaps between exploration (asynchronous, free-form) and encounter (synchronous, opt-in, turn-order) modes according to party actions.
+- Core commands and roles:
+  - `/ooc` — Out-of-character chat with the narrator like a human DM.
+  - `/plan` — Take in-character actions that don’t affect shared state, or preview actions that do.
+  - `/do` — Attempt to take actions that affect other players or world state (guarded by preview/confirm).
+  - `/sheet create|upload|show [id]` — Manage character sheets.
+  - `/campaign upload|summary|start|restart [id]` — Manage campaign data.
+  - Plus `/roll`, `/check`, and emergent GM tools under feature flags.
 
 ---
 
 ## Architecture
 
-This project follows a modular, layered architecture designed for security, testability, and extensibility, especially when integrating with LLMs.
+A modular, layered system designed for security, determinism, and safe AI integration.
 
-* **FastAPI** server implements the Discord Interactions endpoint, verifies signatures, and defers responses to work asynchronously.
-* A **Command Registry** (`Adventorator/commanding.py`) discovers and routes requests to handlers located in `Adventorator/commands/`.
-* A pure Python **Rules Engine** (`Adventorator/rules/`) implements deterministic game mechanics like dice rolls and ability checks.
-* An asynchronous **Data Layer** using SQLAlchemy (`repos.py`) provides structured access to the database.
-* The optional **AI Layer** is split into two distinct components: a `Planner` for routing and an `Orchestrator` for game logic.
+Components at a glance
+- FastAPI edge (`app.py`): Verify Ed25519 signatures, defer within 3s, dispatch commands in the background, and send follow-ups via a `Responder` (Discord webhooks or dev sink).
+- Command registry (`commanding.py` + `command_loader.py`): `@slash_command` decorator with Pydantic option models; handlers in `commands/` receive an `Invocation` with a transport-agnostic `Responder`.
+- Rules engine (`rules/`): Deterministic mechanics (dice, checks) via `Dnd5eRuleset`; seedable RNG for reproducible tests.
+- Data layer (`db.py`, `models.py`, `repos.py`): Async SQLAlchemy with `session_scope()`, typed models, and repo helpers. Transcripts capture all user/bot I/O.
+- AI layer (`planner.py`, `orchestrator.py`, `llm*.py`): Planner routes `/plan` intent to a strict command; Orchestrator proposes mechanics + narration, validates defensively, and runs rules.
+- Retrieval (`retrieval.py`): Player-safe content snippets augment prompts; GM-only text never leaves the DB.
+- Executor + ToolRegistry (`executor.py`, `tool_registry.py`): JSON ToolCallChain with dry-run previews and validated arg schemas.
+- Pending actions + confirm (`models.PendingAction`, `commands/confirm|cancel|pending.py`): Previews that require explicit confirmation before apply.
+- Event ledger (`models.Event`, folds in `repos.py`): Append-only mutations with replay support; executor apply emits events.
+- Observability: JSON logs with request_id, metrics counters, and feature flags for safe rollback: `features_llm`, `features_planner`, `features_executor`, `features_executor_confirm`, `features_events`, `retrieval.enabled`, `ops.metrics_endpoint_enabled`.
 
-**Diagram: High-Level System Architecture (current)**
+Diagram: current system
 
 ```mermaid
 flowchart TD
-  %% === External ===
-  subgraph EXTERNAL[External]
-    U[Player on Discord]:::ext
-    DP[Discord Platform - Commands & Interactions]:::ext
-    WH[Discord Webhooks API - Follow-up Messages]:::ext
-  LLM[LLM API]:::ext
+  %% External
+  subgraph EXT[External]
+    DUser["Discord User"]:::ext
+    Discord["Discord Interactions"]:::ext
+    Webhooks["Discord Webhooks API"]:::ext
+    LLM["LLM API"]:::ext
   end
 
-  %% === Network Edge ===
-  CF[cloudflared Tunnel optional for local dev]:::edge
+  %% Edge
+  subgraph EDGE[Edge]
+    Tunnel["cloudflared dev"]:::edge
+    App["FastAPI /interactions"]:::edge
+    Verify["Ed25519 verify"]:::edge
+    Defer["Deferred ACK (type 5)"]:::edge
+  end
 
-  %% === App ===
-  subgraph APP[Adventorator - FastAPI]
-    subgraph REQUEST[Request Handling]
-      A[POST /interactions]
-  SIG[Ed25519 Verify and headers]
-      DISP[Command Dispatch - registry in commanding.py]
-      DEF[Deferred ACK]
+  %% App internals
+  subgraph APP[Adventorator]
+    Dispatcher["Command Registry\ndispatch"]:::biz
+    Responder["Responder\n(follow-up sender)"]:::biz
+
+    subgraph AI[AI Layer]
+      Planner["Planner\n(/plan router)"]:::biz
+      Orchestrator["Orchestrator\nproposal + defenses"]:::biz
+      Retrieval["Retrieval (player-safe)"]:::biz
     end
 
-    subgraph BUSINESS[Command Logic]
-      RULES[Rules Engine - dice and ability checks]:::biz
-      REPOS[Repos & Context - session_scope + repos.py]:::biz
-      PLAN[Planner/Orchestrator - JSON-only + safety + 30s cache]:::biz
-  RETR[Retrieval Layer - SQL LIKE player-only]:::biz
+    subgraph EXEC[Executor]
+      Registry["ToolRegistry\nschemas/validation"]:::biz
+      Exec["Executor\ndry-run preview/apply"]:::biz
     end
 
-    subgraph RESPONSE[Response]
-      RESP[Responder<br/>follow-up webhooks]
-      TRANS[Transcript Logger]
-      MET[Metrics Counters]
-      LOGS[Structlog JSON Logs]
+    subgraph DATA[Data Layer]
+      Repos["Repos + session_scope()"]:::data
+      Transcripts[(Transcripts)]:::data
+      Scenes[(Scenes)]:::data
+      Characters[(Characters)]:::data
+      Content[(ContentNodes)]:::data
+      Pending[(PendingActions)]:::data
+      Events[(Events Ledger)]:::data
     end
+
+    Metrics["Metrics counters"]:::ops
+    Logs["Structlog JSON"]:::ops
+    Rules["Ruleset (dice/checks)"]:::biz
   end
 
-  %% === Data ===
-  subgraph DATA[Data]
-    DB[(Primary DB)]:::data
-    CN[(Content Nodes Table)]:::data
-    MIG[Alembic Migrations]:::ops
-    %% Optional future vector store (pgvector/Qdrant)
-    VEC[(Vector Store - future)]:::data
-  end
+  %% Flows
+  DUser -->|Slash command| Discord --> Tunnel --> App --> Verify --> Defer
+  Defer --> Dispatcher
+  Dispatcher -->|/roll,/check,/sheet| Rules --> Responder
+  Dispatcher -->|/plan| Planner --> Dispatcher
+  Dispatcher -->|/do| Orchestrator
+  Orchestrator -->|if enabled| Retrieval --> Content
+  Orchestrator -->|LLM JSON| LLM --> Orchestrator
+  Orchestrator -->|validated proposal| Rules
+  Orchestrator --> Exec
+  Exec --> Registry
+  Exec -->|dry-run| Responder
+  Exec -->|create| Pending
+  Responder --> Webhooks --> Discord --> DUser
+  Dispatcher --> Repos
+  Responder --> Transcripts
+  Exec -->|apply| Events
+  Events --> Repos
+  Repos --> Scenes
+  Repos --> Characters
+  Repos --> Transcripts
+  Metrics -.-> APP
+  Logs -.-> APP
 
-  %% === Tooling ===
-  subgraph TOOLING[Tooling]
-    CLI[Dynamic CLI - scripts/cli.py]:::ops
-    REG[scripts/register_commands.py]:::ops
-    TEST[pytest suite]:::ops
-    CFG[config.toml - feature flags + logging]:::ops
-  end
-
-  %% === Ingress Flow ===
-  U -->|Slash command| DP
-  DP -->|signed request| CF
-  CF --> A
-  A --> SIG
-  SIG -->|valid| DISP
-  SIG -.->|invalid| DEF
-  DISP --> DEF
-
-  %% === Command Paths (examples) ===
-  DISP -- "/roll" --> RULES --> RESP
-  DISP -- "/check" --> RULES --> RESP
-  DISP -- "/sheet" --> REPOS --> RESP
-  DISP -- "/ooc" --> REPOS --> PLAN --> LLM --> RESP
-  DISP -- "/plan" --> REPOS --> PLAN -->|route| RULES --> RESP
-  DISP -- "/do" --> REPOS --> PLAN --> LLM --> RESP
-
-  %% === Orchestrator Augmentation (Phase 6) ===
-  PLAN -->|if enabled| RETR
-  RETR -->|query| CN
-  CN --> DB
-  RETR -.->|future| VEC
-
-  %% === Data Access & Egress ===
-  REPOS --> DB
-  RESP --> TRANS -->|write| DB
-  RESP -->|POST| WH --> DP --> U
-  LOGS -.-> APP
-  MET -.-> APP
-
-  %% === Styles ===
+  %% Styles
   classDef ext  fill:#eef7ff,stroke:#4e89ff,stroke-width:1px,color:#0d2b6b
   classDef edge fill:#efeaff,stroke:#8b5cf6,stroke-width:1px,color:#2b1b6b
   classDef data fill:#fff7e6,stroke:#f59e0b,stroke-width:1px,color:#7c3e00
@@ -158,65 +135,155 @@ flowchart TD
   classDef biz  fill:#f0f5ff,stroke:#3b82f6,stroke-width:1px,color:#1e3a8a
 ```
 
-### Core AI Components: Planner and Orchestrator
+### Core AI Components: Planner, Orchestrator, and Executor
 
-The distinction between the `planner` and `orchestrator` is a key architectural decision that promotes security and modularity. They are intentionally separate and serve different purposes.
+A clear separation of concerns keeps AI flexible while game mechanics stay deterministic and safe. Three components work together:
 
-#### Planner: The Semantic Router
+#### Planner (semantic router)
 
-The **`planner`** (`Adventorator/planner.py`) acts as a natural language front-end to the bot's structured command system. It translates a user's freeform request from the `/plan` command into a specific, validated command invocation.
+File: `Adventorator/planner.py`
 
-  * **Responsibilities:**
-      * Dynamically builds a catalog of available, developer-defined slash commands.
-      * Uses the LLM to analyze a user's intent and select the single best command "tool" to fulfill it.
-      * Outputs a structured JSON object (`PlannerOutput`) specifying the command and its arguments.
-  * **Analogy:** The planner is a smart switchboard operator. It listens to a request and connects the user to the correct department (the command handler).
+- Role: Map freeform intent from `/plan` to a specific, validated slash command in the registry.
+- How it works:
+  - Builds a live catalog from the command registry (`command_loader` + `all_commands`), including Pydantic v2 option schemas.
+  - Prompts the LLM with TOOLS + minimal rules context, then extracts the first JSON object.
+  - Validates against `PlannerOutput` and enforces an allowlist: `{roll, check, sheet.create, sheet.show, do, ooc}`.
+- Contract (inputs/outputs):
+  - Input: `user_msg: str`
+  - Output: `PlannerOutput | None` with `{command: str, args: dict}`
+  - Side effects: None (pure function over LLM; in-process 30s cache suppresses repeats)
+- Defenses & failure modes:
+  - Rejects non-JSON or invalid JSON (returns `None`).
+  - Refuses commands not on the allowlist.
+  - Metrics and logs: `planner.request.initiated`, `planner.parse.failed`, `planner.validation.failed`, `planner.parse.valid`.
 
-#### Orchestrator: The Game Engine
+#### Orchestrator (narration + mechanics)
 
-The **`orchestrator`** (`Adventorator/orchestrator.py`) is the core AI Dungeon Master. It is invoked by narrative commands like `/do` to interpret a player's action within the game world and determine the outcome.
+File: `Adventorator/orchestrator.py`
 
-  * **Responsibilities:**
-      * Gathers context from recent game history (`transcripts`).
-      * Uses the LLM to propose a specific game mechanic (e.g., a "Strength check vs. DC 15") and generate descriptive narration.
-      * Performs strict validation on the LLM's proposal to prevent it from bypassing the rules (e.g., by banning verbs like "deal damage" or "add item").
-      * Executes the proposed mechanic using the deterministic `rules` engine.
-      * Combines the mechanic's outcome with the narration into a final result.
-  * **Analogy:** The orchestrator *is* the Dungeon Master. It listens to what a player wants to do, decides which dice roll is needed, and describes what happens.
+- Role: For narrative actions (e.g., `/do`), collect context, ask LLM for a proposal, defend it, and produce mechanics + narration. Optionally routes mechanics to the Executor for preview/confirm flows.
+- Pipeline:
+  1) Facts: Fetch recent `transcripts` via `repos` and format with `build_clerk_messages`.
+  2) Retrieval (optional): If enabled by settings, augment with player-safe `ContentSnippet`s.
+  3) LLM: Build narrator messages and call `generate_json()` to get strictly parsed `LLMOutput`.
+  4) Defenses: Require `action == "ability_check"`, ability in `ABILS`, `5 <= DC <= 30`; block banned verbs in proposal/narration; optionally reject unknown actors.
+  5) Mechanics: Either compute locally via `rules.checks` or use the Executor preview path to produce a `ToolCallChain`.
+  6) Format: Return an `OrchestratorResult` with mechanics string, narration, and optional `chain_json`.
+- Contract (inputs/outputs):
+  - Input: `(scene_id: int, player_msg: str, sheet_info_provider?: (ability)->{score, proficient, expertise, prof_bonus}, character_summary_provider?, rng_seed?, llm_client, prompt_token_cap?, allowed_actors?, settings?, actor_id?)`
+  - Output: `OrchestratorResult` `{mechanics: str, narration: str, rejected?: bool, reason?: str, chain_json?: dict}`
+  - Side effects: Reads transcripts (DB), optional retrieval, increments metrics, 30s in-process prompt cache.
+- Feature flags and knobs:
+  - `features_executor` routes to Executor preview; otherwise computes locally with `rules`.
+  - Retrieval is gated in settings (player-safe only).
+  - Determinism aided by `rng_seed` during tests.
+- Defenses & failure modes:
+  - Invalid LLM output → rejected with reason (`llm_invalid_or_empty`, `Unsupported action`, `Unknown ability`, `DC out of acceptable range`, `unsafe_verb`).
+  - Unknown actors defense compares narration tokens to `allowed_actors`.
+  - Metrics: `llm.request.enqueued`, `llm.response.received`, `llm.defense.rejected`, `orchestrator.format.sent`.
 
-This separation of concerns ensures that the flexible, high-level routing logic is decoupled from the secure, low-level game state progression.
+#### Executor (preview/apply tools)
+
+File: `Adventorator/executor.py`
+
+- Role: Execute mechanics as a declarative, validated tool chain. Supports dry-run previews (for `/do` confirmation) and apply (append events).
+- Registry and built-ins:
+  - `InMemoryToolRegistry` with JSON schemas per tool.
+  - Built-in tools: `roll`, `check` (pure previews), and mutating stubs `apply_damage`, `heal`, `apply_condition`, `remove_condition`, `clear_condition` (emit domain events).
+- Data contracts:
+  - `ToolStep {tool: str, args: dict, requires_confirmation?: bool, visibility?: "ephemeral|public"}`
+  - `ToolCallChain {request_id: str, scene_id: int, steps: [ToolStep], actor_id?: str}`
+  - `PreviewItem {tool: str, mechanics: str, predicted_events?: [ {type, payload} ]}`
+  - `Preview {items: [PreviewItem]}`
+- Behavior:
+  - `execute_chain(chain, dry_run=True)` → `Preview` (no side effects).
+  - `apply_chain(chain)` → `Preview`; if `features_events` is enabled, append predicted events (or a generic mechanics event) to the Events ledger via `repos`/`session_scope()`.
+- Failure modes & metrics:
+  - Unknown tool names are warned and reported as preview items.
+  - Timing and counters: `executor.preview.ok`, `executor.preview.duration_ms`, `executor.apply.ok`, `executor.apply.duration_ms`.
+
+#### Why this separation?
+
+- Security: The planner can only select approved commands; the orchestrator validates LLM output; the executor validates tool names/args.
+- Testability: Rules stay deterministic; each layer is mockable (LLM client, registry, repos) and measurable via metrics.
+- Rollout safety: Feature flags control LLM visibility, planner routing, executor preview/apply, events emission, and retrieval.
+
+At runtime: `/plan` may select `/do`; the `/do` handler calls the orchestrator. If the executor is enabled, the orchestrator returns a `ToolCallChain` preview. The app persists a `PendingAction` and asks the player to confirm. On `/confirm`, the app calls `Executor.apply_chain`, which appends `Event`s; folds in `repos` update derived state for subsequent turns.
 
 ### Key Command Flows
 
 #### The `/plan` Command Flow
 
-This diagram shows how the `planner` and `orchestrator` work together when a user invokes the `/plan` command to perform an in-game action.
+Semantically routes freeform input to a strict slash command using schemas from the registry. Often selects `/do`, which then uses the Orchestrator (and optionally the Executor preview path).
 
 ```mermaid
 sequenceDiagram
-    actor User
-    participant App as Adventorator Service
-    participant Planner
-    participant Orchestrator
-    participant RulesEngine as Rules Engine
-    participant LLM
+  actor User
+  participant App as Adventorator Service
+  participant Planner
+  participant Registry as Command Registry
+  participant LLM as LLM
+
+  Note over Planner: 30s cache suppresses duplicates
 
   User->>App: /plan "I try to pick the lock"
-    App->>Planner: plan(intent)
-    Planner->>LLM: Which command for this text?
-    LLM-->>Planner: {"command": "do", "args": ...}
-    Planner-->>App: Return planned command
-    
-    Note over App: Dispatches to /do handler
-    
-    App->>Orchestrator: run_orchestrator("I try to pick the lock")
-    Orchestrator->>LLM: Propose mechanics & narration
-    LLM-->>Orchestrator: {"proposal": {"ability": "DEX", "dc": 18}, "narration": ...}
-    Orchestrator->>RulesEngine: compute_check(DEX, DC=18)
-    RulesEngine-->>Orchestrator: {total: 14, success: false}
-    Orchestrator-->>App: Return formatted result (mechanics + narration)
-    
-    App-->>User: Sends follow-up message with outcome
+  App->>Planner: build messages (TOOLS + rules list)
+  Planner->>Registry: load catalog (commands + schemas)
+  Planner->>LLM: generate_response(TOOLS + user)
+  LLM-->>Planner: JSON text
+  Planner->>Planner: extract_first_json + validate allowlist
+  Planner-->>App: PlannerOutput (command, args) | None
+
+  Note over App: If valid, dispatch to target handler via registry
+
+  App-->>User: Routed result or fallback
+```
+
+#### The `/do` Command Flow (preview → confirm → events)
+
+Actions that affect shared state are previewed and require confirmation when the executor is enabled.
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant App as Adventorator
+  participant Orc as Orchestrator
+  participant DB as Database
+  participant Retrieval as Retrieval
+  participant LLM as LLM
+  participant Exec as Executor
+  participant Registry as ToolRegistry
+  participant Rules as Ruleset
+
+  User->>App: /do "I pick the lock"
+  App->>Orc: run_orchestrator(scene, msg, settings)
+  Orc->>DB: get_recent_transcripts(scene)
+  DB-->>Orc: transcripts
+  alt retrieval enabled
+    Orc->>Retrieval: top-k snippets (player-safe)
+    Retrieval-->>Orc: snippets
+  end
+  Orc->>LLM: generate_json(narrator)
+  LLM-->>Orc: proposal + narration
+  Orc->>Orc: validate (action, ability, DC)
+  Orc->>Orc: defenses (banned verbs, unknown actors)
+  alt executor enabled
+    Orc->>Exec: execute_chain(dry_run=True, ToolCallChain)
+    Exec->>Registry: get(tool) + validate args
+    Registry-->>Exec: spec
+    Exec-->>App: Preview mechanics (+ predicted events)
+    App->>DB: create PendingAction
+    App-->>User: show preview + confirm/cancel
+    User->>App: /confirm id
+    App->>Exec: apply_chain
+    Exec->>DB: append Events
+    App-->>User: applied result
+  else local rules
+    Orc->>Rules: compute_check(...)
+    Rules-->>Orc: mechanics
+    Orc-->>App: mechanics + narration
+    App-->>User: result
+  end
 ```
 
 #### The `/ooc` Command Flow
@@ -231,18 +298,19 @@ sequenceDiagram
   participant LLM as LLM API
 
   User->>App: /ooc "What does the room smell like?"
-  
+
   Note over App: Dispatches "ooc" command
-  
-  App->>DB: get_recent_transcripts(scene_id)
-  DB-->>App: Return transcript history
-  
-  Note over App: Formats history and user message into prompt
-  
-  App->>LLM: generate_response(prompt)
-  LLM-->>App: Return text-only narration
-  
-  App-->>User: Sends follow-up message with narration
+
+  App->>DB: get_recent_transcripts(scene)
+  DB-->>App: transcripts
+
+  Note over App: Formats history + user text into prompt
+
+  App->>LLM: generate_response(narration-only)
+  LLM-->>App: narration
+
+  App-->>User: send follow-up
+  Note over App: visibility via features.llm_visible
 ```
 
 -----
@@ -272,7 +340,43 @@ make tunnel
 
 Discord can now reach your dev server using the tunnel URL + `/interactions`.
 
------
+---
+
+## Docker Compose Dev (with Feature Flags)
+
+Spin up Postgres and the app together with docker compose. Configure feature flags in `config.toml` or `.env`.
+
+```bash
+docker compose up -d --build db app
+```
+
+Required env for compose dev:
+
+```env
+DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
+# Discord
+DISCORD_APPLICATION_ID=...
+DISCORD_PUBLIC_KEY=...
+DISCORD_BOT_TOKEN=...
+# Feature flags (examples)
+FEATURES_LLM=true
+FEATURES_PLANNER=true
+FEATURES_LLM_VISIBLE=false
+FEATURES_EXECUTOR=true
+FEATURES_EXECUTOR_CONFIRM=true
+FEATURES_EVENTS=true
+FEATURES_RETRIEVAL_ENABLED=true
+```
+
+Apply migrations from your host (or inside the app container):
+
+```bash
+make alembic-up
+```
+
+Tip: For quick local-only dev without containers, set `DATABASE_URL=sqlite+aiosqlite:///./adventorator.sqlite3` and use the Quickstart steps below.
+
+---
 
 ## Database & Alembic
 
@@ -430,71 +534,7 @@ The FastAPI app exposes two operational endpoints:
 
 -----
 
-## Docker / Compose
-
-To run Postgres and the app together:
-
-```bash
-docker compose up -d --build db app
-```
-
-Ensure `.env` has:
-
-```env
-DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
-```
-
-On your host (or inside the app container), apply migrations:
-
-```bash
-make alembic-up
-```
-
-The app will be available on http://localhost:18000.
-
-Tip: For local-only dev without containers, set `DATABASE_URL=sqlite+aiosqlite:///./adventorator.sqlite3` and use the Quick Dev Setup above.
-
------
-
-## Development Setup: Postgres
-
-Use Postgres locally either via Docker Compose or a standalone container.
-
-Option A — docker compose (recommended)
-
-```bash
-# Start DB and app
-docker compose up -d --build db app
-
-# Set DATABASE_URL in .env to the db service hostname
-# DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
-
-# Apply migrations from your host (or inside the app container)
-make alembic-up
-```
-
-Option B — standalone Postgres container
-
-```bash
-# Start a local Postgres 16 container
-docker run --rm -d --name advdb \
-  -e POSTGRES_PASSWORD=adventorator \
-  -e POSTGRES_USER=adventorator \
-  -e POSTGRES_DB=adventorator \
-  -p 5432:5432 postgres:16
-
-# Point DATABASE_URL at localhost
-# DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@localhost:5432/adventorator
-
-# Apply migrations
-make alembic-up
-```
-
-Notes
-- You can switch back to SQLite any time by setting `DATABASE_URL=sqlite+aiosqlite:///./adventorator.sqlite3`.
-- Alembic reads `DATABASE_URL` (via `.env`), and will choose the proper sync driver under the hood for migrations.
-
------
+---
 
 ## Repo Structure
 
@@ -509,9 +549,17 @@ Notes
 │       ├── app.py               # FastAPI entrypoint & Discord interactions
 │       ├── commanding.py        # Core command registration framework
 │       ├── commands/            # Individual slash command handlers
-│       ├── orchestrator.py      # Core AI game engine
+│       ├── orchestrator.py      # Core AI game engine (narration + mechanics)
 │       ├── planner.py           # AI semantic router for /plan
+│       ├── executor.py          # ToolCallChain preview/apply engine
+│       ├── tool_registry.py     # Tool metadata + validation
 │       ├── rules/               # Deterministic game mechanics
+│       ├── retrieval.py         # Player-safe content retrieval
+│       ├── services/            # App services (e.g., characters)
+│       ├── schemas.py           # Shared pydantic schemas (LLM outputs, etc.)
+│       ├── llm.py               # LLM client
+│       ├── llm_utils.py         # JSON extract/validate utilities
+│       ├── llm_prompts.py       # Prompt builders
 │       └── ...                  # (config, db, models, repos, etc.)
 └── tests/                       # Unit and integration tests
 ```
