@@ -1,6 +1,10 @@
 """Minimal in-process metrics shim for counters and timers.
 
 This is intentionally simple; production can replace these with a real backend.
+
+Adds a lightweight histogram helper with fixed or custom buckets. Values are
+exported into flattened counters for the /metrics endpoint to keep payloads
+simple and avoid changing types in existing consumers.
 """
 from __future__ import annotations
 
@@ -9,6 +13,9 @@ from collections import defaultdict
 # Note: Avoid heavy imports at module import time; import test-only helpers lazily.
 
 _counters: dict[str, int] = defaultdict(int)
+_histograms: dict[str, dict[str, int]] = {}
+_hist_sums: dict[str, int] = defaultdict(int)
+_hist_counts: dict[str, int] = defaultdict(int)
 
 
 def inc_counter(name: str, value: int = 1) -> None:
@@ -21,6 +28,9 @@ def get_counter(name: str) -> int:
 
 def reset_counters() -> None:
     _counters.clear()
+    _histograms.clear()
+    _hist_sums.clear()
+    _hist_counts.clear()
     # Also clear the planner cache to prevent cross-test cache hits when
     # tests expect a clean slate after calling reset_counters().
     try:
@@ -34,4 +44,35 @@ def reset_counters() -> None:
 
 def get_counters() -> dict[str, int]:
     """Return a shallow copy of all counters for diagnostics."""
-    return dict(_counters)
+    out = dict(_counters)
+    # Flatten histograms as counters for easy scraping
+    for name, buckets in _histograms.items():
+        for b_lbl, cnt in buckets.items():
+            out[f"histo.{name}.{b_lbl}"] = cnt
+        out[f"histo.{name}.sum"] = _hist_sums.get(name, 0)
+        out[f"histo.{name}.count"] = _hist_counts.get(name, 0)
+    return out
+
+
+def observe_histogram(name: str, value: int, *, buckets: list[int] | None = None) -> None:
+    """Record a value in a histogram with <=-style buckets.
+
+    - buckets: the upper bounds for each bucket in milliseconds. Defaults to
+      [1, 2, 5, 10, 20, 50, 100, 250, 500, 1000, 2000, 5000].
+    - We also emit an overflow bucket labeled 'gt_{last}'.
+    """
+    if buckets is None:
+        buckets = [1, 2, 5, 10, 20, 50, 100, 250, 500, 1000, 2000, 5000]
+    h = _histograms.setdefault(name, {})
+    placed = False
+    for ub in buckets:
+        if value <= ub:
+            key = f"le_{ub}"
+            h[key] = h.get(key, 0) + 1
+            placed = True
+            break
+    if not placed:
+        key = f"gt_{buckets[-1]}"
+        h[key] = h.get(key, 0) + 1
+    _hist_sums[name] += int(value)
+    _hist_counts[name] += 1
