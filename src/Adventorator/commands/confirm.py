@@ -57,6 +57,7 @@ async def confirm(inv: Invocation, opts: ConfirmOpts):
                 request_id=pa.request_id,
                 scene_id=pa.scene_id,
                 steps=steps,
+                actor_id=user_id,
             )
             ex = Executor()
             await ex.apply_chain(chain)

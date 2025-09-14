@@ -27,6 +27,8 @@ def _toml_settings_source() -> dict[str, Any]:
     "feature_planner_enabled": t.get("features", {}).get("planner", True),
         "features_rules": t.get("features", {}).get("rules", False),
     "features_combat": t.get("features", {}).get("combat", False),
+    # Events ledger (Phase 9) — default disabled
+    "features_events": t.get("features", {}).get("events", False),
     # Executor (Phase 7+) — default disabled
     "features_executor": t.get("features", {}).get("executor", False),
     # Confirmation gating FF (Phase 8); default true so it can be disabled in dev
@@ -124,6 +126,7 @@ class Settings(BaseSettings):
     feature_planner_enabled: bool = True
     features_rules: bool = False
     features_combat: bool = False
+    features_events: bool = False
     features_executor: bool = False
     features_executor_confirm: bool = True
     response_timeout_seconds: int = 3

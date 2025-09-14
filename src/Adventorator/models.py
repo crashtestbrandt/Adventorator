@@ -206,3 +206,38 @@ class PendingAction(Base):
             unique=True,
         ),
     )
+
+
+# -----------------------------
+# Phase 9: Event Ledger
+# -----------------------------
+
+
+class Event(Base):
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scene_id: Mapped[int] = mapped_column(
+        ForeignKey("scenes.id", ondelete="CASCADE"), index=True
+    )
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    type: Mapped[str] = mapped_column(String(64), index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_events_scene_time",
+            "scene_id",
+            "created_at",
+        ),
+        Index(
+            "ix_events_scene_actor_time",
+            "scene_id",
+            "actor_id",
+            "created_at",
+        ),
+    )
