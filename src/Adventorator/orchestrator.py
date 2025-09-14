@@ -248,6 +248,9 @@ async def run_orchestrator(
             async with session_scope() as s:
                 sc = await s.get(_models.Scene, scene_id)
                 if sc is not None and bool(getattr(settings.retrieval, "enabled", False)):
+                    # DI note: build_retriever(settings) constructs a retriever with its
+                    # dependencies (e.g., async sessionmaker) injected. Tests can also
+                    # instantiate SqlFallbackRetriever() directly with a custom sessionmaker.
                     retriever = build_retriever(settings)
                     retrieval_snippets = await retriever.retrieve(
                         sc.campaign_id, player_msg, k=getattr(settings.retrieval, "top_k", 4)

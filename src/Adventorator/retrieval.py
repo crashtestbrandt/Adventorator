@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import sqlalchemy as sa
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from Adventorator.db import get_sessionmaker
 from Adventorator.metrics import inc_counter
@@ -33,8 +34,14 @@ class SqlFallbackRetriever(BaseRetriever):
     Guaranteed to return only player-visible text; gm_text is never surfaced.
     """
 
-    def __init__(self):
-        self._sm = get_sessionmaker()
+    def __init__(self, sessionmaker: async_sessionmaker[AsyncSession] | None = None):
+        """Create a SQL fallback retriever.
+
+        Parameters
+        - sessionmaker: An async session factory to use for DB access. Injecting this
+          improves testability and follows the codebase's DI patterns.
+        """
+        self._sm = sessionmaker or get_sessionmaker()
 
     async def retrieve(self, campaign_id: int, query: str, k: int = 4) -> list[ContentSnippet]:
         start = time.time()
@@ -118,4 +125,4 @@ class SqlFallbackRetriever(BaseRetriever):
 
 def build_retriever(settings) -> BaseRetriever:
     # For now: only SQL fallback. Future: switch on settings.retrieval.provider
-    return SqlFallbackRetriever()
+    return SqlFallbackRetriever(get_sessionmaker())
