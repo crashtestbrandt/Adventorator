@@ -65,7 +65,7 @@ class CharacterService:
                 # expired
                 try:
                     del self._cache[cache_key]
-                except Exception:
+                except KeyError:
                     pass
 
         try:
