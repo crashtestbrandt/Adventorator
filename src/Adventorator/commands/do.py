@@ -59,7 +59,17 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         player_tx_id = getattr(player_tx, "id", None)
         scene_id = scene.id
         # Derive allowed actors from characters in this campaign
-        allowed = await repos.list_character_names(s, campaign.id)
+        # Allowed actors: include full names and their capitalized word tokens
+        names = await repos.list_character_names(s, campaign.id)
+        allowed = list(names)
+        extra_tokens: set[str] = set()
+        for nm in names:
+            for part in str(nm).split():
+                part = part.strip()
+                if part and part[0].isalpha() and part[0].isupper():
+                    extra_tokens.add(part)
+        if extra_tokens:
+            allowed.extend(sorted(extra_tokens))
         # Build a sheet provider from CharacterService for this user
         cs = CharacterService()
         sheet = await cs.get_active_sheet_info(
