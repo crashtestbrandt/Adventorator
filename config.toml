@@ -7,7 +7,6 @@ llm = true
 executor = true
 events = true
 rules = true
-combat = false
 llm_visible = true
 
 # Retrieval-augmented orchestration.
@@ -28,6 +27,9 @@ default_system_prompt = "You are AdventureBot, an assistant for players in a tab
 [planner]
 enabled = true
 timeout_seconds = 20
+
+[combat]
+enabled = true
 
 [logging]
 # Enable verbose debugging during development

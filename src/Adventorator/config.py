@@ -31,7 +31,19 @@ def _toml_settings_source() -> dict[str, Any]:
         )
     ),
         "features_rules": t.get("features", {}).get("rules", False),
-    "features_combat": t.get("features", {}).get("combat", False),
+        # Combat FF now lives under [combat].enabled; keep a fallback to legacy [features].combat
+        # Example:
+        # [combat]
+        # enabled = true
+        # Legacy:
+        # [features]
+        # combat = true
+        "features_combat": bool(
+            (t.get("combat", {}) or {}).get(
+                "enabled",
+                (t.get("features", {}) or {}).get("combat", False),
+            )
+        ),
     # Events ledger (Phase 9) — default disabled
     "features_events": t.get("features", {}).get("events", False),
     # Executor (Phase 7+) — default disabled

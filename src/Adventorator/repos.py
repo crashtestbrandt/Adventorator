@@ -229,6 +229,128 @@ async def healthcheck(s: AsyncSession) -> None:
 
 
 # -----------------------------
+# Encounters & Combatants (Phase 10)
+# -----------------------------
+
+
+async def create_encounter(s: AsyncSession, *, scene_id: int) -> models.Encounter:
+    enc = models.Encounter(scene_id=scene_id)
+    s.add(enc)
+    await _flush_retry(s)
+    return enc
+
+
+async def get_encounter_by_id(s: AsyncSession, *, encounter_id: int) -> models.Encounter | None:
+    q = await s.execute(
+        select(models.Encounter).where(models.Encounter.id == encounter_id)
+    )
+    return q.scalar_one_or_none()
+
+
+async def get_active_or_setup_encounter_for_scene(
+    s: AsyncSession, *, scene_id: int
+) -> models.Encounter | None:
+    q = await s.execute(
+        select(models.Encounter)
+        .where(
+            models.Encounter.scene_id == scene_id,
+            models.Encounter.status.in_(
+                [models.EncounterStatus.setup, models.EncounterStatus.active]
+            ),
+        )
+        .order_by(models.Encounter.id.desc())
+        .limit(1)
+    )
+    return q.scalar_one_or_none()
+
+
+async def update_encounter_state(
+    s: AsyncSession,
+    *,
+    encounter_id: int,
+    status: str | None = None,
+    round: int | None = None,
+    active_idx: int | None = None,
+) -> None:
+    q = await s.execute(select(models.Encounter).where(models.Encounter.id == encounter_id))
+    enc = q.scalar_one_or_none()
+    if not enc:
+        return
+    if status is not None:
+        try:
+            enc.status = models.EncounterStatus(status)
+        except Exception:
+            enc.status = models.EncounterStatus.setup
+    if round is not None:
+        enc.round = int(round)
+    if active_idx is not None:
+        enc.active_idx = int(active_idx)
+    await _flush_retry(s)
+
+
+async def add_combatant(
+    s: AsyncSession,
+    *,
+    encounter_id: int,
+    name: str,
+    character_id: int | None = None,
+    hp: int = 0,
+    token_id: str | None = None,
+) -> models.Combatant:
+    # Determine next order_idx for stability
+    q = await s.execute(
+        select(models.Combatant).where(models.Combatant.encounter_id == encounter_id)
+    )
+    existing = list(q.scalars().all())
+    next_idx = (max([c.order_idx for c in existing], default=-1) + 1) if existing else 0
+    cb = models.Combatant(
+        encounter_id=encounter_id,
+        character_id=character_id,
+        name=name,
+        initiative=None,
+        hp=hp,
+        conditions={},
+        token_id=token_id,
+        order_idx=next_idx,
+    )
+    s.add(cb)
+    await _flush_retry(s)
+    return cb
+
+
+async def set_combatant_initiative(
+    s: AsyncSession, *, combatant_id: int, initiative: int
+) -> None:
+    q = await s.execute(select(models.Combatant).where(models.Combatant.id == combatant_id))
+    cb = q.scalar_one_or_none()
+    if not cb:
+        return
+    cb.initiative = int(initiative)
+    await _flush_retry(s)
+
+
+async def list_combatants(
+    s: AsyncSession, *, encounter_id: int
+) -> list[models.Combatant]:
+    q = await s.execute(
+        select(models.Combatant).where(models.Combatant.encounter_id == encounter_id)
+    )
+    return list(q.scalars().all())
+
+
+def sort_initiative_order(combatants: list[models.Combatant]) -> list[models.Combatant]:
+    # initiative desc (None last), then order_idx asc for stability
+    def _key(c: models.Combatant):
+        init = c.initiative
+        init_sort = -init if isinstance(init, int) else float("inf")
+        return (init_sort, c.order_idx)
+
+    cbs = [c for c in combatants]
+    cbs.sort(key=_key)
+    return cbs
+
+
+# -----------------------------
 # Pending Actions (Phase 8)
 # -----------------------------
 

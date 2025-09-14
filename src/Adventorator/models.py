@@ -241,3 +241,60 @@ class Event(Base):
             "created_at",
         ),
     )
+
+
+# -----------------------------
+# Phase 10: Encounters & Turns
+# -----------------------------
+
+
+class EncounterStatus(str, enum.Enum):
+    setup = "setup"
+    active = "active"
+    ended = "ended"
+
+
+class Encounter(Base):
+    __tablename__ = "encounters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
+    status: Mapped[EncounterStatus] = mapped_column(
+        SAEnum(EncounterStatus), default=EncounterStatus.setup, index=True
+    )
+    round: Mapped[int] = mapped_column(Integer, default=1)
+    active_idx: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class Combatant(Base):
+    __tablename__ = "combatants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    encounter_id: Mapped[int] = mapped_column(
+        ForeignKey("encounters.id", ondelete="CASCADE"), index=True
+    )
+    character_id: Mapped[int | None] = mapped_column(
+        ForeignKey("characters.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    initiative: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    hp: Mapped[int] = mapped_column(Integer, default=0)
+    conditions: Mapped[dict] = mapped_column(JSON, default=dict)
+    token_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Stable order to break ties and to preserve insertion order during setup
+    order_idx: Mapped[int] = mapped_column(Integer, default=0)
+
+    __table_args__ = (
+        Index(
+            "ix_combatants_encounter_order",
+            "encounter_id",
+            "initiative",
+            "order_idx",
+        ),
+    )

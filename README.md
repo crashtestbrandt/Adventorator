@@ -16,6 +16,11 @@ A Discord-native Dungeon Master bot that blends deterministic 5e mechanics with 
 - [Repo Structure](#repo-structure)
 - [Contributing](./CONTRIBUTING.md)
 
+> Encounters (Phase 10)
+- See docs: [Encounters (dev notes)](./docs/dev/encounters.md)
+- Feature flag: enable `[combat].enabled=true` in `config.toml` (legacy fallback to `[features].combat` is supported).
+- Command: `/encounter status` (FF-gated) shows current round, active combatant, and initiative order.
+
 ![](/docs/images/usage-slash-check.jpeg)
 
 ---
