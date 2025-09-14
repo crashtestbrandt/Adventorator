@@ -75,7 +75,7 @@ async def acquire_encounter_locks(
                 inc_counter("locks.acquire.error")
                 raise
         else:
-            inc_counter("locks.mode.inproc", 1)
+            inc_counter("locks.mode.inproc")
         yield None
     finally:
         # Release advisory lock if we took it
