@@ -4,7 +4,6 @@ env = "dev"
 
 [features]
 llm = true
-planner = true
 executor = true
 events = true
 rules = true
@@ -25,6 +24,10 @@ response_timeout_seconds = 3
 api_url = "http://localhost:11434/api/chat"
 model_name = "llama3.2:latest"
 default_system_prompt = "You are AdventureBot, an assistant for players in a tabletop RPG. Chat Rules: 1. Refrain from producing extremely long responses that may overwhelm the user or stray off-topic. 2. Most responses should nudge the user towards an adventure interaction, suggesting simple, short-worded actions they can take. 3. Vulgarity is encouraged but should be used sparingly and for surprise effect. 4. Feel free to roast the user, but avoid excessive niceties. Be blunt and to the point."
+
+[planner]
+enabled = true
+timeout_seconds = 20
 
 [logging]
 # Enable verbose debugging during development

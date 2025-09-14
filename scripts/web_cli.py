@@ -46,7 +46,7 @@ from Adventorator.config import load_settings
 # Bind to 0.0.0.0 so Docker container can reach the host via host.docker.internal
 SINK_HOST = "0.0.0.0"
 SINK_PORT = 19000  # may be overridden after settings load
-RESPONSE_TIMEOUT_SECONDS = 15
+RESPONSE_TIMEOUT_SECONDS = 20
 
 try:
     settings = load_settings()

@@ -23,8 +23,13 @@ def _toml_settings_source() -> dict[str, Any]:
         "features_llm": t.get("features", {}).get("llm", False),
     # Default visibility to False for safe-by-default shadow mode
     "features_llm_visible": t.get("features", {}).get("llm_visible", False),
-    # Planner hard-toggle; defaults to True so it can be disabled quickly via env
-    "feature_planner_enabled": t.get("features", {}).get("planner", True),
+    # Planner hard-toggle; prefer [planner].enabled, fallback to legacy [features].planner
+    "feature_planner_enabled": bool(
+        (t.get("planner", {}) or {}).get(
+            "enabled",
+            (t.get("features", {}) or {}).get("planner", True),
+        )
+    ),
         "features_rules": t.get("features", {}).get("rules", False),
     "features_combat": t.get("features", {}).get("combat", False),
     # Events ledger (Phase 9) — default disabled
