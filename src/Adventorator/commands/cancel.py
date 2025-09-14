@@ -18,7 +18,11 @@ class CancelOpts(Option):
 )
 async def cancel(inv: Invocation, opts: CancelOpts):
     settings = inv.settings
-    if not settings or not getattr(settings, "features_executor", False):
+    if (
+        not settings
+        or not getattr(settings, "features_executor", False)
+        or not getattr(settings, "features_executor_confirm", True)
+    ):
         await inv.responder.send("Pending actions are disabled.", ephemeral=True)
         return
 

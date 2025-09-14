@@ -14,6 +14,21 @@ run:
 tunnel:
 	cloudflared tunnel --url http://127.0.0.1:18000
 
+# Named Cloudflare Tunnel helpers (requires Cloudflare account & zone)
+# One-time: `cloudflared login`, then create and route DNS to your hostname.
+# Example hostname: adv-dev.yourdomain.com
+tunnel-dev-run:
+	cloudflared tunnel run adventorator-dev
+
+tunnel-dev-create:
+	cloudflared tunnel create adventorator-dev
+
+# Set a DNS record for your tunnel to a stable hostname
+# Usage: make tunnel-dev-dns HOST=adv-dev.example.com
+tunnel-dev-dns:
+	@if [ -z "$(HOST)" ]; then echo "HOST is required (e.g., make tunnel-dev-dns HOST=adv-dev.example.com)"; exit 1; fi
+	cloudflared tunnel route dns adventorator-dev $(HOST)
+
 test:
 	. .venv/bin/activate && pytest
 

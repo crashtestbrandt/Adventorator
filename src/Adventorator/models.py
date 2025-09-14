@@ -188,6 +188,8 @@ class PendingAction(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Idempotency key computed from normalized ToolCallChain JSON
+    dedup_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     __table_args__ = (
         Index(
@@ -195,5 +197,12 @@ class PendingAction(Base):
             "scene_id",
             "user_id",
             "created_at",
+        ),
+        Index(
+            "ux_pending_scene_user_dedup",
+            "scene_id",
+            "user_id",
+            "dedup_hash",
+            unique=True,
         ),
     )

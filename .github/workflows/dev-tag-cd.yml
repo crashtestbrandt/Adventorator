@@ -1,0 +1,48 @@
+name: Dev Tag CD
+
+on:
+  push:
+    tags:
+      - "*-dev"
+
+permissions:
+  contents: read
+
+jobs:
+  register-commands:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'crashtestbrandt/Adventurator' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Register Discord commands (global)
+        env:
+          DISCORD_APPLICATION_ID: ${{ secrets.DISCORD_APPLICATION_ID }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+        run: |
+          . .venv/bin/activate
+          python scripts/register_commands.py --register --global
+
+      - name: Register Discord commands (guild)
+        if: env.DISCORD_GUILD_ID != ''
+        env:
+          DISCORD_APPLICATION_ID: ${{ secrets.DISCORD_APPLICATION_ID }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+        run: |
+          . .venv/bin/activate
+          python scripts/register_commands.py --register --guild $DISCORD_GUILD_ID

@@ -236,7 +236,7 @@ RB
 
 ---
 
-## Phase 8 — Pending Actions and Confirmation Flow ([#12](https://github.com/crashtestbrandt/Adventorator/issues/12)) — status: open
+## Phase 8 — Pending Actions and Confirmation Flow ([#12](https://github.com/crashtestbrandt/Adventorator/issues/12)) — status: closed
 
 Goal
 - Introduce a gating loop for destructive actions using PendingAction with TTL and idempotency. Still minimal tool surface.
@@ -263,6 +263,12 @@ DoD
 
 RB
 - Disable `features.executor` to drop back to non-mutating previews only.
+
+Status notes
+- Implemented app- and DB-level idempotency for `PendingAction` using a normalized `dedup_hash` and a composite unique index `(scene_id, user_id, dedup_hash)` (dialect-aware migration).
+- Added feature flag `features.executor_confirm`; orchestrator/commands persist pendings only when any step requires confirmation.
+- Repos handle `IntegrityError` by fetching the existing pending and incrementing duplicate metrics. TTL expiry helper and CLI included.
+- Tests, lint, and type checks pass consistently; coverage includes dedup, expiry, confirm/cancel flows.
 
 ---
 

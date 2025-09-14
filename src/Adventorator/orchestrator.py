@@ -397,6 +397,7 @@ async def run_orchestrator(
                             "prof_bonus": prof_bonus,
                             "seed": rng_seed,
                         },
+                        requires_confirmation=True,
                     )
                 ],
             )

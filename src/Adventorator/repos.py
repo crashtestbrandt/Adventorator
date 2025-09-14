@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Adventorator import models
@@ -204,6 +206,32 @@ async def create_pending_action(
     expires_at = None
     if ttl_seconds and ttl_seconds > 0:
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+    # Compute a normalized dedup hash from the chain JSON
+    try:
+        normalized = json.dumps(chain, sort_keys=True, separators=(",", ":"))
+        dedup_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    except Exception:
+        dedup_hash = None
+    # Idempotency: if a pending with same (scene_id, user_id, dedup_hash)
+    # exists, return it
+    if dedup_hash:
+        stmt = (
+            select(models.PendingAction)
+            .where(
+                models.PendingAction.scene_id == scene_id,
+                models.PendingAction.user_id == user_id,
+                models.PendingAction.dedup_hash == dedup_hash,
+                models.PendingAction.status == "pending",
+            )
+            .order_by(models.PendingAction.created_at.desc())
+            .limit(1)
+        )
+        q = await s.execute(stmt)
+        existing = q.scalar_one_or_none()
+        if existing:
+            inc_counter("pending.create.duplicate")
+            inc_counter("pending.created")
+            return existing
     pa = models.PendingAction(
         campaign_id=campaign_id,
         scene_id=scene_id,
@@ -217,10 +245,35 @@ async def create_pending_action(
         bot_tx_id=bot_tx_id,
         status="pending",
         expires_at=expires_at,
+        dedup_hash=dedup_hash,
     )
     s.add(pa)
-    await _flush_retry(s)
+    try:
+        await _flush_retry(s)
+    except IntegrityError:
+        # Likely unique (scene_id, user_id, dedup_hash) conflict; fetch existing
+        await s.rollback()
+        if dedup_hash:
+            q = await s.execute(
+                select(models.PendingAction)
+                .where(
+                    models.PendingAction.scene_id == scene_id,
+                    models.PendingAction.user_id == user_id,
+                    models.PendingAction.dedup_hash == dedup_hash,
+                    models.PendingAction.status == "pending",
+                )
+                .order_by(models.PendingAction.created_at.desc())
+                .limit(1)
+            )
+            existing = q.scalar_one_or_none()
+            if existing:
+                inc_counter("pending.create.duplicate")
+                inc_counter("pending.created")
+                return existing
+        # If no dedup hash or not found, re-raise
+        raise
     inc_counter("pending.create")
+    inc_counter("pending.created")
     return pa
 
 
@@ -255,6 +308,11 @@ async def mark_pending_action_status(
         pa.status = status
         await _flush_retry(s)
     inc_counter(f"pending.status.{status}")
+    # Aliases for plan parity
+    if status == "confirmed":
+        inc_counter("pending.confirmed")
+    if status == "canceled":
+        inc_counter("pending.canceled")
 
 
 async def expire_stale_pending_actions(s: AsyncSession) -> int:

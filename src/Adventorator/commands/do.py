@@ -178,7 +178,15 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
 
     # Pending actions flow: if enabled and a chain is present, persist PendingAction and
     # present confirmation instructions; leave transcripts in pending status.
-    pending_enabled = bool(getattr(settings, "features_executor", False))
+    pending_enabled = bool(getattr(settings, "features_executor", False)) and bool(
+        getattr(settings, "features_executor_confirm", True)
+    )
+    if pending_enabled and getattr(res, "chain_json", None):
+        # Check if any step requires confirmation; else fall back to immediate output
+        steps = list((res.chain_json or {}).get("steps", []))
+        any_requires = any(bool(st.get("requires_confirmation")) for st in steps)
+        if not any_requires:
+            pending_enabled = False
     if pending_enabled and getattr(res, "chain_json", None):
         async with session_scope() as s:
             campaign = await repos.get_or_create_campaign(s, guild_id)

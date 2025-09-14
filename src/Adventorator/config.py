@@ -29,6 +29,8 @@ def _toml_settings_source() -> dict[str, Any]:
     "features_combat": t.get("features", {}).get("combat", False),
     # Executor (Phase 7+) — default disabled
     "features_executor": t.get("features", {}).get("executor", False),
+    # Confirmation gating FF (Phase 8); default true so it can be disabled in dev
+    "features_executor_confirm": t.get("features", {}).get("executor_confirm", True),
     "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
     # When set, app will post follow-ups to this base URL instead of Discord.
     # Example: "http://host.docker.internal:19000"
@@ -123,6 +125,7 @@ class Settings(BaseSettings):
     features_rules: bool = False
     features_combat: bool = False
     features_executor: bool = False
+    features_executor_confirm: bool = True
     response_timeout_seconds: int = 3
     app_port: int = 18000
     planner_timeout_seconds: int = 12
