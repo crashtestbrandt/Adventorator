@@ -41,6 +41,14 @@ def _cache_put(scene_id: int, msg: str, plan_json: dict[str, Any]) -> None:
     _plan_cache[(scene_id, msg.strip())] = (time.time(), plan_json)
 
 
+def reset_plan_cache() -> None:
+    """Clear the in-process planner cache.
+
+    This is primarily used by tests to avoid cross-test interference.
+    """
+    _plan_cache.clear()
+
+
 def _catalog() -> list[dict[str, Any]]:
     # Ensure registry is populated (safe to call multiple times)
     cmds = all_commands()

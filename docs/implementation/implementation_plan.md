@@ -114,7 +114,7 @@ This document aggregates the “Phase N” issues from GitHub with their full de
 
 ---
 
-## Phase 4 — Planner Layer and `/act` Command ([#56](https://github.com/crashtestbrandt/Adventorator/issues/56)) — status: closed
+## Phase 4 — Planner Layer and `/plan` Command ([#56](https://github.com/crashtestbrandt/Adventorator/issues/56)) — status: closed
 
 Introduce an **LLM-driven planner** that can translate freeform user input into valid Adventorator commands. The implementation is incremental and defensive, with strong validation and rollback options.
 
@@ -124,13 +124,13 @@ Introduce an **LLM-driven planner** that can translate freeform user input into 
 * **Planner contract:** define strict Pydantic models (`Plan`, `PlannerOutput`) and a system prompt that forces the LLM to output JSON with a single command and validated arguments.
 * **Tool catalog:** auto-generate a schema catalog from the command registry (`all_commands()`), ensuring the planner cannot invent unknown shapes.
 * **Planner service:** implement a `plan()` helper that builds prompts, invokes the LLM, and parses/validates JSON output defensively.
-* **New `/act` command:** route freeform input through the planner, validate the selected command and args against the existing option models, then dispatch safely. Player input is persisted to transcripts before planning, like `/ooc`.
-* **Parity:** `register_commands.py` and `cli.py` pick up `/act` automatically; users can test locally or in Discord with identical behavior.
+* **New `/plan` command:** route freeform input through the planner, validate the selected command and args against the existing option models, then dispatch safely. Player input is persisted to transcripts before planning, like `/ooc`.
+* **Parity:** `register_commands.py` and `cli.py` pick up `/plan` automatically; users can test locally or in Discord with identical behavior.
 * **Guardrails:** enforce an allowlist of commands (`roll`, `check`, `sheet.create`, `sheet.show`, `do`, `ooc`), size caps (≤16KB sheet JSON), and ephemeral errors for unknown or invalid plans. Planner “rationale” is logged but never shown to users.
 * **Observability:** add structlog events and metrics counters (requests, parse failures, accepted/rejected decisions). Add a 30s cache to suppress duplicate LLM calls for identical input.
 * **Latency & resilience:** keep the DEFERRED flow, apply a soft timeout, and fall back gracefully (default roll or user-friendly error). Feature flag `FEATURE_PLANNER_ENABLED` allows instant disable.
 * **Testing:** unit tests for schema validation, plan parsing, and allowlist; integration tests with mocked LLM output; optional E2E test with SQLite to confirm transcripts and dispatches.
-* **Rollout:** shadow in a dev guild, then canary in production with monitoring, before full availability. Document `/act` usage and examples. Rollback plan: flip the feature flag to disable without redeploy.
+* **Rollout:** shadow in a dev guild, then canary in production with monitoring, before full availability. Document `/plan` usage and examples. Rollback plan: flip the feature flag to disable without redeploy.
 * **User experience:** freeform input like
   – `roll 2d6+3 for damage` → `/roll`
   – `make a dexterity check against DC 15` → `/check`
@@ -142,7 +142,7 @@ Introduce an **LLM-driven planner** that can translate freeform user input into 
 
 **Future enhancements:** disambiguation mode for low-confidence plans, few-shot examples to improve stability, and per-guild defaults for planner behavior.
 
-**Definition of done:** `/act` works in CLI and Discord, only allowlisted commands can be executed, invalid inputs are handled gracefully, caching and telemetry are in place, and feature flag control is available.
+**Definition of done:** `/plan` works in CLI and Discord, only allowlisted commands can be executed, invalid inputs are handled gracefully, caching and telemetry are in place, and feature flag control is available.
 
 ---
 

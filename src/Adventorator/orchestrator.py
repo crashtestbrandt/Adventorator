@@ -4,15 +4,17 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import structlog
 
+from Adventorator import models as _models
 from Adventorator import repos
 from Adventorator.db import session_scope
 from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messages
 from Adventorator.metrics import inc_counter
 from Adventorator.models import Transcript as TranscriptModel
+from Adventorator.retrieval import ContentSnippet, build_retriever
 from Adventorator.rules.checks import ABILS, CheckInput, compute_check
 from Adventorator.rules.dice import DiceRNG
 from Adventorator.schemas import LLMOutput
@@ -85,13 +87,77 @@ def _contains_banned_verbs(text: str) -> bool:
 
 
 _NAME_RE = re.compile(r"\b[A-Z][a-z]{2,}\b")
+# Common pronouns and sentence-starters to ignore in name detection
+_PRONOUNS = {
+    # second person
+    "You",
+    "Your",
+    "Yours",
+    "Yourself",
+    "Yourselves",
+    # third person plural
+    "They",
+    "Them",
+    "Their",
+    "Theirs",
+    "Themselves",
+    # third person singular
+    "She",
+    "Her",
+    "Hers",
+    "Herself",
+    "He",
+    "Him",
+    "His",
+    "Himself",
+    "It",
+    "Its",
+    "Itself",
+    # first person
+    "We",
+    "Us",
+    "Our",
+    "Ours",
+    "Ourselves",
+    "I",
+    "Me",
+    "My",
+    "Mine",
+    "Myself",
+    # common capitalized determiners/conjunctions at sentence start
+    "The",
+    "A",
+    "An",
+    "This",
+    "That",
+    "These",
+    "Those",
+    "And",
+    "But",
+    "Then",
+    "However",
+    "Meanwhile",
+}
 
 
 def _unknown_actor_present(narration: str, allowed: set[str]) -> str | None:
     if not narration:
         return None
     # Tokenize proper-noun-like words from narration
-    nar_tokens = {t.lower() for t in _NAME_RE.findall(narration)}
+    # Heuristic: ignore the first token of each sentence to avoid false positives
+    # from sentence-initial capitalization (e.g., "Dust motes ...").
+    sentences = re.split(r"(?<=[.!?])\s+", narration)
+    tokens: list[str] = []
+    for s in sentences:
+        words = _NAME_RE.findall(s)
+        if not words:
+            continue
+        # Skip the first candidate in this sentence; take the rest
+        for w in words[1:]:
+            if w not in _PRONOUNS:
+                tokens.append(w)
+    nar_tokens = set(tokens)
+    nar_tokens = {t.lower() for t in nar_tokens}
     if not nar_tokens:
         return None
     # Build an allowed token set from provided actor names (supports full names)
@@ -147,6 +213,7 @@ async def run_orchestrator(
     llm_client: object | None = None,
     prompt_token_cap: int | None = None,
     allowed_actors: list[str] | set[str] | None = None,
+    settings: Any | None = None,
 ) -> OrchestratorResult:
     """End-to-end shadow-mode orchestration.
 
@@ -173,8 +240,37 @@ async def run_orchestrator(
     inc_counter("llm.request.enqueued")
     log.info("llm.request.enqueued", scene_id=scene_id)
 
-    # 1) transcripts -> facts (clerk)
+    # 0) Optional: retrieval augmentation (Phase 6, feature-flagged)
+    retrieval_snippets: list[ContentSnippet] = []
+    if settings is not None and getattr(settings, "retrieval", None) is not None:
+        try:
+            # Fetch campaign_id for the scene
+            async with session_scope() as s:
+                sc = await s.get(_models.Scene, scene_id)
+                if sc is not None and bool(getattr(settings.retrieval, "enabled", False)):
+                    # DI note: build_retriever(settings) constructs a retriever with its
+                    # dependencies (e.g., async sessionmaker) injected. Tests can also
+                    # instantiate SqlFallbackRetriever() directly with a custom sessionmaker.
+                    retriever = build_retriever(settings)
+                    retrieval_snippets = await retriever.retrieve(
+                        sc.campaign_id, player_msg, k=getattr(settings.retrieval, "top_k", 4)
+                    )
+                    log.info(
+                        "retrieval.ok",
+                        scene_id=scene_id,
+                        campaign_id=sc.campaign_id,
+                        count=len(retrieval_snippets),
+                    )
+        except Exception:
+            # Non-fatal: log and proceed without retrieval
+            inc_counter("retrieval.errors")
+            log.warning("retrieval.error", scene_id=scene_id, exc_info=True)
+
+    # 1) transcripts -> facts (clerk), augmented by retrieval player-safe text
     facts = await _facts_from_transcripts(scene_id, player_msg, max_tokens=prompt_token_cap)
+    if retrieval_snippets:
+        # Add retrieval snippets as facts (player-visible only)
+        facts.extend([f"[ref] {snip.title}: {snip.text}" for snip in retrieval_snippets])
 
     # 2) narrator -> JSON output
     char_summary = character_summary_provider() if character_summary_provider else None

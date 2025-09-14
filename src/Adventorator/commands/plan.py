@@ -35,14 +35,12 @@ def _rate_limited(user_id: str) -> bool:
     return False
 
 
-class ActOpts(Option):
+class PlanOpts(Option):
     message: str = Field(description="Freeform action/request")
 
 
-@slash_command(name="act", description="Let the DM figure out what to do.", option_model=ActOpts)
-async def act(inv: Invocation, opts: ActOpts):
-    # TODO: If/when multiple rulesets are supported, pass ruleset context to the planner prompt.
-    # For now, the planner prompt enumerates rules from the default Dnd5eRuleset.
+@slash_command(name="plan", description="Let the DM figure out what to do.", option_model=PlanOpts)
+async def plan_cmd(inv: Invocation, opts: PlanOpts):
     # Preconditions: require LLM available
     settings = inv.settings
     if not (settings and getattr(settings, "features_llm", False) and inv.llm_client):
@@ -155,7 +153,6 @@ async def act(inv: Invocation, opts: ActOpts):
     except Exception as e:
         inc_counter("planner.decision.rejected")
         log.info("planner.decision", cmd=cmd_name_flat, accepted=False, error=str(e))
-        # Provide targeted guidance for common commands with missing args (Phase 5.6)
         guidance: str | None = None
         if cmd_name_flat in {"sheet.create"}:
             guidance = (
@@ -206,7 +203,6 @@ async def act(inv: Invocation, opts: ActOpts):
         responder=inv.responder,
         settings=inv.settings,
         llm_client=inv.llm_client,
-    # Preserve injected ruleset so planned commands can use it
-    ruleset=inv.ruleset,
+        ruleset=inv.ruleset,
     )
     await cmd.handler(new_inv, option_obj)

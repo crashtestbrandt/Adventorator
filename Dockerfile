@@ -18,6 +18,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 COPY pyproject.toml requirements.txt ./
 COPY src ./src
 COPY scripts ./scripts
+# Include only example content to minimize image size
+COPY docs/examples ./docs/examples
 
 # Install Python deps (requirements.txt includes "-e .")
 RUN ~/.local/bin/uv pip install -r requirements.txt

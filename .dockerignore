@@ -31,10 +31,10 @@ logs/
 # Node/npm (if ever added)
 node_modules/
 
-# Tests and docs are not required in the runtime image
-# (keep migrations; they may be used at runtime)
 tests/
-docs/
+# Exclude docs by default but keep example content used by import scripts
+docs/*
+!docs/examples/
 
 # Env files and local overrides
 .env

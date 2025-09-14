@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from Adventorator.db import Base
@@ -111,3 +113,44 @@ Index(
     Transcript.channel_id,
     Transcript.created_at,
 )
+
+
+# -----------------------------
+# Phase 6: Content ingestion
+# -----------------------------
+
+
+class NodeType(str, enum.Enum):
+    location = "location"
+    npc = "npc"
+    encounter = "encounter"
+    lore = "lore"
+
+
+class ContentNode(Base):
+    __tablename__ = "content_nodes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
+    )
+    node_type: Mapped[NodeType] = mapped_column(SAEnum(NodeType), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    # Player-visible text only; GM-only content must never be surfaced to players/LLM
+    player_text: Mapped[str] = mapped_column(Text)
+    # GM-only notes; never included in prompts or responses
+    gm_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Free-form tags/keywords for retrieval filtering (list of strings)
+    tags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_content_nodes_campaign_type_title",
+            "campaign_id",
+            "node_type",
+            "title",
+        ),
+    )

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import StaticPool
 
 from Adventorator.config import load_settings
 
@@ -37,6 +38,7 @@ class Base(DeclarativeBase):
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_schema_initialized: bool = False
 
 
 def get_engine() -> AsyncEngine:
@@ -46,7 +48,20 @@ def get_engine() -> AsyncEngine:
         kwargs: dict[str, object] = {}
         if DATABASE_URL.startswith("sqlite+aiosqlite://"):
             # SQLite ignores pool_size; keep it minimal and avoid pre_ping
-            kwargs.update(connect_args={"timeout": 30})
+            # If using special file::memory:?cache=shared URI, enable uri flag
+            connect_args = {"timeout": 30}
+            if (
+                DATABASE_URL.endswith("file::memory:?cache=shared")
+                or "file::memory:?cache=shared" in DATABASE_URL
+            ):
+                connect_args["uri"] = True
+            kwargs.update(connect_args=connect_args)
+            # Critical for in-memory DBs: share a single connection so schema persists
+            if (
+                ":memory:" in DATABASE_URL
+                or "file::memory:?cache=shared" in DATABASE_URL
+            ):
+                kwargs.update(poolclass=StaticPool)
         elif DATABASE_URL.startswith("postgresql+asyncpg://"):
             # Production-oriented Postgres pool settings (per-instance)
             kwargs.update(
@@ -67,8 +82,34 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     return _sessionmaker  # type: ignore[return-value]
 
 
+async def _ensure_schema_created_if_needed() -> None:
+    """Ensure tables exist for in-memory SQLite during tests.
+
+    In CI/tests we use an in-memory SQLite database. Even with StaticPool,
+    some tests may access the engine before the session-scoped fixture runs.
+    Creating the schema here is idempotent and fast for SQLite.
+    """
+    global _schema_initialized
+    if _schema_initialized:
+        return
+    # Only auto-create for in-memory SQLite; avoid interfering with real DBs
+    if DATABASE_URL.startswith("sqlite+aiosqlite://") and ":memory:" in DATABASE_URL:
+        # Ensure models module is imported so all tables are registered
+        try:
+            from Adventorator import models as _models  # noqa: F401
+        except Exception:
+            # If import fails, proceed; create_all will just create what's known
+            pass
+        engine = get_engine()
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    _schema_initialized = True
+
+
 @contextlib.asynccontextmanager
 async def session_scope() -> AsyncIterator[AsyncSession]:
+    # Defensive: ensure schema exists in in-memory test DBs BEFORE session open
+    await _ensure_schema_created_if_needed()
     sm = get_sessionmaker()
     async with sm() as s:
         try:

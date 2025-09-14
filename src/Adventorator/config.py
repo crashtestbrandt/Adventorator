@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomllib
-from pydantic import Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -78,6 +78,20 @@ def _toml_settings_source() -> dict[str, Any]:
     planner_cfg = t.get("planner", {}) or {}
     out["planner_timeout_seconds"] = int(planner_cfg.get("timeout_seconds", 12))
 
+    # Retrieval (Phase 6)
+    # Example TOML:
+    # [features.retrieval]
+    # enabled = true
+    # provider = "none" # future: pgvector|qdrant
+    # top_k = 4
+    retrieval_cfg = (t.get("features", {}).get("retrieval", {}) or {})
+    if retrieval_cfg:
+        out["retrieval"] = {
+            "enabled": bool(retrieval_cfg.get("enabled", False)),
+            "provider": retrieval_cfg.get("provider", "none"),
+            "top_k": int(retrieval_cfg.get("top_k", 4)),
+        }
+
     # Ops toggles
     ops_cfg = t.get("ops", {}) or {}
     out["metrics_endpoint_enabled"] = ops_cfg.get("metrics_endpoint_enabled", False)
@@ -109,6 +123,14 @@ class Settings(BaseSettings):
     response_timeout_seconds: int = 3
     app_port: int = 18000
     planner_timeout_seconds: int = 12
+
+    # --- Retrieval (Phase 6) ---
+    class RetrievalConfig(BaseModel):
+        enabled: bool = False
+        provider: Literal["none", "pgvector", "qdrant"] = "none"
+        top_k: int = 4
+
+    retrieval: RetrievalConfig = RetrievalConfig()
 
     # --- LLM Configuration ---
     llm_api_provider: Literal["ollama", "openai"] = Field(

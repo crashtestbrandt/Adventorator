@@ -154,6 +154,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
             llm_client=llm,
             prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None) if settings else None,
             allowed_actors=allowed,
+            settings=settings,
         )
     except Exception:
         async with session_scope() as s:

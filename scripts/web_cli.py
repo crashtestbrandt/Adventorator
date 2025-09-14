@@ -242,8 +242,7 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
         except Exception:
             pass
 
-# --- CLI Building Logic (unchanged) ---
-# ... (rest of the file is identical)
+# --- CLI Building Logic ---
 
 def _click_type_for(annotation: Any):
     origin, args = get_origin(annotation), get_args(annotation)

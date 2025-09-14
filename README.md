@@ -17,6 +17,7 @@ A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in
 * [Prerequisites](#prerequisites) & [Quickstart](#quickstart)
 * [Database & Alembic](#database--alembic)
 * [Configuration](#configuration)
+* [Retrieval & Safety](#retrieval--safety)
 * [Commands](#commands)
 * [Operations](#operations)
 * [Repo Structure](#repo-structure)
@@ -30,7 +31,7 @@ Adventorator is a FastAPI application that serves as a backend for a Discord bot
 
 **✨ What it does (today)**
 
-* Discord-first gameplay with slash commands: `/roll`, `/check`, `/sheet`, `/ooc`, and the smart router `/act`.
+* Discord-first gameplay with slash commands: `/roll`, `/check`, `/sheet`, `/ooc`, and the smart router `/plan`.
 * Fast 3-second deferral on all interactions; real work happens asynchronously with webhook follow-ups.
 * A deterministic `rules` engine for dice and ability checks (advantage/disadvantage, crits, modifiers).
 * Campaign persistence via async SQLAlchemy and Alembic, including full transcripts of player and bot messages.
@@ -41,7 +42,7 @@ Adventorator is a FastAPI application that serves as a backend for a Discord bot
 * [X] Phase 1: Deterministic dice + checks, `/roll` and `/check` commands.
 * [X] Phase 2: Persistence (campaigns, characters, transcripts).
 * [X] Phase 3: Shadow LLM narrator, proposal-only.
-* [X] Phase 4: Planner + `/act` smart routing.
+* [X] Phase 4: Planner + `/plan` smart routing.
 * [ ] Phase 5+: Combat system, content ingestion, GM controls, premium polish.
 
 **🔜 Roadmap**
@@ -63,34 +64,35 @@ This project follows a modular, layered architecture designed for security, test
 * An asynchronous **Data Layer** using SQLAlchemy (`repos.py`) provides structured access to the database.
 * The optional **AI Layer** is split into two distinct components: a `Planner` for routing and an `Orchestrator` for game logic.
 
-**Diagram: High-Level System Architecture**
+**Diagram: High-Level System Architecture (current)**
 
 ```mermaid
 flowchart TD
   %% === External ===
   subgraph EXTERNAL[External]
     U[Player on Discord]:::ext
-    DP[Discord Platform<br/>Commands & Interactions]:::ext
-    WH[Discord Webhooks API<br/>Follow-up Messages]:::ext
-    LLM[LLM API<br/>e.g., Ollama]:::ext
+    DP[Discord Platform - Commands & Interactions]:::ext
+    WH[Discord Webhooks API - Follow-up Messages]:::ext
+  LLM[LLM API]:::ext
   end
 
   %% === Network Edge ===
-  CF[cloudflared Tunnel<br/>optional for local dev]:::edge
+  CF[cloudflared Tunnel optional for local dev]:::edge
 
   %% === App ===
   subgraph APP[Adventorator - FastAPI]
     subgraph REQUEST[Request Handling]
       A[POST /interactions]
-      SIG[Ed25519 Verify<br/>X-Signature-*]
-      DISP[Command Dispatch<br/>registry in commanding.py]
-  DEF[Deferred ACK]
+  SIG[Ed25519 Verify and headers]
+      DISP[Command Dispatch - registry in commanding.py]
+      DEF[Deferred ACK]
     end
 
     subgraph BUSINESS[Command Logic]
-      RULES[Rules Engine<br/>dice, checks]
-      REPOS[Repos & Context<br/>session_scope + repos.py]
-      PLAN[Planner/Orchestrator<br/>JSON-only + safety + 30s cache]
+      RULES[Rules Engine - dice and ability checks]:::biz
+      REPOS[Repos & Context - session_scope + repos.py]:::biz
+      PLAN[Planner/Orchestrator - JSON-only + safety + 30s cache]:::biz
+  RETR[Retrieval Layer - SQL LIKE player-only]:::biz
     end
 
     subgraph RESPONSE[Response]
@@ -103,16 +105,19 @@ flowchart TD
 
   %% === Data ===
   subgraph DATA[Data]
-    DB[(Postgres or SQLite<br/>campaigns, characters, transcripts)]:::data
+    DB[(Primary DB)]:::data
+    CN[(Content Nodes Table)]:::data
     MIG[Alembic Migrations]:::ops
+    %% Optional future vector store (pgvector/Qdrant)
+    VEC[(Vector Store - future)]:::data
   end
 
   %% === Tooling ===
   subgraph TOOLING[Tooling]
-    CLI[Dynamic CLI<br/>scripts/cli.py]:::ops
+    CLI[Dynamic CLI - scripts/cli.py]:::ops
     REG[scripts/register_commands.py]:::ops
     TEST[pytest suite]:::ops
-    CFG[config.toml<br/>feature flags + logging]:::ops
+    CFG[config.toml - feature flags + logging]:::ops
   end
 
   %% === Ingress Flow ===
@@ -129,9 +134,17 @@ flowchart TD
   DISP -- "/check" --> RULES --> RESP
   DISP -- "/sheet" --> REPOS --> RESP
   DISP -- "/ooc" --> REPOS --> PLAN --> LLM --> RESP
-  DISP -- "/act" --> REPOS --> PLAN -->|route| RULES --> RESP
+  DISP -- "/plan" --> REPOS --> PLAN -->|route| RULES --> RESP
+  DISP -- "/do" --> REPOS --> PLAN --> LLM --> RESP
 
-  %% === Egress ===
+  %% === Orchestrator Augmentation (Phase 6) ===
+  PLAN -->|if enabled| RETR
+  RETR -->|query| CN
+  CN --> DB
+  RETR -.->|future| VEC
+
+  %% === Data Access & Egress ===
+  REPOS --> DB
   RESP --> TRANS -->|write| DB
   RESP -->|POST| WH --> DP --> U
   LOGS -.-> APP
@@ -142,7 +155,8 @@ flowchart TD
   classDef edge fill:#efeaff,stroke:#8b5cf6,stroke-width:1px,color:#2b1b6b
   classDef data fill:#fff7e6,stroke:#f59e0b,stroke-width:1px,color:#7c3e00
   classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46
-  ```
+  classDef biz  fill:#f0f5ff,stroke:#3b82f6,stroke-width:1px,color:#1e3a8a
+```
 
 ### Core AI Components: Planner and Orchestrator
 
@@ -150,7 +164,7 @@ The distinction between the `planner` and `orchestrator` is a key architectural 
 
 #### Planner: The Semantic Router
 
-The **`planner`** (`Adventorator/planner.py`) acts as a natural language front-end to the bot's structured command system. It translates a user's freeform request from the `/act` command into a specific, validated command invocation.
+The **`planner`** (`Adventorator/planner.py`) acts as a natural language front-end to the bot's structured command system. It translates a user's freeform request from the `/plan` command into a specific, validated command invocation.
 
   * **Responsibilities:**
       * Dynamically builds a catalog of available, developer-defined slash commands.
@@ -174,9 +188,9 @@ This separation of concerns ensures that the flexible, high-level routing logic 
 
 ### Key Command Flows
 
-#### The `/act` Command Flow
+#### The `/plan` Command Flow
 
-This diagram shows how the `planner` and `orchestrator` work together when a user invokes the `/act` command to perform an in-game action.
+This diagram shows how the `planner` and `orchestrator` work together when a user invokes the `/plan` command to perform an in-game action.
 
 ```mermaid
 sequenceDiagram
@@ -187,7 +201,7 @@ sequenceDiagram
     participant RulesEngine as Rules Engine
     participant LLM
 
-    User->>App: /act "I try to pick the lock"
+  User->>App: /plan "I try to pick the lock"
     App->>Planner: plan(intent)
     Planner->>LLM: Which command for this text?
     LLM-->>Planner: {"command": "do", "args": ...}
@@ -293,9 +307,9 @@ Behavior is configured via `config.toml`, which can be overridden by environment
 
 **Key Toggles:**
 
-  * `features.llm`: Master switch for all LLM-powered features (`/ooc`, `/act`).
+  * `features.llm`: Master switch for all LLM-powered features (`/ooc`, `/plan`).
   * `features.llm_visible`: If `true`, LLM narration is posted publicly; otherwise, it runs in a "shadow mode" (logged but not sent to Discord).
-  * `features.planner`: Hard on/off switch for the `/act` planner.
+  * `features.planner`: Hard on/off switch for the `/plan` planner.
   * `ops.metrics_endpoint_enabled`: If `true`, exposes a `GET /metrics` endpoint.
 
 **LLM Client:**
@@ -305,6 +319,52 @@ Behavior is configured via `config.toml`, which can be overridden by environment
   * `llm.model_name`: Model identifier (e.g., `"llama3:latest"`).
 
 See `src/Adventorator/config.py` for all options and default values.
+
+-----
+
+## Retrieval & Safety
+
+Phase 6 adds a simple, safe retrieval layer to augment the Orchestrator with player-visible lore snippets.
+
+- Storage: `ContentNode` records with separate `player_text` and `gm_text`. Only `player_text` is ever returned to users or sent to the LLM.
+- Retriever: A SQL LIKE fallback searches over `title`, `player_text`, and (for matching only) `gm_text` to improve recall. GM text is never surfaced.
+- Feature flags (config.toml):
+  - `features.retrieval.enabled` (bool): turn retrieval on/off.
+  - `features.retrieval.provider` ("none" for SQL fallback; future: pgvector/qdrant).
+  - `features.retrieval.top_k` (int): number of snippets to include.
+- Orchestrator integration: when enabled, the top-k snippets for the active campaign are appended to the facts bundle as `[ref] <title>: <player_text>`.
+- Safety defenses in the orchestrator:
+  - Only allows the action `ability_check` with whitelisted abilities and a bounded DC (5–30).
+  - Bans verbs implying state mutation (e.g., “deal damage”, “modify inventory”).
+  - Detects unknown proper-noun actors, ignoring pronouns like “You/They”.
+
+Content ingestion (CLI):
+
+```bash
+# Import a Markdown file as a content node
+PYTHONPATH=./src python scripts/import_content.py \
+  --campaign-id 1 \
+  --node-type lore \
+  --title "Ancient Door" \
+  --file docs/examples/ancient-door.md
+```
+
+Metrics and logging:
+
+- Retrieval counters: `retrieval.calls`, `retrieval.snippets`, `retrieval.errors`, `retrieval.latency_ms`.
+- Orchestrator counters: `llm.request.enqueued`, `llm.response.received`, `llm.defense.rejected`, `orchestrator.format.sent`.
+- JSON logs with context-rich events at boundaries; see `logs/adventorator.jsonl`.
+
+Dev headers (local web CLI):
+
+- `X-Adventorator-Use-Dev-Key`: trusts a development public key for local testing.
+- `X-Adventorator-Webhook-Base`: reroutes follow-ups to a local sink during dev.
+
+Tests & in-memory DB notes:
+
+- The test suite uses a pure in-memory SQLite URL with a shared connection pool so schema persists across async sessions.
+- A schema guard ensures tables are created before per-test purges; do not rely on Alembic for tests.
+- If you see `no such table` in tests, ensure you’re not changing the test engine URL or pool configuration.
 
 -----
 
@@ -343,13 +403,13 @@ The application uses a decorator-based system to discover and register new comma
     python scripts/register_commands.py
     ```
 
-### Using the `/act` Smart Router
+### Using the `/plan` Smart Router
 
-`/act` lets players use natural language, which is routed to a known command.
+`/plan` lets players use natural language, which is routed to a known command.
 
-  * `/act "roll 2d6+3 for damage"` → routes to `/roll --expr 2d6+3`
-  * `/act "make a dexterity check against DC 15"` → `/check --ability DEX --dc 15`
-  * `/act "I sneak along the wall"` → `/do --message "I sneak along the wall"`
+  * `/plan "roll 2d6+3 for damage"` → routes to `/roll --expr 2d6+3`
+  * `/plan "make a dexterity check against DC 15"` → `/check --ability DEX --dc 15`
+  * `/plan "I sneak along the wall"` → `/do --message "I sneak along the wall"`
 
 **Safety & Guardrails:**
 
@@ -450,7 +510,7 @@ Notes
 │       ├── commanding.py        # Core command registration framework
 │       ├── commands/            # Individual slash command handlers
 │       ├── orchestrator.py      # Core AI game engine
-│       ├── planner.py           # AI semantic router for /act
+│       ├── planner.py           # AI semantic router for /plan
 │       ├── rules/               # Deterministic game mechanics
 │       └── ...                  # (config, db, models, repos, etc.)
 └── tests/                       # Unit and integration tests

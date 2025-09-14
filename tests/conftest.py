@@ -5,18 +5,18 @@ import os
 from collections.abc import AsyncIterator
 
 import pytest
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.pool import StaticPool
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# Ensure the app code (which uses Adventorator.db.get_engine) also points to an
-# in-memory database during tests, before any app modules are imported.
+# Ensure the app code (which uses Adventorator.db.get_engine) also points to a
+# shared in-memory database during tests, before any app modules are imported.
+# Use a pure process-local in-memory DB to avoid creating a stray file named
+# literally "file::memory:" on disk. Tests use a single engine from app code.
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
-from Adventorator.db import Base, get_engine
+# Import models so all ORM tables are registered on Base.metadata before create_all
+from Adventorator import models as _models  # noqa: F401
+from Adventorator.db import Base, get_engine, get_sessionmaker
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -36,26 +36,35 @@ async def _app_engine_lifecycle() -> AsyncIterator[None]:
     gc.collect()
 
 
-@pytest.fixture(scope="session")
-async def test_sessionmaker() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
-    # Use in-memory DB for tests with a single shared connection (StaticPool).
-    engine = create_async_engine(
-        os.environ["DATABASE_URL"], future=True, echo=False, poolclass=StaticPool
-    )
+# Ensure a clean slate before each test. Since some helpers commit using
+# session_scope(), we must clear committed rows across the shared in-memory DB.
+@pytest.fixture(autouse=True)
+async def _reset_db_per_test() -> AsyncIterator[None]:
+    engine = get_engine()
     async with engine.begin() as conn:
+        # Defensive: ensure schema exists (idempotent for SQLite in-memory)
         await conn.run_sync(Base.metadata.create_all)
-    try:
-        yield async_sessionmaker(engine, expire_on_commit=False)
-    finally:
-        await engine.dispose()
-    # Clean up any lingering references to connections
-    # that could trigger ResourceWarnings
-    gc.collect()
+        # Disable FKs to allow arbitrary delete order (SQLite only)
+        is_sqlite = conn.dialect.name == "sqlite"
+        if is_sqlite:
+            await conn.execute(sa.text("PRAGMA foreign_keys=OFF"))
+        # Purge all known tables, ignoring any that may not yet exist
+        for table in reversed(Base.metadata.sorted_tables):
+            try:
+                await conn.execute(table.delete())
+            except sa.exc.OperationalError as e:
+                if is_sqlite and "no such table" in str(e).lower():
+                    continue
+                raise
+        if is_sqlite:
+            await conn.execute(sa.text("PRAGMA foreign_keys=ON"))
+    yield None
 
 
 @pytest.fixture
-async def db(test_sessionmaker: async_sessionmaker[AsyncSession]) -> AsyncIterator[AsyncSession]:
-    async with test_sessionmaker() as s:
+async def db() -> AsyncIterator[AsyncSession]:
+    sm = get_sessionmaker()
+    async with sm() as s:
         try:
             yield s
         finally:
