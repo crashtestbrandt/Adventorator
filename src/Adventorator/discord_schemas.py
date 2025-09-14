@@ -6,15 +6,15 @@ from pydantic import BaseModel, Field
 
 
 class User(BaseModel):
-    id: str
-    username: str
+    id: str | None = None
+    username: str | None = None
     discriminator: str | None = None
     avatar: str | None = None
     global_name: str | None = None
 
 
 class Member(BaseModel):
-    user: User
+    user: User | None = None
     nick: str | None = None
     roles: list[str] = Field(default_factory=list)
     joined_at: str | None = None
@@ -22,14 +22,14 @@ class Member(BaseModel):
 
 
 class Channel(BaseModel):
-    id: str
+    id: str | None = None
     guild_id: str | None = None
     name: str | None = None
     type: int | None = None
 
 
 class Guild(BaseModel):
-    id: str
+    id: str | None = None
     locale: str | None = None
     features: list[str] = Field(default_factory=list)
 
@@ -60,3 +60,4 @@ class DeferResponse(BaseModel):
 
 class PongResponse(BaseModel):
     type: Literal[1]  # PONG for pings (type 1)
+

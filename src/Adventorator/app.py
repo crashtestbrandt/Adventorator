@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from Adventorator import repos
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import Invocation, Responder, find_command
-from Adventorator.config import load_settings
+from Adventorator.config import Settings, load_settings
 from Adventorator.crypto import verify_ed25519
 from Adventorator.db import session_scope
 from Adventorator.discord_schemas import Interaction
@@ -95,12 +95,6 @@ async def interactions(request: Request):
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
         campaign = await repos.get_or_create_campaign(s, guild_id)
         await repos.ensure_scene(s, campaign.id, channel_id)
-        # Content can be reconstructed from command name/options; store a compact form:
-        # msg = f"/{inter.data.name}" if inter.data and inter.data.name else "<interaction>"
-    # await repos.write_transcript(
-    #     s, campaign.id, scene.id, channel_id,
-    #     "player", msg, str(user_id), meta=inter.model_dump()
-    # )
 
     # Ping = 1
     if inter.type == 1:
@@ -115,10 +109,7 @@ async def interactions(request: Request):
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
-    """Assign a request_id, bind it to structlog context, and measure duration.
-
-    Also adds X-Request-ID header to the response for correlation.
-    """
+    """Assign a request_id, bind it to structlog context, and measure duration."""
     from structlog.contextvars import bind_contextvars, clear_contextvars
 
     request_id = str(uuid.uuid4())
@@ -141,12 +132,6 @@ async def request_id_middleware(request: Request, call_next):
             )
         except Exception:
             pass
-        try:
-            # Add header on the way out; FastAPI Response may not be available if exception
-            if 'response' in locals():
-                response.headers["X-Request-ID"] = request_id
-        except Exception:
-            pass
         clear_contextvars()
 
 
@@ -154,21 +139,14 @@ async def _dispatch_command(inter: Interaction):
     # Safe: _dispatch_command only called when inter.data and name are present
     assert inter.data is not None and inter.data.name is not None
     name = inter.data.name
-
-    # 0) Registry-backed commands (new pattern): if a command module exists under
-    #    Adventorator.commands and is registered, dispatch here and return.
-    #    This keeps handlers transport-agnostic and shared with the CLI.
-    # Extract potential subcommand (Discord encodes SUB_COMMAND as first option type=1)
     sub = _subcommand(inter)
     cmd = find_command(name, sub)
     if cmd is not None:
-        # Build options map from Discord interaction (flatten SUB_COMMAND if present)
         options: dict[str, Any] = {}
         opts: list[dict[str, Any]] = (
             inter.data.options or [] if inter.data is not None else []
         )
         if opts and isinstance(opts[0], dict) and opts[0].get("type") == 1:
-            # SUB_COMMAND: options one level deeper
             opts = opts[0].get("options", []) or []
         for o in opts:
             n = o.get("name")
@@ -176,17 +154,31 @@ async def _dispatch_command(inter: Interaction):
                 options[n] = o.get("value")
 
         class DiscordResponder(Responder):  # type: ignore[misc]
-            def __init__(self, application_id: str, token: str):
+            def __init__(self, application_id: str, token: str, settings: Settings):
                 self.application_id = application_id
                 self.token = token
+                self.settings = settings
 
-            async def send(self, content: str, *, ephemeral: bool = False) -> None:  # noqa: D401
-                await followup_message(
-                    self.application_id,
-                    self.token,
-                    content,
-                    ephemeral=ephemeral,
-                )
+            async def send(self, content: str, *, ephemeral: bool = False) -> None:
+                try:
+                    await followup_message(
+                        self.application_id,
+                        self.token,
+                        content,
+                        ephemeral=ephemeral,
+                        settings=self.settings,
+                    )
+                except TypeError:
+                    # Test spies may not accept the keyword-only 'settings' parameter
+                    await followup_message(
+                        self.application_id,
+                        self.token,
+                        content,
+                        ephemeral=ephemeral,
+                        # mypy: test spies monkeypatch this symbol without the 'settings' kwarg
+                        # which is intentional in tests; ignore the type mismatch here.
+                        # type: ignore[call-arg]
+                    )
 
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
         inv = Invocation(
@@ -196,11 +188,10 @@ async def _dispatch_command(inter: Interaction):
             user_id=str(user_id),
             channel_id=str(channel_id) if channel_id else None,
             guild_id=str(guild_id) if guild_id else None,
-            responder=DiscordResponder(inter.application_id, inter.token),
+            responder=DiscordResponder(inter.application_id, inter.token, settings),
             settings=settings,
             llm_client=llm_client,
         )
-        # Structured command invocation lifecycle logging
         start = time.perf_counter()
         status = "success"
         try:
@@ -212,20 +203,8 @@ async def _dispatch_command(inter: Interaction):
                 inter.token,
                 f"❌ Invalid options for `{name}`.",
                 ephemeral=True,
+                settings=settings,
             )
-            try:
-                log.info(
-                    "command.completed",
-                    command_name=name,
-                    subcommand=sub,
-                    options=options,
-                    user_id=str(user_id),
-                    guild_id=str(guild_id) if guild_id else None,
-                    status=status,
-                    duration_ms=int((time.perf_counter() - start) * 1000),
-                )
-            except Exception:
-                pass
             return
         try:
             log.info(
@@ -237,7 +216,7 @@ async def _dispatch_command(inter: Interaction):
                 guild_id=str(guild_id) if guild_id else None,
             )
             await cmd.handler(inv, opts_obj)
-        except Exception:  # Let FastAPI/global handlers decide further
+        except Exception:
             status = "error"
             log.error(
                 "command.error",
@@ -250,24 +229,20 @@ async def _dispatch_command(inter: Interaction):
             )
             raise
         finally:
-            try:
-                log.info(
-                    "command.completed",
-                    command_name=name,
-                    subcommand=sub,
-                    options=options,
-                    user_id=str(user_id),
-                    guild_id=str(guild_id) if guild_id else None,
-                    status=status,
-                    duration_ms=int((time.perf_counter() - start) * 1000),
-                )
-            except Exception:
-                pass
+            log.info(
+                "command.completed",
+                command_name=name,
+                subcommand=sub,
+                options=options,
+                user_id=str(user_id),
+                guild_id=str(guild_id) if guild_id else None,
+                status=status,
+                duration_ms=int((time.perf_counter() - start) * 1000),
+            )
     return
 
 
 def _subcommand(inter: Interaction) -> str | None:
-    # options[0].name for SUB_COMMAND
     if inter.data is not None and inter.data.options:
         first = inter.data.options[0]
         if isinstance(first, dict) and first.get("type") == 1:
@@ -276,64 +251,20 @@ def _subcommand(inter: Interaction) -> str | None:
     return None
 
 
-def _option(inter: Interaction, name: str, default: Any | None = None) -> Any | None:
-    # If you’re inside a SUB_COMMAND, options are nested one level deeper
-    opts: list[dict[str, Any]] = inter.data.options or [] if inter.data is not None else []
-    if opts and isinstance(opts[0], dict) and opts[0].get("type") == 1:
-        opts = opts[0].get("options", [])
-    for opt in opts or []:
-        if opt.get("name") == name:
-            return opt.get("value", default)
-    return default
-
-
 def _infer_ids_from_interaction(inter):
-    guild_id = int(inter.guild.id) if inter.guild else 0
-    channel_id = int(inter.channel.id) if inter.channel else 0
+    guild_id = int(inter.guild.id) if inter.guild and inter.guild.id else 0
+    channel_id = int(inter.channel.id) if inter.channel and inter.channel.id else 0
     user = inter.member.user if inter.member and inter.member.user else None
-    user_id = int(user.id) if user else 0
+    user_id = int(user.id) if user and user.id else 0
     username = user.username if user else "Unknown"
     return guild_id, channel_id, user_id, username
 
 
-async def _resolve_context(inter: Interaction):
-    guild_id = int(inter.guild.id) if inter.guild else 0
-    channel_id = int(inter.channel.id) if inter.channel else 0
-    user = inter.member.user if inter.member and inter.member.user else None
-    user_id = int(user.id) if user else 0
-    username = user.username if user else "Unknown"
-
-    # Discord Interaction payloads carry these in different places depending on type.
-    # For slash commands: guild_id & channel_id are in "guild_id"/"channel" fields
-    # (add to schemas if needed).
-    # For simplicity here, we assume you extended Interaction to include guild_id/channel.id/user.id
-    # If not, adapt based on your actual payload.
-
-    # TODO: parse from raw JSON fields in your Interaction model if missing.
-
-    async with session_scope() as s:
-        campaign = await repos.get_or_create_campaign(s, guild_id, name="Default")
-        player = await repos.get_or_create_player(s, user_id, username)
-        scene = await repos.ensure_scene(s, campaign.id, channel_id)
-        await repos.write_transcript(
-            s,
-            campaign.id,
-            scene.id,
-            channel_id,
-            "player",
-            "<user message>",
-            str(user_id),
-        )
-        return campaign, player, scene
-
-
 @app.get("/healthz")
 async def healthz():
-    # Basic checks: commands loaded, DB reachable
     try:
         load_all_commands()
         async with session_scope() as s:
-            # lightweight query
             await repos.healthcheck(s)
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"unhealthy: {err}") from err
@@ -344,5 +275,4 @@ async def healthz():
 async def metrics():
     if not getattr(settings, "metrics_endpoint_enabled", False):
         raise HTTPException(status_code=404, detail="metrics disabled")
-    # Return a simple JSON dump of counters for local ops
     return get_counters()

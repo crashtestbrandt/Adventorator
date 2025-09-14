@@ -15,7 +15,7 @@ from Adventorator.planner_schemas import PlannerOutput
 
 log = structlog.get_logger()
 
-_PLAN_TIMEOUT = 12.0    # seconds
+_PLAN_TIMEOUT = 12.0    # seconds (default; overridden by settings if provided)
 
 # Simple in-memory per-user rate limiter: max N requests per window
 _RL_MAX = 5
@@ -84,6 +84,12 @@ async def act(inv: Invocation, opts: ActOpts):
         )
         scene_id = scene.id
 
+    # Planner timeout (allow override via settings)
+    try:
+        timeout_s = float(getattr(settings, "planner_timeout_seconds", _PLAN_TIMEOUT))
+    except Exception:
+        timeout_s = _PLAN_TIMEOUT
+
     # Cache check
     cached = _cache_get(scene_id, user_msg)
     if cached is not None:
@@ -96,7 +102,7 @@ async def act(inv: Invocation, opts: ActOpts):
     else:
         # Plan using LLM with a soft timeout; fallback to roll 1d20 on timeout
         try:
-            out = await asyncio.wait_for(plan(inv.llm_client, user_msg), timeout=_PLAN_TIMEOUT)  # type: ignore[arg-type]
+            out = await asyncio.wait_for(plan(inv.llm_client, user_msg), timeout=timeout_s)  # type: ignore[arg-type]
         except asyncio.TimeoutError:
             # Friendly fallback
             fallback_text = "I couldn't decide in time; rolling a d20."

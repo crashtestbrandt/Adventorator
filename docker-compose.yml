@@ -19,10 +19,18 @@ services:
       timeout: 3s
       retries: 10
 
-  # app:
   app:
     build: .
     env_file: .env
+    # This environment block overrides variables from the .env file
+    # specifically for this container.
+    environment:
+      # Tell the app to connect to the 'db' service hostname instead of 'localhost'.
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # Tell the app to send webhooks back to the host machine, where web_cli.py's sink will be listening.
+      # The port must match the SINK_PORT in web_cli.py (default 19000).
+      - DISCORD_WEBHOOK_URL_OVERRIDE=http://host.docker.internal:19000
+      - LLM_API_URL=http://host.docker.internal:11434
     depends_on:
       db:
         condition: service_healthy
