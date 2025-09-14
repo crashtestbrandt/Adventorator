@@ -1,10 +1,10 @@
 """FastAPI app entrypoint for Adventorator."""
 
 import asyncio
+import contextvars
 import time
 import uuid
 from typing import Any
-import contextvars
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request
@@ -79,10 +79,18 @@ async def interactions(request: Request):
     # Allow a trusted dev header to opt-in to an alternate public key for local CLI
     use_dev_key = request.headers.get(DEV_KEY_HEADER) == "1"
     pubkey = settings.discord_public_key
+    log.info(
+        "signature.verification",
+        use_dev_key=use_dev_key,
+        env=settings.env,
+        has_dev_public_key=bool(settings.discord_dev_public_key),
+        pubkey_used=(settings.discord_dev_public_key if use_dev_key and settings.env == "dev" and settings.discord_dev_public_key else settings.discord_public_key),
+        dev_header=request.headers.get(DEV_KEY_HEADER),
+    )
     if use_dev_key and settings.env == "dev" and settings.discord_dev_public_key:
         pubkey = settings.discord_dev_public_key
     if not verify_ed25519(pubkey, ts, raw, sig):
-        log.error("Invalid signature", sig=sig, ts=ts)
+        log.error("Invalid signature", sig=sig, ts=ts, pubkey_used=pubkey, use_dev_key=use_dev_key)
         raise HTTPException(status_code=401, detail="bad signature")
 
     try:

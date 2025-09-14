@@ -7,10 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System deps for psycopg, build tools, and healthchecks
-RUN apt-get update && apt-get install -y --no-install-recommends \
-	curl build-essential libpq-dev && \
-	rm -rf /var/lib/apt/lists/*
+# Install curl for healthchecks; avoid heavy build deps in runtime
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
@@ -21,11 +19,20 @@ COPY pyproject.toml requirements.txt ./
 COPY src ./src
 COPY scripts ./scripts
 
-# Install Python deps (wheel cache inside image). requirements.txt includes "-e ."
+# Install Python deps (requirements.txt includes "-e .")
 RUN ~/.local/bin/uv pip install -r requirements.txt
 COPY config.toml ./config.toml
 
+# Create non-root user and set ownership
+RUN useradd -m -u 10001 appuser \
+	&& mkdir -p /app/logs \
+	&& chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 18000
+
+# Basic container-level healthcheck matching compose
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -fsS http://127.0.0.1:18000/healthz >/dev/null || exit 1
 
 # Default command: run the FastAPI app
 CMD ["python", "-m", "uvicorn", "Adventorator.app:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "18000"]
