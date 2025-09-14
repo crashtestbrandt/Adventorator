@@ -434,7 +434,7 @@ class Executor:
             settings = load_settings()
             if getattr(settings, "features_combat", False):
                 async with session_scope() as s:
-                    for step, item in zip(chain.steps, res.items, strict=False):
+                    for step, item in zip(chain.steps, res.items, strict=True):
                         name = step.tool
                         evs: list[dict[str, Any]] = []
                         if name == "start_encounter":
