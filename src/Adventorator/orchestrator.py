@@ -218,6 +218,7 @@ async def run_orchestrator(
     prompt_token_cap: int | None = None,
     allowed_actors: list[str] | set[str] | None = None,
     settings: Any | None = None,
+    actor_id: str | None = None,
 ) -> OrchestratorResult:
     """End-to-end shadow-mode orchestration.
 
@@ -400,6 +401,7 @@ async def run_orchestrator(
                         requires_confirmation=True,
                     )
                 ],
+                actor_id=actor_id,
             )
             _exec_start = time.monotonic()
             prev = await ex.execute_chain(chain, dry_run=True)
@@ -414,6 +416,7 @@ async def run_orchestrator(
             chain_json = {
                 "request_id": chain.request_id,
                 "scene_id": chain.scene_id,
+                "actor_id": chain.actor_id,
                 "steps": [
                     {
                         "tool": st.tool,

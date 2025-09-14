@@ -79,6 +79,51 @@ async def get_character(s: AsyncSession, campaign_id: int, name: str) -> models.
     return q.scalar_one_or_none()
 
 
+async def get_character_by_id(
+    s: AsyncSession, *, campaign_id: int, character_id: int
+) -> models.Character | None:
+    q = await s.execute(
+        select(models.Character).where(
+            models.Character.campaign_id == campaign_id,
+            models.Character.id == character_id,
+        )
+    )
+    return q.scalar_one_or_none()
+
+
+async def normalize_actor_ref(
+    s: AsyncSession, *, campaign_id: int, ident: str | int | None
+) -> str | None:
+    """Normalize actor identifier to a display string (character name when possible).
+
+    - If ident is int-like, try to resolve character by id in the campaign.
+    - If ident is a non-empty string, return as-is.
+    - Otherwise, return None.
+    """
+    if ident is None:
+        return None
+    # Try int-like first
+    char_id: int | None = None
+    if isinstance(ident, int):
+        char_id = ident
+    elif isinstance(ident, str):
+        try:
+            char_id = int(ident)
+        except Exception:
+            # Not an int-like string; assume it's already a name/ref
+            return ident if ident.strip() else None
+    if char_id is not None:
+        try:
+            ch = await get_character_by_id(s, campaign_id=campaign_id, character_id=char_id)
+            if ch is not None and getattr(ch, "name", None):
+                return str(ch.name)
+        except Exception:
+            pass
+        # Fallback to the numeric id string
+        return str(char_id)
+    return None
+
+
 async def ensure_scene(s: AsyncSession, campaign_id: int, channel_id: int) -> models.Scene:
     q = await s.execute(select(models.Scene).where(models.Scene.channel_id == channel_id))
     sc = q.scalar_one_or_none()
@@ -336,3 +381,189 @@ async def expire_stale_pending_actions(s: AsyncSession) -> int:
         await _flush_retry(s)
         inc_counter("pending.expired", count)
     return count
+
+
+# -----------------------------
+# Events (Phase 9)
+# -----------------------------
+
+
+async def append_event(
+    s: AsyncSession,
+    *,
+    scene_id: int,
+    actor_id: str | None,
+    type: str,
+    payload: dict,
+    request_id: str | None = None,
+) -> models.Event:
+    """Append an event to the ledger. Always insert-only.
+
+    Emits metrics events.append.ok/error and returns the created Event.
+    """
+    # Normalize actor reference to a display string (prefer character name when possible)
+    actor_norm: str | None = actor_id
+    try:
+        # Resolve campaign_id from scene for normalization context
+        q = await s.execute(select(models.Scene).where(models.Scene.id == scene_id))
+        sc = q.scalar_one_or_none()
+        if sc is not None and getattr(sc, "campaign_id", None) is not None:
+            actor_norm = await normalize_actor_ref(
+                s, campaign_id=int(sc.campaign_id), ident=actor_id
+            )
+    except Exception:
+        # Best-effort only; fall back to provided actor_id on any error
+        actor_norm = actor_id
+
+    ev = models.Event(
+        scene_id=scene_id,
+        actor_id=actor_norm,
+        type=type,
+        payload=payload,
+        request_id=request_id,
+    )
+    s.add(ev)
+    await _flush_retry(s)
+    inc_counter("events.append.ok")
+    return ev
+
+
+async def list_events(
+    s: AsyncSession, *, scene_id: int, since_id: int | None = None, limit: int = 500
+) -> list[models.Event]:
+    stmt = select(models.Event).where(models.Event.scene_id == scene_id)
+    if since_id is not None:
+        stmt = stmt.where(models.Event.id > since_id)
+    stmt = stmt.order_by(models.Event.id.asc()).limit(limit)
+    q = await s.execute(stmt)
+    return list(q.scalars().all())
+
+
+def fold_hp_view(events: list[models.Event]) -> dict[str, int]:
+    """Very small example fold: derive HP deltas per actor.
+
+    Convention: event.type == "apply_damage" with payload {"target": actor_id, "amount": int}
+    returns a dict of actor_id -> net HP change (negative numbers for damage).
+    """
+    hp: dict[str, int] = {}
+    for ev in events:
+        if ev.type == "apply_damage":
+            target = str(ev.payload.get("target"))
+            amt = int(ev.payload.get("amount", 0))
+            if target:
+                hp[target] = hp.get(target, 0) - amt
+        elif ev.type == "heal":
+            target = str(ev.payload.get("target"))
+            amt = int(ev.payload.get("amount", 0))
+            if target:
+                hp[target] = hp.get(target, 0) + amt
+    return hp
+
+
+def fold_conditions_view(events: list[models.Event]) -> dict[str, dict[str, dict[str, int | None]]]:
+    """Fold conditions per target: {target: {condition: {"stacks": int, "duration": int|None}}}.
+
+    Supported events:
+    - condition.applied {target, condition, duration?}
+    - condition.removed {target, condition}
+    - heal/apply_damage do not affect conditions.
+    Duration semantics are simple:
+    last write wins; stacks increment on applied,
+    decrement on removed.
+    """
+    out: dict[str, dict[str, dict[str, int | None]]] = {}
+    for ev in events:
+        et = ev.type
+        if et == "condition.applied":
+            target = str(ev.payload.get("target"))
+            cond = str(ev.payload.get("condition"))
+            dur = ev.payload.get("duration")
+            try:
+                dur_i = int(dur) if dur is not None else None
+            except Exception:
+                dur_i = None
+            if not target or not cond:
+                continue
+            tgt = out.setdefault(target, {})
+            slot = tgt.setdefault(cond, {"stacks": 0, "duration": None})
+            prev = slot.get("stacks")
+            prev_int = prev if isinstance(prev, int) else 0
+            slot["stacks"] = prev_int + 1
+            slot["duration"] = dur_i if dur_i is not None else slot.get("duration", None)
+        elif et == "condition.removed":
+            target = str(ev.payload.get("target"))
+            cond = str(ev.payload.get("condition"))
+            if not target or not cond:
+                continue
+            tgt = out.setdefault(target, {})
+            slot = tgt.setdefault(cond, {"stacks": 0, "duration": None})
+            prev = slot.get("stacks")
+            prev_int = prev if isinstance(prev, int) else 0
+            slot["stacks"] = max(0, prev_int - 1)
+            # Do not change duration on removal; stacks reaching 0 indicates inactive
+        elif et == "condition.cleared":
+            target = str(ev.payload.get("target"))
+            cond = str(ev.payload.get("condition"))
+            if not target or not cond:
+                continue
+            tgt = out.setdefault(target, {})
+            slot = tgt.setdefault(cond, {"stacks": 0, "duration": None})
+            slot["stacks"] = 0
+            slot["duration"] = None
+    return out
+
+
+def fold_initiative_view(events: list[models.Event]) -> list[tuple[str, int]]:
+    """Fold a simple initiative order from events.
+
+    Supported events:
+    - initiative.set {order: [{"id": str, "init": int}, ...]}
+    - initiative.update {id, init}
+    - initiative.remove {id}
+    Returns a stable sorted list by descending init then id.
+    """
+    order: dict[str, int] = {}
+    for ev in events:
+        if ev.type == "initiative.set":
+            try:
+                arr = ev.payload.get("order") or []
+                if isinstance(arr, list):
+                    order.clear()
+                    for ent in arr:
+                        cid = str((ent or {}).get("id", ""))
+                        raw_init = (ent or {}).get("init", 0)
+                        if isinstance(raw_init, int):
+                            init = raw_init
+                        elif isinstance(raw_init, str):
+                            try:
+                                init = int(raw_init)
+                            except Exception:
+                                init = 0
+                        else:
+                            init = 0
+                        if cid:
+                            order[cid] = init
+            except Exception:
+                continue
+        elif ev.type == "initiative.update":
+            cid = str(ev.payload.get("id", ""))
+            if cid:
+                raw_init2 = ev.payload.get("init", 0)
+                if isinstance(raw_init2, int):
+                    order[cid] = raw_init2
+                elif isinstance(raw_init2, str):
+                    try:
+                        order[cid] = int(raw_init2)
+                    except Exception:
+                        order[cid] = 0
+                else:
+                    order[cid] = 0
+        elif ev.type == "initiative.remove":
+            cid = str(ev.payload.get("id", ""))
+            if cid and cid in order:
+                try:
+                    del order[cid]
+                except KeyError:
+                    pass
+    # sort by descending init then id for stability
+    return sorted(order.items(), key=lambda kv: (-kv[1], kv[0]))

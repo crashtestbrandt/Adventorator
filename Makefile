@@ -65,6 +65,12 @@ alembic-rev:
 alembic-up:
 	. .venv/bin/activate && PYTHONPATH=./src alembic upgrade head
 
+alembic-up-one:
+	. .venv/bin/activate && PYTHONPATH=./src alembic upgrade +1
+
+alembic-up-all:
+	. .venv/bin/activate && PYTHONPATH=./src alembic upgrade heads
+
 # Alias to match README instructions
 db-upgrade: alembic-up
 

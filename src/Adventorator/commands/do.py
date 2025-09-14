@@ -149,6 +149,13 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
 
     # Orchestrate
     try:
+        # Prefer character identity for actor_id if available
+        actor_id = str(user_id)
+        try:
+            if sheet is not None and getattr(sheet, "name", None):
+                actor_id = str(sheet.name)
+        except Exception:
+            actor_id = str(user_id)
         res = await run_orchestrator(
             scene_id=scene_id or 0,
             player_msg=message,
@@ -158,6 +165,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
             prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None) if settings else None,
             allowed_actors=allowed,
             settings=settings,
+            actor_id=actor_id,
         )
     except Exception:
         async with session_scope() as s:

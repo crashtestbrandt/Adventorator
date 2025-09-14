@@ -1,7 +1,9 @@
 # src/Adventorator/commands/check.py
 from pydantic import Field
 
+from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, slash_command
+from Adventorator.config import load_settings
 from Adventorator.db import session_scope
 from Adventorator.rules.checks import CheckInput
 from Adventorator.services.character_service import CharacterService
@@ -78,3 +80,39 @@ async def check_command(inv: Invocation, opts: CheckOpts):
         f"= **{out.total}** → {verdict}"
     )
     await inv.responder.send(text)
+
+    # Phase 9: append event when enabled
+    try:
+        settings = inv.settings or load_settings()
+        if getattr(settings, "features_events", False):
+            guild_id = int(inv.guild_id or 0)
+            channel_id = int(inv.channel_id or 0)
+            user_id = str(inv.user_id)
+            async with session_scope() as s:
+                campaign = await repos.get_or_create_campaign(s, guild_id)
+                scene = await repos.ensure_scene(s, campaign.id, channel_id)
+                payload = {
+                    "ability": ability,
+                    "score": int(score),
+                    "proficient": bool(proficient),
+                    "expertise": bool(expertise),
+                    "proficiency_bonus": int(prof_bonus),
+                    "dc": int(opts.dc),
+                    "d20": list(out.d20),
+                    "pick": int(out.pick),
+                    "mod": int(out.mod),
+                    "total": int(out.total),
+                    "success": bool(out.success),
+                    "text": text,
+                }
+                await repos.append_event(
+                    s,
+                    scene_id=scene.id,
+                    actor_id=user_id,
+                    type="check.performed",
+                    payload=payload,
+                    request_id=None,
+                )
+    except Exception:
+        # Keep non-fatal during rollout
+        pass
