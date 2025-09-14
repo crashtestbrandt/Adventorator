@@ -48,7 +48,7 @@ class SqlFallbackRetriever(BaseRetriever):
             async with self._sm() as s:
                 # Tokenize query into alphanumeric terms and filter common stopwords
                 terms = [t for t in re.findall(r"[A-Za-z0-9]+", q.lower()) if t]
-                STOPWORDS = {
+                stopwords = {
                     "the",
                     "a",
                     "an",
@@ -78,7 +78,7 @@ class SqlFallbackRetriever(BaseRetriever):
                     "examine",
                     "inspect",
                 }
-                terms = [t for t in terms if t not in STOPWORDS]
+                terms = [t for t in terms if t not in stopwords]
                 if not terms:
                     return []
                 # Build a broad OR across tokens (each token matches title/player/gm_text)
