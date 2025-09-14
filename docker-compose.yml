@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16
+    container_name: adventorator-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    env_file: .env
+    # This environment block overrides variables from the .env file
+    # specifically for this container.
+    environment:
+      # Tell the app to connect to the 'db' service hostname instead of 'localhost'.
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - LLM_API_URL=${LLM_API_URL:-http://ollama:11434}
+    depends_on:
+      db:
+        condition: service_healthy
+      cli-sink:
+        condition: service_started
+    ports:
+      - "${APP_PORT:-18000}:18000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18000/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  cli-sink:
+    build: .
+    command: ["python", "scripts/web_cli.py", "--sink-only", "--sink-port", "19000"]
+    environment:
+      - CLI_SINK_PORT=19000
+    expose:
+      - "19000"
+    restart: unless-stopped
+
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+
+volumes:
+  db_data:
+  ollama_data:

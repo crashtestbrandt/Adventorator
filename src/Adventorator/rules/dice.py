@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass
+
 import structlog
 
 _DICE_RE = re.compile(r"^\s*(?P<count>\d+)?d(?P<sides>\d+)\s*(?P<mod>[+\-]\s*\d+)?\s*$")
@@ -31,7 +32,12 @@ class DiceRNG:
         Supports: XdY+Z
         Special case: d20 with adv/dis
         """
-        self._log.debug("rules.dice.roll.start", expr=expr, advantage=advantage, disadvantage=disadvantage)
+        self._log.debug(
+            "rules.dice.roll.start",
+            expr=expr,
+            advantage=advantage,
+            disadvantage=disadvantage,
+        )
         m = _DICE_RE.match(expr.replace(" ", ""))
         if not m:
             raise ValueError(f"Bad dice expression: {expr}")

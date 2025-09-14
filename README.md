@@ -4,12 +4,16 @@
 
 A Discord-native Dungeon Master bot that runs tabletop RPG campaigns directly in chat. It blends deterministic game mechanics with AI-powered narration, letting players experience a text-based campaign without needing a human DM online 24/7.
 
-![](/docs/images/usage-slash-check.jpeg)
-
 ---
 
+## Development
+
+### Quick Dev Setup
+
+![](/docs/images/usage-slash-check.jpeg)
+
+
 * [Overview](#overview)
-* [Architecture](#architecture)
 * [Prerequisites](#prerequisites) & [Quickstart](#quickstart)
 * [Database & Alembic](#database--alembic)
 * [Configuration](#configuration)
@@ -30,8 +34,6 @@ Adventorator is a FastAPI application that serves as a backend for a Discord bot
 * Fast 3-second deferral on all interactions; real work happens asynchronously with webhook follow-ups.
 * A deterministic `rules` engine for dice and ability checks (advantage/disadvantage, crits, modifiers).
 * Campaign persistence via async SQLAlchemy and Alembic, including full transcripts of player and bot messages.
-* Optional, safety-gated AI for narration and intent routing, controlled by feature flags. The bot defaults to a secure, rules-only mode.
-* Structured JSON logging, minimal in-memory metrics, and a flexible configuration system using `config.toml` and environment variables.
 
 **🚧 Project Status**
 
@@ -281,6 +283,8 @@ alembic downgrade -1
 
 By default, `alembic.ini` points at the `DATABASE_URL` from your configuration. For local development, SQLite is used by default.
 
+See also: `migrations/README` for deeper Alembic usage, driver notes, and troubleshooting.
+
 -----
 
 ## Configuration
@@ -363,6 +367,72 @@ The FastAPI app exposes two operational endpoints:
 
   * `GET /healthz`: A lightweight check that the application can load commands and connect to the database. Returns `{"status":"ok"}` or a 500 error.
   * `GET /metrics`: A JSON dump of internal counters. Disabled by default; enable with `ops.metrics_endpoint_enabled=true`.
+
+-----
+
+## Docker / Compose
+
+To run Postgres and the app together:
+
+```bash
+docker compose up -d --build db app
+```
+
+Ensure `.env` has:
+
+```env
+DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
+```
+
+On your host (or inside the app container), apply migrations:
+
+```bash
+make alembic-up
+```
+
+The app will be available on http://localhost:18000.
+
+Tip: For local-only dev without containers, set `DATABASE_URL=sqlite+aiosqlite:///./adventorator.sqlite3` and use the Quick Dev Setup above.
+
+-----
+
+## Development Setup: Postgres
+
+Use Postgres locally either via Docker Compose or a standalone container.
+
+Option A — docker compose (recommended)
+
+```bash
+# Start DB and app
+docker compose up -d --build db app
+
+# Set DATABASE_URL in .env to the db service hostname
+# DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
+
+# Apply migrations from your host (or inside the app container)
+make alembic-up
+```
+
+Option B — standalone Postgres container
+
+```bash
+# Start a local Postgres 16 container
+docker run --rm -d --name advdb \
+  -e POSTGRES_PASSWORD=adventorator \
+  -e POSTGRES_USER=adventorator \
+  -e POSTGRES_DB=adventorator \
+  -p 5432:5432 postgres:16
+
+# Point DATABASE_URL at localhost
+# DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@localhost:5432/adventorator
+
+# Apply migrations
+make alembic-up
+```
+
+Notes
+- You can switch back to SQLite any time by setting `DATABASE_URL=sqlite+aiosqlite:///./adventorator.sqlite3`.
+- Alembic reads `DATABASE_URL` (via `.env`), and will choose the proper sync driver under the hood for migrations.
 
 -----
 

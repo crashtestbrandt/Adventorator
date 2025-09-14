@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 from collections.abc import AsyncIterator
 
+import structlog
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -13,7 +14,6 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from Adventorator.config import load_settings
-import structlog
 
 settings = load_settings()
 log = structlog.get_logger()
@@ -47,8 +47,14 @@ def get_engine() -> AsyncEngine:
         if DATABASE_URL.startswith("sqlite+aiosqlite://"):
             # SQLite ignores pool_size; keep it minimal and avoid pre_ping
             kwargs.update(connect_args={"timeout": 30})
-        else:
-            kwargs.update(pool_pre_ping=True, pool_size=5, max_overflow=10)
+        elif DATABASE_URL.startswith("postgresql+asyncpg://"):
+            # Production-oriented Postgres pool settings (per-instance)
+            kwargs.update(
+                pool_pre_ping=True,
+                pool_size=5,
+                max_overflow=10,
+                pool_timeout=30,
+            )
 
         _engine = create_async_engine(DATABASE_URL, **kwargs)
         _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)

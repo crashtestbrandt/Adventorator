@@ -1,12 +1,9 @@
-# src/Adventorator/responder.py
-
 import httpx
 import orjson
-from fastapi import Response
 import structlog
+from fastapi import Response
 
-# Keep this module dependency-free of Settings to avoid import-time env errors
-# (we don't actually need settings here)
+from Adventorator.config import Settings
 
 __all__ = [
     "orjson_response",
@@ -21,59 +18,58 @@ def orjson_response(data: dict) -> Response:
 
 
 def respond_pong() -> Response:
-    # Interaction callback type 1 (PONG)
     return orjson_response({"type": 1})
 
 
 def respond_deferred() -> Response:
-    # Interaction callback type 5 (DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE)
     return orjson_response({"type": 5})
 
 
-async def followup_message(application_id: str, token: str, content: str, ephemeral: bool = False):
+async def followup_message(
+    application_id: str,
+    token: str,
+    content: str,
+    ephemeral: bool = False,
+    *,
+    settings: Settings,
+    webhook_base_url: str | None = None,
+):
     """
-    Send a follow-up message via webhook:
-    POST https://discord.com/api/v10/webhooks/{application_id}/{token}
+    Send a follow-up message via webhook.
+    Uses discord_webhook_url_override from settings if present.
     """
     log = structlog.get_logger()
-    url = f"https://discord.com/api/v10/webhooks/{application_id}/{token}"
-    flags = 64 if ephemeral else 0  # 64 = EPHEMERAL
+    # Per-request override (highest precedence) > process settings override > Discord API
+    base_url = (
+        (webhook_base_url or "").strip() or settings.discord_webhook_url_override or "https://discord.com/api/v10"
+    )
+    url = f"{base_url.rstrip('/')}/webhooks/{application_id}/{token}"
+
+    flags = 64 if ephemeral else 0
     payload = {"content": content, "flags": flags}
-    # Pre-send structured log: (avoid logging token/URL)
-    try:
-        log.info(
-            "discord.followup.send",
-            ephemeral=ephemeral,
-            flags=flags,
-            content_len=len(content or ""),
-            content_preview=(content or "")[:120],
-        )
-    except Exception:
-        pass
+    log.info(
+        "discord.followup.send",
+        target_url=url,
+        ephemeral=ephemeral,
+        content_len=len(content or ""),
+    )
+
     async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.post(
-            url, content=orjson.dumps(payload), headers={"Content-Type": "application/json"}
-        )
-        # Post-send structured log:
         try:
-            log.info(
-                "discord.followup.sent",
-                http_status_code=r.status_code,
-                rate_remaining=r.headers.get("X-RateLimit-Remaining"),
-                rate_reset_after=r.headers.get("X-RateLimit-Reset-After") or r.headers.get("X-RateLimit-Reset"),
+            r = await client.post(
+                url, content=orjson.dumps(payload), headers={"Content-Type": "application/json"}
             )
-        except Exception:
-            pass
-        try:
             r.raise_for_status()
-        except Exception:
-            try:
-                log.error(
-                    "discord.followup.error",
-                    http_status_code=getattr(r, "status_code", None),
-                    text_preview=(getattr(r, "text", "") or "")[:200],
-                    exc_info=True,
-                )
-            except Exception:
-                pass
-            raise
+            log.info("discord.followup.sent", http_status_code=r.status_code)
+        except httpx.RequestError as e:
+            log.error("discord.followup.network_error", target_url=str(e.request.url), error=str(e))
+            if not settings.discord_webhook_url_override:
+                raise
+        except httpx.HTTPStatusError as e:
+            log.error(
+                "discord.followup.http_error",
+                http_status_code=e.response.status_code,
+                text_preview=(e.response.text or "")[:200],
+            )
+            if not settings.discord_webhook_url_override:
+                raise

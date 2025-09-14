@@ -27,7 +27,10 @@ def _toml_settings_source() -> dict[str, Any]:
     "feature_planner_enabled": t.get("features", {}).get("planner", True),
         "features_rules": t.get("features", {}).get("rules", False),
         "features_combat": t.get("features", {}).get("combat", False),
-        "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
+    "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
+    # When set, app will post follow-ups to this base URL instead of Discord.
+    # Example: "http://host.docker.internal:19000"
+    "discord_webhook_url_override": t.get("discord", {}).get("webhook_url_override"),
         "llm_api_provider": t.get("llm", {}).get("api_provider", "ollama"),
         "llm_api_url": t.get("llm", {}).get("api_url"),
         "llm_model_name": t.get("llm", {}).get("model_name"),
@@ -71,6 +74,10 @@ def _toml_settings_source() -> dict[str, Any]:
     if "max_response_chars" in llm_cfg and llm_cfg.get("max_response_chars") is not None:
         out["llm_max_response_chars"] = llm_cfg["max_response_chars"]
 
+    # Planner
+    planner_cfg = t.get("planner", {}) or {}
+    out["planner_timeout_seconds"] = int(planner_cfg.get("timeout_seconds", 12))
+
     # Ops toggles
     ops_cfg = t.get("ops", {}) or {}
     out["metrics_endpoint_enabled"] = ops_cfg.get("metrics_endpoint_enabled", False)
@@ -81,16 +88,29 @@ def _toml_settings_source() -> dict[str, Any]:
 class Settings(BaseSettings):
     env: str = Field(default="dev")
     database_url: str = Field(default="sqlite+aiosqlite:///./adventorator.sqlite3")
-    # Provide a default to satisfy static type checkers; real value should come from env/TOML.
+
+    # --- Discord Credentials ---
+    discord_app_id: str | None = None
     discord_public_key: str = ""
-    discord_bot_token: str | None = None
+    # Development-only alternate public key used for local CLI-signed requests
+    discord_dev_public_key: str | None = None
+    discord_bot_token: SecretStr | None = None
+    # For development/testing with web_cli.py only
+    discord_private_key: SecretStr | None = None
+    # For redirecting webhooks back to the local web_cli.py sink
+    discord_webhook_url_override: str | None = None
+
+    # --- App Behavior ---
     features_llm: bool = False
     features_llm_visible: bool = False
     feature_planner_enabled: bool = True
     features_rules: bool = False
     features_combat: bool = False
     response_timeout_seconds: int = 3
+    app_port: int = 18000
+    planner_timeout_seconds: int = 12
 
+    # --- LLM Configuration ---
     llm_api_provider: Literal["ollama", "openai"] = Field(
         default="ollama", description="The type of LLM API to use ('ollama' or 'openai')."
     )
@@ -100,31 +120,28 @@ class Settings(BaseSettings):
     )
     llm_model_name: str = "llama3:8b"
     llm_default_system_prompt: str = "You are a helpful assistant."
-    # TODO: These limits should align with the selected model's context window.
     llm_max_prompt_tokens: int = 4096
     llm_max_response_chars: int = 4096
 
-    # Logging
+    # --- Logging ---
     logging_enabled: bool = True
     logging_level: str = "INFO"
-    # Per-handler levels; use "NONE" to disable
     logging_console: str = "INFO"
     logging_file: str = "INFO"
-    # Legacy booleans retained for backward compatibility (unused if above present)
     logging_to_console: bool = True
     logging_to_file: bool = True
     logging_file_path: str = "logs/adventorator.jsonl"
     logging_max_bytes: int = 5_000_000
     logging_backup_count: int = 5
 
-    # Ops
+    # --- Ops ---
     metrics_endpoint_enabled: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="",
         case_sensitive=False,
         env_file=".env",
-        extra="ignore",
+        extra="ignore", # Safely ignore any extra env vars
     )
 
     @classmethod
@@ -136,8 +153,6 @@ class Settings(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
-        # Priority: init kwargs > explicit env vars > .env file > TOML file > file secrets
-        # Rationale: tests often construct Settings(...) directly and expect these to override env/config.
         return (
             init_settings,
             env_settings,
@@ -148,5 +163,5 @@ class Settings(BaseSettings):
 
 
 def load_settings() -> Settings:
-    # Instantiate with no kwargs so env/.env can override TOML source
     return Settings()
+

@@ -1,0 +1,42 @@
+# Reduce build context size and avoid leaking local artifacts/secrets
+
+# VCS
+.git
+.gitignore
+
+# Python caches & environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv/
+.uv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.tox/
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local runtime artifacts
+logs/
+*.log
+*.sqlite3
+*.db
+
+# Node/npm (if ever added)
+node_modules/
+
+# Tests and docs are not required in the runtime image
+# (keep migrations; they may be used at runtime)
+tests/
+docs/
+
+# Env files and local overrides
+.env
+.env.local
+*.env

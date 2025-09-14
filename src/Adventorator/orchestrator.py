@@ -90,11 +90,22 @@ _NAME_RE = re.compile(r"\b[A-Z][a-z]{2,}\b")
 def _unknown_actor_present(narration: str, allowed: set[str]) -> str | None:
     if not narration:
         return None
-    # Find proper-noun-like tokens and compare to allowed actors (case-sensitive match)
-    tokens = set(_NAME_RE.findall(narration))
-    disallowed = tokens - allowed
+    # Tokenize proper-noun-like words from narration
+    nar_tokens = {t.lower() for t in _NAME_RE.findall(narration)}
+    if not nar_tokens:
+        return None
+    # Build an allowed token set from provided actor names (supports full names)
+    allowed_tokens: set[str] = set()
+    for name in allowed:
+        for t in _NAME_RE.findall(name):
+            allowed_tokens.add(t.lower())
+    # If no allowed tokens provided, skip defense
+    if not allowed_tokens:
+        return None
+    disallowed = nar_tokens - allowed_tokens
     if disallowed:
-        return ", ".join(sorted(disallowed))
+        # Return a display string using original casing best-effort
+        return ", ".join(sorted({t.capitalize() for t in disallowed}))
     return None
 
 
@@ -131,6 +142,7 @@ async def run_orchestrator(
     scene_id: int,
     player_msg: str,
     sheet_info_provider: Callable[[str], _SheetInfo] | None = None,
+    character_summary_provider: Callable[[], str | None] | None = None,
     rng_seed: int | None = None,
     llm_client: object | None = None,
     prompt_token_cap: int | None = None,
@@ -165,7 +177,13 @@ async def run_orchestrator(
     facts = await _facts_from_transcripts(scene_id, player_msg, max_tokens=prompt_token_cap)
 
     # 2) narrator -> JSON output
-    narrator_msgs = build_narrator_messages(facts, player_msg, max_tokens=prompt_token_cap)
+    char_summary = character_summary_provider() if character_summary_provider else None
+    narrator_msgs = build_narrator_messages(
+        facts,
+        player_msg,
+        max_tokens=prompt_token_cap,
+        character_summary=char_summary,
+    )
     if not llm_client:
         return OrchestratorResult(
             mechanics="LLM not configured.", narration="", rejected=True, reason="llm_unconfigured"

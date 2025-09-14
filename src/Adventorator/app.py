@@ -1,6 +1,7 @@
-# app.py
+"""FastAPI app entrypoint for Adventorator."""
 
 import asyncio
+import contextvars
 import time
 import uuid
 from typing import Any
@@ -11,14 +12,14 @@ from fastapi import FastAPI, HTTPException, Request
 from Adventorator import repos
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import Invocation, Responder, find_command
-from Adventorator.config import load_settings
+from Adventorator.config import Settings, load_settings
 from Adventorator.crypto import verify_ed25519
 from Adventorator.db import session_scope
 from Adventorator.discord_schemas import Interaction
 from Adventorator.llm import LLMClient
-from Adventorator.logging import setup_logging, redact_settings
-from Adventorator.responder import followup_message, respond_deferred, respond_pong
+from Adventorator.logging import redact_settings, setup_logging
 from Adventorator.metrics import get_counters
+from Adventorator.responder import followup_message, respond_deferred, respond_pong
 from Adventorator.rules.dice import DiceRNG
 
 rng = DiceRNG()  # TODO: Seed per-scene later
@@ -27,6 +28,9 @@ log = structlog.get_logger()
 settings = load_settings()
 setup_logging(settings)
 app = FastAPI(title="Adventorator")
+
+# Stash the current request for downstream helpers (initialized in middleware)
+_current_request_var: contextvars.ContextVar | None = None
 
 llm_client = None
 if settings.features_llm:
@@ -52,6 +56,7 @@ async def shutdown_event():
 
 DISCORD_SIG_HEADER = "X-Signature-Ed25519"
 DISCORD_TS_HEADER = "X-Signature-Timestamp"
+DEV_KEY_HEADER = "X-Adventorator-Use-Dev-Key"
 
 
 @app.post("/interactions")
@@ -74,29 +79,47 @@ async def interactions(request: Request):
         log.error("Missing signature headers", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="missing signature headers")
 
-    if not verify_ed25519(settings.discord_public_key, ts, raw, sig):
-        log.error("Invalid signature", sig=sig, ts=ts)
+    # Allow a trusted dev header to opt-in to an alternate public key for local CLI
+    use_dev_key = request.headers.get(DEV_KEY_HEADER) == "1"
+    # Compute which public key will be used (dev key allowed only in dev)
+    use_dev_pub = (
+        use_dev_key
+        and getattr(settings, "env", None) == "dev"
+        and bool(getattr(settings, "discord_dev_public_key", None))
+    )
+    dev_key: str = getattr(settings, "discord_dev_public_key", "") or ""
+    prod_key: str = getattr(settings, "discord_public_key", "") or ""
+    pubkey_used: str = dev_key if use_dev_pub else prod_key
+    pubkey = pubkey_used
+    log.info(
+        "signature.verification",
+        use_dev_key=use_dev_key,
+        env=getattr(settings, "env", None),
+        has_dev_public_key=bool(getattr(settings, "discord_dev_public_key", None)),
+        pubkey_used=pubkey_used,
+        dev_header=request.headers.get(DEV_KEY_HEADER),
+    )
+    if not verify_ed25519(pubkey, ts, raw, sig):
+        log.error("Invalid signature", sig=sig, ts=ts, pubkey_used=pubkey, use_dev_key=use_dev_key)
         raise HTTPException(status_code=401, detail="bad signature")
 
     try:
         inter = Interaction.model_validate_json(raw)
-    except Exception:
+    except Exception as err:
         # Include tiny preview for debugging only; avoid full body spam
-        preview = raw[:200].decode("utf-8", errors="replace") if isinstance(raw, (bytes, bytearray)) else str(raw)[:200]
+        preview = (
+            raw[:200].decode("utf-8", errors="replace")
+            if isinstance(raw, (bytes | bytearray))
+            else str(raw)[:200]
+        )
         log.error("discord.request.parse_error", raw_body_preview=preview)
-        raise HTTPException(status_code=400, detail="invalid interaction payload")
+        raise HTTPException(status_code=400, detail="invalid interaction payload") from err
     log.info("discord.request.validated", interaction=inter.model_dump())
 
     async with session_scope() as s:
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
         campaign = await repos.get_or_create_campaign(s, guild_id)
         await repos.ensure_scene(s, campaign.id, channel_id)
-        # Content can be reconstructed from command name/options; store a compact form:
-        # msg = f"/{inter.data.name}" if inter.data and inter.data.name else "<interaction>"
-    # await repos.write_transcript(
-    #     s, campaign.id, scene.id, channel_id,
-    #     "player", msg, str(user_id), meta=inter.model_dump()
-    # )
 
     # Ping = 1
     if inter.type == 1:
@@ -111,12 +134,15 @@ async def interactions(request: Request):
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
-    """Assign a request_id, bind it to structlog context, and measure duration.
-
-    Also adds X-Request-ID header to the response for correlation.
-    """
+    """Assign a request_id, bind it to structlog context, and measure duration."""
     from structlog.contextvars import bind_contextvars, clear_contextvars
 
+    # Stash request in a ContextVar for downstream helpers that need headers
+    global _current_request_var
+    if _current_request_var is None:
+        _current_request_var = contextvars.ContextVar("current_request")
+
+    req_token = _current_request_var.set(request)
     request_id = str(uuid.uuid4())
     start = time.perf_counter()
     bind_contextvars(request_id=request_id)
@@ -137,10 +163,9 @@ async def request_id_middleware(request: Request, call_next):
             )
         except Exception:
             pass
+        # Reset the request ContextVar so it doesn't leak across requests
         try:
-            # Add header on the way out; FastAPI Response may not be available if exception
-            if 'response' in locals():
-                response.headers["X-Request-ID"] = request_id
+            _current_request_var.reset(req_token)
         except Exception:
             pass
         clear_contextvars()
@@ -150,21 +175,14 @@ async def _dispatch_command(inter: Interaction):
     # Safe: _dispatch_command only called when inter.data and name are present
     assert inter.data is not None and inter.data.name is not None
     name = inter.data.name
-
-    # 0) Registry-backed commands (new pattern): if a command module exists under
-    #    Adventorator.commands and is registered, dispatch here and return.
-    #    This keeps handlers transport-agnostic and shared with the CLI.
-    # Extract potential subcommand (Discord encodes SUB_COMMAND as first option type=1)
     sub = _subcommand(inter)
     cmd = find_command(name, sub)
     if cmd is not None:
-        # Build options map from Discord interaction (flatten SUB_COMMAND if present)
         options: dict[str, Any] = {}
         opts: list[dict[str, Any]] = (
             inter.data.options or [] if inter.data is not None else []
         )
         if opts and isinstance(opts[0], dict) and opts[0].get("type") == 1:
-            # SUB_COMMAND: options one level deeper
             opts = opts[0].get("options", []) or []
         for o in opts:
             n = o.get("name")
@@ -172,19 +190,45 @@ async def _dispatch_command(inter: Interaction):
                 options[n] = o.get("value")
 
         class DiscordResponder(Responder):  # type: ignore[misc]
-            def __init__(self, application_id: str, token: str):
+            def __init__(
+                self,
+                application_id: str,
+                token: str,
+                settings: Settings,
+                webhook_base_url: str | None = None,
+            ):
                 self.application_id = application_id
                 self.token = token
+                self.settings = settings
+                # Allows trusted callers (e.g., internal CLI) to request a per-interaction sink
+                self.webhook_base_url = webhook_base_url
 
-            async def send(self, content: str, *, ephemeral: bool = False) -> None:  # noqa: D401
-                await followup_message(
-                    self.application_id,
-                    self.token,
-                    content,
-                    ephemeral=ephemeral,
-                )
+            async def send(self, content: str, *, ephemeral: bool = False) -> None:
+                try:
+                    await followup_message(
+                        self.application_id,
+                        self.token,
+                        content,
+                        ephemeral=ephemeral,
+                        settings=self.settings,
+                        webhook_base_url=self.webhook_base_url,
+                    )
+                except TypeError:
+                    # Test spies may not accept the keyword-only 'settings' parameter
+                    await followup_message(
+                        self.application_id,
+                        self.token,
+                        content,
+                        ephemeral=ephemeral,
+                        # mypy: test spies monkeypatch this symbol without the 'settings' kwarg
+                        # which is intentional in tests; ignore the type mismatch here.
+                        # type: ignore[call-arg]
+                    )
 
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
+        # Allow a trusted caller to provide a one-off webhook base via header
+        webhook_base_url = request_header_override()
+        from Adventorator.rules.engine import Dnd5eRuleset
         inv = Invocation(
             name=name,
             subcommand=sub,
@@ -192,37 +236,29 @@ async def _dispatch_command(inter: Interaction):
             user_id=str(user_id),
             channel_id=str(channel_id) if channel_id else None,
             guild_id=str(guild_id) if guild_id else None,
-            responder=DiscordResponder(inter.application_id, inter.token),
+            responder=DiscordResponder(
+                inter.application_id,
+                inter.token,
+                settings,
+                webhook_base_url,
+            ),
             settings=settings,
             llm_client=llm_client,
+            ruleset=Dnd5eRuleset(),
         )
-        # Structured command invocation lifecycle logging
-        import time
         start = time.perf_counter()
         status = "success"
         try:
             opts_obj = cmd.option_model.model_validate(options)
-        except Exception as e:
+        except Exception:
             status = "options_error"
             await followup_message(
                 inter.application_id,
                 inter.token,
-                f"❌ Invalid options for `{name}`: {e}",
+                f"❌ Invalid options for `{name}`.",
                 ephemeral=True,
+                settings=settings,
             )
-            try:
-                log.info(
-                    "command.completed",
-                    command_name=name,
-                    subcommand=sub,
-                    options=options,
-                    user_id=str(user_id),
-                    guild_id=str(guild_id) if guild_id else None,
-                    status=status,
-                    duration_ms=int((time.perf_counter() - start) * 1000),
-                )
-            except Exception:
-                pass
             return
         try:
             log.info(
@@ -234,7 +270,7 @@ async def _dispatch_command(inter: Interaction):
                 guild_id=str(guild_id) if guild_id else None,
             )
             await cmd.handler(inv, opts_obj)
-        except Exception as e:  # Let FastAPI/global handlers decide further
+        except Exception:
             status = "error"
             log.error(
                 "command.error",
@@ -247,24 +283,42 @@ async def _dispatch_command(inter: Interaction):
             )
             raise
         finally:
-            try:
-                log.info(
-                    "command.completed",
-                    command_name=name,
-                    subcommand=sub,
-                    options=options,
-                    user_id=str(user_id),
-                    guild_id=str(guild_id) if guild_id else None,
-                    status=status,
-                    duration_ms=int((time.perf_counter() - start) * 1000),
-                )
-            except Exception:
-                pass
+            log.info(
+                "command.completed",
+                command_name=name,
+                subcommand=sub,
+                options=options,
+                user_id=str(user_id),
+                guild_id=str(guild_id) if guild_id else None,
+                status=status,
+                duration_ms=int((time.perf_counter() - start) * 1000),
+            )
     return
 
 
+def request_header_override() -> str | None:
+    """Placeholder for propagating a per-request webhook base URL.
+
+    When the web CLI calls /interactions, it can include a custom header
+    (e.g., X-Adventorator-Webhook-Base) that we trust in dev to route the
+    follow-up to the local sink service. In production, callers won't set it,
+    and the app falls back to Discord.
+    """
+    try:
+        # A small shim: stash the current request in a contextvar in middleware
+        global _current_request_var
+        if _current_request_var is None:
+            return None
+        req = _current_request_var.get(None)
+        if not req:
+            return None
+        val = req.headers.get("X-Adventorator-Webhook-Base")
+        return val
+    except Exception:
+        return None
+
+
 def _subcommand(inter: Interaction) -> str | None:
-    # options[0].name for SUB_COMMAND
     if inter.data is not None and inter.data.options:
         first = inter.data.options[0]
         if isinstance(first, dict) and first.get("type") == 1:
@@ -273,67 +327,23 @@ def _subcommand(inter: Interaction) -> str | None:
     return None
 
 
-def _option(inter: Interaction, name: str, default: Any | None = None) -> Any | None:
-    # If you’re inside a SUB_COMMAND, options are nested one level deeper
-    opts: list[dict[str, Any]] = inter.data.options or [] if inter.data is not None else []
-    if opts and isinstance(opts[0], dict) and opts[0].get("type") == 1:
-        opts = opts[0].get("options", [])
-    for opt in opts or []:
-        if opt.get("name") == name:
-            return opt.get("value", default)
-    return default
-
-
 def _infer_ids_from_interaction(inter):
-    guild_id = int(inter.guild.id) if inter.guild else 0
-    channel_id = int(inter.channel.id) if inter.channel else 0
+    guild_id = int(inter.guild.id) if inter.guild and inter.guild.id else 0
+    channel_id = int(inter.channel.id) if inter.channel and inter.channel.id else 0
     user = inter.member.user if inter.member and inter.member.user else None
-    user_id = int(user.id) if user else 0
+    user_id = int(user.id) if user and user.id else 0
     username = user.username if user else "Unknown"
     return guild_id, channel_id, user_id, username
 
 
-async def _resolve_context(inter: Interaction):
-    guild_id = int(inter.guild.id) if inter.guild else 0
-    channel_id = int(inter.channel.id) if inter.channel else 0
-    user = inter.member.user if inter.member and inter.member.user else None
-    user_id = int(user.id) if user else 0
-    username = user.username if user else "Unknown"
-
-    # Discord Interaction payloads carry these in different places depending on type.
-    # For slash commands: guild_id & channel_id are in "guild_id"/"channel" fields
-    # (add to schemas if needed).
-    # For simplicity here, we assume you extended Interaction to include guild_id/channel.id/user.id
-    # If not, adapt based on your actual payload.
-
-    # TODO: parse from raw JSON fields in your Interaction model if missing.
-
-    async with session_scope() as s:
-        campaign = await repos.get_or_create_campaign(s, guild_id, name="Default")
-        player = await repos.get_or_create_player(s, user_id, username)
-        scene = await repos.ensure_scene(s, campaign.id, channel_id)
-        await repos.write_transcript(
-            s,
-            campaign.id,
-            scene.id,
-            channel_id,
-            "player",
-            "<user message>",
-            str(user_id),
-        )
-        return campaign, player, scene
-
-
 @app.get("/healthz")
 async def healthz():
-    # Basic checks: commands loaded, DB reachable
     try:
         load_all_commands()
         async with session_scope() as s:
-            # lightweight query
             await repos.healthcheck(s)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"unhealthy: {e}")
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"unhealthy: {err}") from err
     return {"status": "ok"}
 
 
@@ -341,5 +351,4 @@ async def healthz():
 async def metrics():
     if not getattr(settings, "metrics_endpoint_enabled", False):
         raise HTTPException(status_code=404, detail="metrics disabled")
-    # Return a simple JSON dump of counters for local ops
     return get_counters()

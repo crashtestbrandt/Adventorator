@@ -1,22 +1,21 @@
 from __future__ import annotations
 
-from typing import Any
 import asyncio
-import structlog
 import time
 
+import structlog
 from pydantic import Field
 
+from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, find_command, slash_command
 from Adventorator.db import session_scope
-from Adventorator import repos
 from Adventorator.metrics import inc_counter
-from Adventorator.planner import plan, _cache_get, _cache_put, _is_allowed
+from Adventorator.planner import _cache_get, _cache_put, _is_allowed, plan
 from Adventorator.planner_schemas import PlannerOutput
 
 log = structlog.get_logger()
 
-_PLAN_TIMEOUT = 12.0    # seconds
+_PLAN_TIMEOUT = 12.0    # seconds (default; overridden by settings if provided)
 
 # Simple in-memory per-user rate limiter: max N requests per window
 _RL_MAX = 5
@@ -42,6 +41,8 @@ class ActOpts(Option):
 
 @slash_command(name="act", description="Let the DM figure out what to do.", option_model=ActOpts)
 async def act(inv: Invocation, opts: ActOpts):
+    # TODO: If/when multiple rulesets are supported, pass ruleset context to the planner prompt.
+    # For now, the planner prompt enumerates rules from the default Dnd5eRuleset.
     # Preconditions: require LLM available
     settings = inv.settings
     if not (settings and getattr(settings, "features_llm", False) and inv.llm_client):
@@ -59,7 +60,10 @@ async def act(inv: Invocation, opts: ActOpts):
 
     # Per-user simple rate limiting
     if inv.user_id and _rate_limited(str(inv.user_id)):
-        await inv.responder.send("⏳ You're doing that a bit too quickly. Please wait a moment.", ephemeral=True)
+        await inv.responder.send(
+            "⏳ You're doing that a bit too quickly. Please wait a moment.",
+            ephemeral=True,
+        )
         return
 
     inc_counter("planner.request")
@@ -82,6 +86,12 @@ async def act(inv: Invocation, opts: ActOpts):
         )
         scene_id = scene.id
 
+    # Planner timeout (allow override via settings)
+    try:
+        timeout_s = float(getattr(settings, "planner_timeout_seconds", _PLAN_TIMEOUT))
+    except Exception:
+        timeout_s = _PLAN_TIMEOUT
+
     # Cache check
     cached = _cache_get(scene_id, user_msg)
     if cached is not None:
@@ -94,7 +104,7 @@ async def act(inv: Invocation, opts: ActOpts):
     else:
         # Plan using LLM with a soft timeout; fallback to roll 1d20 on timeout
         try:
-            out = await asyncio.wait_for(plan(inv.llm_client, user_msg), timeout=_PLAN_TIMEOUT)  # type: ignore[arg-type]
+            out = await asyncio.wait_for(plan(inv.llm_client, user_msg), timeout=timeout_s)  # type: ignore[arg-type]
         except asyncio.TimeoutError:
             # Friendly fallback
             fallback_text = "I couldn't decide in time; rolling a d20."
@@ -145,7 +155,35 @@ async def act(inv: Invocation, opts: ActOpts):
     except Exception as e:
         inc_counter("planner.decision.rejected")
         log.info("planner.decision", cmd=cmd_name_flat, accepted=False, error=str(e))
-        await inv.responder.send("⚠️ Planned arguments were invalid.", ephemeral=True)
+        # Provide targeted guidance for common commands with missing args (Phase 5.6)
+        guidance: str | None = None
+        if cmd_name_flat in {"sheet.create"}:
+            guidance = (
+                "To create a character, use /sheet create and provide the json option with "
+                "your character sheet JSON. Example: {\"name\": \"Aria\", "
+                "\"class\": \"Fighter\", \"level\": 1, ...}"
+            )
+        elif cmd_name_flat in {"sheet.show"}:
+            guidance = (
+                "To show a character, use /sheet show with the name option. Example: name: Aria"
+            )
+        elif cmd_name_flat == "check":
+            guidance = (
+                "Use /check with at least ability (STR/DEX/...). Optionally include dc. "
+                "Example: ability: DEX dc: 12"
+            )
+        elif cmd_name_flat == "roll":
+            guidance = (
+                "Use /roll with an expr like 1d20 or 2d6+3. Example: expr: \"1d20\""
+            )
+        elif cmd_name_flat == "do":
+            guidance = (
+                "Use /do with a short action description. Example: message: "
+                "\"I sneak along the wall\""
+            )
+
+        msg = guidance or "⚠️ Planned arguments were invalid."
+        await inv.responder.send(msg, ephemeral=True)
         return
 
     inc_counter("planner.decision.accepted")
@@ -168,5 +206,7 @@ async def act(inv: Invocation, opts: ActOpts):
         responder=inv.responder,
         settings=inv.settings,
         llm_client=inv.llm_client,
+    # Preserve injected ruleset so planned commands can use it
+    ruleset=inv.ruleset,
     )
     await cmd.handler(new_inv, option_obj)

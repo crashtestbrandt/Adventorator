@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any
 import time
+from typing import Any
 
 import orjson
-
-from Adventorator.commanding import all_commands
-from Adventorator.command_loader import load_all_commands
 import structlog
+
+from Adventorator.command_loader import load_all_commands
+from Adventorator.commanding import all_commands
 from Adventorator.llm import LLMClient
 from Adventorator.llm_utils import extract_first_json
 from Adventorator.planner_prompts import SYSTEM_PLANNER
 from Adventorator.planner_schemas import PlannerOutput
-
 
 # --- Allowlist of commands the planner may route to (defense-in-depth) ---
 _ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do", "ooc"}
@@ -69,8 +68,18 @@ def _catalog() -> list[dict[str, Any]]:
 
 def build_planner_messages(user_msg: str) -> list[dict[str, Any]]:
     tools_json = orjson.dumps(_catalog()).decode("utf-8")
+    # Dynamically enumerate available rules from the rules engine (Dnd5eRuleset)
+    from Adventorator.rules.engine import Dnd5eRuleset
+    ruleset = Dnd5eRuleset()
+    # List available rules as method names (excluding dunder and private)
+    rule_methods = [
+        m for m in dir(ruleset)
+        if not m.startswith("_") and callable(getattr(ruleset, m))
+    ]
+    rules_list = "\n".join(f"- {m}" for m in rule_methods)
+    rules_text = f"AVAILABLE RULES:\n{rules_list}\n"
     return [
-        {"role": "system", "content": SYSTEM_PLANNER},
+        {"role": "system", "content": SYSTEM_PLANNER + "\n" + rules_text},
         {
             "role": "user",
             "content": f"TOOLS:\n{tools_json}\n\nUSER:\n{user_msg}",

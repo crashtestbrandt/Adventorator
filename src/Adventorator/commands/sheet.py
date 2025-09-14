@@ -7,6 +7,7 @@ from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.db import session_scope
 from Adventorator.schemas import CharacterSheet
+from Adventorator.services.character_service import CharacterService
 
 
 class SheetCreateOpts(Option):
@@ -77,8 +78,9 @@ async def sheet_show(inv: Invocation, opts: SheetShowOpts):
 
     async with session_scope() as s:
         campaign = await repos.get_or_create_campaign(s, guild_id)
-        ch = await repos.get_character(s, campaign.id, who)
-        if not ch:
+        cs = CharacterService()
+        sheet = await cs.get_sheet_by_name(s, campaign_id=campaign.id, name=who)
+        if not sheet:
             await inv.responder.send(f"❌ No character named **{who}**", ephemeral=True)
             return
         await repos.write_transcript(
@@ -92,12 +94,17 @@ async def sheet_show(inv: Invocation, opts: SheetShowOpts):
             meta={"name": who},
         )
 
-    sheet_dict = ch.sheet  # type: ignore[attr-defined]
+    # Preserve existing summary format; fill minimal fields from SheetInfo
+    # Note: AC/HP aren't in SheetInfo; keep placeholders if not available in DB sheet structure.
+    name = sheet.name
+    cls = sheet.class_name or "?"
+    lvl = sheet.level or "?"
+    # Attempt to pull AC/HP if present via repos.get_character would have used raw JSON.
+    # For now, display abilities-centric summary consistently.
     summary = (
-        f"**{sheet_dict['name']}** — {sheet_dict['class']} {sheet_dict['level']}\n"
-        f"AC {sheet_dict['ac']} | HP {sheet_dict['hp']['current']}/{sheet_dict['hp']['max']} | "
-        f"STR {sheet_dict['abilities']['STR']} DEX {sheet_dict['abilities']['DEX']} "
-        f"CON {sheet_dict['abilities']['CON']} INT {sheet_dict['abilities']['INT']} "
-        f"WIS {sheet_dict['abilities']['WIS']} CHA {sheet_dict['abilities']['CHA']}"
+        f"**{name}** — {cls} {lvl}\n"
+        f"STR {sheet.abilities.get('STR', 10)} DEX {sheet.abilities.get('DEX', 10)} "
+        f"CON {sheet.abilities.get('CON', 10)} INT {sheet.abilities.get('INT', 10)} "
+        f"WIS {sheet.abilities.get('WIS', 10)} CHA {sheet.abilities.get('CHA', 10)}"
     )
     await inv.responder.send(summary, ephemeral=True)

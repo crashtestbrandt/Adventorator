@@ -2,8 +2,9 @@
 from pydantic import Field
 
 from Adventorator.commanding import Invocation, Option, slash_command
-from Adventorator.rules.checks import CheckInput, compute_check
-from Adventorator.rules.dice import DiceRNG
+from Adventorator.db import session_scope
+from Adventorator.rules.checks import CheckInput
+from Adventorator.services.character_service import CharacterService
 
 
 class CheckOpts(Option):
@@ -24,22 +25,51 @@ class CheckOpts(Option):
 )
 async def check_command(inv: Invocation, opts: CheckOpts):
     ability = (opts.ability or "DEX").upper()
-    rng = DiceRNG()
-    d20 = rng.roll("1d20", advantage=opts.advantage, disadvantage=opts.disadvantage)
+    score = opts.score
+    prof_bonus = opts.prof_bonus
+    proficient = opts.proficient
+    expertise = opts.expertise
+
+    # If score/proficiency flags or prof bonus not provided explicitly,
+    # try to default from the active character
+    need_sheet = (
+        score in (None, 0, 10) and not opts.proficient and not opts.expertise
+    ) or (prof_bonus in (None, 0, 2))
+    if need_sheet:
+        async with session_scope() as s:
+            cs = CharacterService()
+            sheet = await cs.get_active_sheet_info(
+                s,
+                user_id=int(inv.user_id or 0),
+                guild_id=int(inv.guild_id or 0) if inv.guild_id else 0,
+                channel_id=int(inv.channel_id or 0) if inv.channel_id else 0,
+            )
+        if sheet is not None:
+            # Override score and prof bonus from sheet
+            score = int(sheet.abilities.get(ability, score))
+            prof_bonus = int(sheet.proficiency_bonus or prof_bonus)
+            # If a commonly mapped skill implies proficiency/expertise, respect it.
+            # Try to infer skill name from ability if possible (no direct mapping here),
+            # so leave flags unless the user set them explicitly. If both flags are false,
+            # keep them as False; detailed skill flags are handled in /do via narrator flow.
 
     ci = CheckInput(
         ability=ability,
-        score=int(opts.score),
-        proficient=bool(opts.proficient),
-        expertise=bool(opts.expertise),
-        proficiency_bonus=int(opts.prof_bonus),
+        score=int(score),
+        proficient=bool(proficient),
+        expertise=bool(expertise),
+        proficiency_bonus=int(prof_bonus),
         dc=int(opts.dc),
         advantage=bool(opts.advantage),
         disadvantage=bool(opts.disadvantage),
     )
+    if inv.ruleset is None:
+        from Adventorator.rules.engine import Dnd5eRuleset
 
-    d20_rolls = d20.rolls[:2] if len(d20.rolls) >= 2 else [d20.rolls[0]]
-    out = compute_check(ci, d20_rolls)
+        rs = Dnd5eRuleset()
+    else:
+        rs = inv.ruleset
+    out = rs.perform_check(ci)
     verdict = "✅ success" if out.success else "❌ fail"
     text = (
         f"🧪 **{ability}** check vs DC {opts.dc}\n"

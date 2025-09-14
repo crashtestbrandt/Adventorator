@@ -5,6 +5,7 @@ from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.db import session_scope
 from Adventorator.orchestrator import run_orchestrator
+from Adventorator.services.character_service import CharacterService
 
 
 class DoOpts(Option):
@@ -39,6 +40,8 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
     bot_tx_id = None
     scene_id = None
     allowed: list[str] = []
+    sheet_provider = None
+    char_summary_provider = None
     # Resolve scene and write the player transcript within the same session
     async with session_scope() as s:
         campaign = await repos.get_or_create_campaign(s, guild_id)
@@ -56,13 +59,98 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         player_tx_id = getattr(player_tx, "id", None)
         scene_id = scene.id
         # Derive allowed actors from characters in this campaign
-        allowed = await repos.list_character_names(s, campaign.id)
+        # Allowed actors: include full names and their capitalized word tokens
+        names = await repos.list_character_names(s, campaign.id)
+        allowed = list(names)
+        extra_tokens: set[str] = set()
+        for nm in names:
+            for part in str(nm).split():
+                part = part.strip()
+                if part and part[0].isalpha() and part[0].isupper():
+                    extra_tokens.add(part)
+        if extra_tokens:
+            allowed.extend(sorted(extra_tokens))
+        # Build a sheet provider from CharacterService for this user
+        cs = CharacterService()
+        sheet = await cs.get_active_sheet_info(
+            s,
+            user_id=user_id,
+            guild_id=guild_id,
+            channel_id=channel_id,
+        )
+        if sheet is not None:
+            # Map to the orchestrator's per-ability callable
+            def _provider(ability: str):
+                a = (ability or "").upper()
+                score = int(sheet.abilities.get(a, 10))
+                # Infer proficiency/expertise from skills if message hints at a skill
+                txt = message.lower()
+                # Map simple keywords -> canonical skill keys used by
+                # CharacterService
+                keyword_to_skill = {
+                    "lockpick": "sleight of hand",
+                    "pick lock": "sleight of hand",
+                    "sneak": "stealth",
+                    "hide": "stealth",
+                    "move quietly": "stealth",
+                    "climb": "athletics",
+                    "jump": "athletics",
+                    "convince": "persuasion",
+                    "persuade": "persuasion",
+                    "lie": "deception",
+                    "deceive": "deception",
+                    "recall lore": "history",
+                    "recall": "history",
+                    "notice": "perception",
+                    "spot": "perception",
+                    "search": "investigation",
+                    "investigate": "investigation",
+                }
+                skill_key = None
+                for k, skill_name in keyword_to_skill.items():
+                    if k in txt:
+                        skill_key = skill_name
+                        break
+                prof = False
+                exp = False
+                if skill_key and hasattr(sheet, "skills") and sheet.skills:
+                    s_info = sheet.skills.get(skill_key)
+                    if s_info:
+                        prof = bool(s_info.get("proficient", False))
+                        exp = bool(s_info.get("expertise", False))
+                        # If the skill's governing ability differs and matches the
+                        # requested, keep; otherwise just use the ability score
+                        # above.
+                return {
+                    "score": score,
+                    "proficient": prof,
+                    "expertise": exp,
+                    "prof_bonus": int(sheet.proficiency_bonus),
+                }
+
+            sheet_provider = _provider
+            # Build a compact character summary for prompts
+            def _summary() -> str:
+                parts = [sheet.name]
+                if sheet.class_name:
+                    parts.append(str(sheet.class_name))
+                if sheet.level:
+                    parts.append(f"Lv {sheet.level}")
+                # Include two key stats for brevity
+                dex = sheet.abilities.get("DEX", 10)
+                str_ = sheet.abilities.get("STR", 10)
+                parts.append(f"STR {str_}, DEX {dex}, PB {sheet.proficiency_bonus}")
+                return " ".join(str(p) for p in parts if p)
+
+            char_summary_provider = _summary
 
     # Orchestrate
     try:
         res = await run_orchestrator(
             scene_id=scene_id or 0,
             player_msg=message,
+            sheet_info_provider=sheet_provider,
+            character_summary_provider=char_summary_provider,
             llm_client=llm,
             prompt_token_cap=getattr(settings, "llm_max_prompt_tokens", None) if settings else None,
             allowed_actors=allowed,

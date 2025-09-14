@@ -43,7 +43,14 @@ class LLMClient:
         self._client: Any
 
         if self.provider == "ollama":
-            self.api_url = f"{settings.llm_api_url.rstrip('/')}/api/chat"
+            base = (settings.llm_api_url or "").rstrip("/")
+            # Accept either base (http://host:11434) or explicit chat endpoint (/api/chat)
+            if base.endswith("/api/chat"):
+                self.api_url = base
+            elif base.endswith("/api"):
+                self.api_url = f"{base}/chat"
+            else:
+                self.api_url = f"{base}/api/chat"
             headers = {"Content-Type": "application/json"}
             self._client = httpx.AsyncClient(timeout=60.0, headers=headers)
         

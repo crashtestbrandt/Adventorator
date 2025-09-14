@@ -1,4 +1,5 @@
 import json
+
 import pytest
 
 from Adventorator.command_loader import load_all_commands
@@ -56,7 +57,6 @@ async def test_act_routes_ooc():
     cmd = find_command("act", None)
     assert cmd is not None
 
-    llm = _FakeLLM('{"command": "ooc", "args": {"message": "tell a short neutral scene"}}')
     responder = _SpyResponder()
     inv = Invocation(
         name="act",
