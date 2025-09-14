@@ -154,3 +154,55 @@ class ContentNode(Base):
             "title",
         ),
     )
+
+
+# -----------------------------
+# Phase 8: Pending Actions
+# -----------------------------
+
+
+class PendingAction(Base):
+    __tablename__ = "pending_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
+    )
+    scene_id: Mapped[int] = mapped_column(
+        ForeignKey("scenes.id", ondelete="CASCADE"), index=True
+    )
+    channel_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    # Correlates a planner/orchestrator request end-to-end
+    request_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # Store the executor ToolCallChain JSON for confirm/apply
+    chain: Mapped[dict] = mapped_column(JSON)
+    # Store preview strings for quick display without recomputation
+    mechanics: Mapped[str] = mapped_column(Text)
+    narration: Mapped[str] = mapped_column(Text)
+    # Link to associated transcripts created during proposal
+    player_tx_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bot_tx_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Idempotency key computed from normalized ToolCallChain JSON
+    dedup_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
+    __table_args__ = (
+        Index(
+            "ix_pending_scene_user_time",
+            "scene_id",
+            "user_id",
+            "created_at",
+        ),
+        Index(
+            "ux_pending_scene_user_dedup",
+            "scene_id",
+            "user_id",
+            "dedup_hash",
+            unique=True,
+        ),
+    )

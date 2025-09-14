@@ -236,23 +236,39 @@ RB
 
 ---
 
-## Phase 8 — Pending Actions and Confirmation Flow ([#12](https://github.com/crashtestbrandt/Adventorator/issues/12)) — status: open
+## Phase 8 — Pending Actions and Confirmation Flow ([#12](https://github.com/crashtestbrandt/Adventorator/issues/12)) — status: closed
 
-**Goal:** Players can act in personal threads; merge to shared combat when needed.
+Goal
+- Introduce a gating loop for destructive actions using PendingAction with TTL and idempotency. Still minimal tool surface.
 
-**Deliverables**
-* Scene model: {scene_id, participants[], location_node, mode:'exploration'|'combat', clock}
-* Merge/branch ops:
-  * branch_scene(from, player) → solo thread
-  * merge_scenes([ids]) → new combat thread; rebase clocks if you track time
-  * Conflict policy: if asynchronous scenes diverge, prompt the human GM to resolve or soft-retcon (configurable)
+Deliverables
+- Data/Repos
+  - `PendingAction(id, scene_id, user_id, plan_json, status: pending|applied|canceled, expires_at, dedup_hash)`.
+  - Repos: `create_pending_action`, `mark_applied`, `mark_canceled`, `get_pending_for_user(scene)`.
+- Commands/UI
+  - Present preview plus CTA. Start simple with commands: `/confirm <action_id>`, `/cancel <action_id>`; buttons can come later.
+  - Orchestrator: when `requires_confirmation` present in any step → persist `PendingAction` and prompt user.
+- Executor
+  - `execute_chain(..., dry_run=False)` applies only after orchestrator confirmation; enforce idempotency by `(scene_id, user_id, dedup_hash)`.
+- Observability
+  - Metrics: `pending.created`, `pending.confirmed`, `pending.canceled`, `pending.expired`.
+- FF: `features.executor_confirm = true` (can disable confirmation for dev/testing only).
 
-**Exit criteria**
-* Merging two solo scenes into one combat scene keeps initiative & HP correct
-* Audit trail shows how/when merges occurred
+Tests
+- Unit: dedup hash stability; TTL expiry job/logic.
+- Integration: preview → confirm → apply; repeated confirm is a no-op; cancel prevents apply.
 
-**Rollback**
-* Disable branching: all actions happen in one shared channel.
+DoD
+- Safe, idempotent confirm/apply loop working for synthetic mutating tools (stub mutation).
+
+RB
+- Disable `features.executor` to drop back to non-mutating previews only.
+
+Status notes
+- Implemented app- and DB-level idempotency for `PendingAction` using a normalized `dedup_hash` and a composite unique index `(scene_id, user_id, dedup_hash)` (dialect-aware migration).
+- Added feature flag `features.executor_confirm`; orchestrator/commands persist pendings only when any step requires confirmation.
+- Repos handle `IntegrityError` by fetching the existing pending and incrementing duplicate metrics. TTL expiry helper and CLI included.
+- Tests, lint, and type checks pass consistently; coverage includes dedup, expiry, confirm/cancel flows.
 
 ---
 
