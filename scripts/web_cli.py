@@ -195,6 +195,8 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
         message = timestamp.encode() + body
         signed = SIGNING_KEY.sign(message)
         headers = { "X-Signature-Ed25519": signed.signature.hex(), "X-Signature-Timestamp": timestamp, "Content-Type": "application/json" }
+        # Signal to the server that this request should be verified with the dev public key (if configured)
+        headers["X-Adventorator-Use-Dev-Key"] = "1"
         # Per-request webhook base override so app routes follow-ups back to our sink
         # Priority: explicit --webhook-base > mode default
         if CLI_WEBHOOK_BASE:

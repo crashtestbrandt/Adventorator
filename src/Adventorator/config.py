@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     # --- Discord Credentials ---
     discord_app_id: str | None = None
     discord_public_key: str = ""
+    # Development-only alternate public key used for local CLI-signed requests
+    discord_dev_public_key: str | None = None
     discord_bot_token: SecretStr | None = None
     # For development/testing with web_cli.py only
     discord_private_key: SecretStr | None = None

@@ -53,6 +53,7 @@ async def shutdown_event():
 
 DISCORD_SIG_HEADER = "X-Signature-Ed25519"
 DISCORD_TS_HEADER = "X-Signature-Timestamp"
+DEV_KEY_HEADER = "X-Adventorator-Use-Dev-Key"
 
 
 @app.post("/interactions")
@@ -75,7 +76,12 @@ async def interactions(request: Request):
         log.error("Missing signature headers", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="missing signature headers")
 
-    if not verify_ed25519(settings.discord_public_key, ts, raw, sig):
+    # Allow a trusted dev header to opt-in to an alternate public key for local CLI
+    use_dev_key = request.headers.get(DEV_KEY_HEADER) == "1"
+    pubkey = settings.discord_public_key
+    if use_dev_key and settings.env == "dev" and settings.discord_dev_public_key:
+        pubkey = settings.discord_dev_public_key
+    if not verify_ed25519(pubkey, ts, raw, sig):
         log.error("Invalid signature", sig=sig, ts=ts)
         raise HTTPException(status_code=401, detail="bad signature")
 
