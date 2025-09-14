@@ -32,13 +32,17 @@ async def followup_message(
     ephemeral: bool = False,
     *,
     settings: Settings,
+    webhook_base_url: str | None = None,
 ):
     """
     Send a follow-up message via webhook.
     Uses discord_webhook_url_override from settings if present.
     """
     log = structlog.get_logger()
-    base_url = settings.discord_webhook_url_override or "https://discord.com/api/v10"
+    # Per-request override (highest precedence) > process settings override > Discord API
+    base_url = (
+        (webhook_base_url or "").strip() or settings.discord_webhook_url_override or "https://discord.com/api/v10"
+    )
     url = f"{base_url.rstrip('/')}/webhooks/{application_id}/{token}"
 
     flags = 64 if ephemeral else 0

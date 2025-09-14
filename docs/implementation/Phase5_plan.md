@@ -8,8 +8,6 @@
 
 #### **Milestone 5.1: Database Migration to Postgres**
 
-[Low Level Implementation Plan for 5.1](./Phase5_Milestone1_plan.md)
-
 * **Goal:** Migrate the application's persistence layer from SQLite to Postgres, enabling robust, concurrent data access suitable for production.
 * **Key Tasks:**
     1.  Update project dependencies to include `asyncpg`.

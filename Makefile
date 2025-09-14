@@ -56,7 +56,7 @@ implementation-plan:
 
 .PHONY: compose-up compose-down
 compose-up:
-	docker compose up -d --build db app
+	docker compose up -d --build db app cli-sink
 
 compose-down:
 	docker compose down

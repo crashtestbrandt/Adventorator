@@ -19,6 +19,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # Copy metadata and lockfiles first for better layer caching
 COPY pyproject.toml requirements.txt ./
 COPY src ./src
+COPY scripts ./scripts
 
 # Install Python deps (wheel cache inside image). requirements.txt includes "-e ."
 RUN ~/.local/bin/uv pip install -r requirements.txt

@@ -83,6 +83,37 @@ try:
 except Exception:
     pass
 
+# --- CLI flags (pre-parse) ---
+SINK_ONLY = False
+NO_SINK = False
+CLI_WEBHOOK_BASE = os.getenv("CLI_WEBHOOK_BASE")  # e.g., http://cli-sink:19000
+
+def _preparse_args(argv: list[str]) -> list[str]:
+    global SINK_ONLY, NO_SINK, CLI_WEBHOOK_BASE, SINK_PORT
+    remaining: list[str] = []
+    it = iter(argv)
+    for a in it:
+        if a == "--sink-only":
+            SINK_ONLY = True
+            continue
+        if a == "--no-sink":
+            NO_SINK = True
+            continue
+        if a == "--webhook-base":
+            try:
+                CLI_WEBHOOK_BASE = next(it)
+            except StopIteration:
+                pass
+            continue
+        if a == "--sink-port":
+            try:
+                SINK_PORT = int(next(it))
+            except Exception:
+                pass
+            continue
+        remaining.append(a)
+    return remaining
+
 # --- Webhook Sink Server ---
 # A FastAPI app that receives follow-up webhooks. We share an Event between
 # processes via a multiprocessing.Manager, but it's created at runtime to avoid
@@ -122,32 +153,35 @@ def run_sink_server(event):
 
 
 async def _send_interaction(command: Command, options: dict[str, Any]):
-    """Starts the sink, sends the interaction, and waits for the response."""
-    # Create a Manager and shared Event at runtime (under __main__) to work
-    # with the "spawn" start method on macOS.
-    manager = multiprocessing.Manager()
-    event = manager.Event()
-
-    # Use a separate process for the sink server for robust cleanup.
-    server_process = multiprocessing.Process(target=run_sink_server, args=(event,), daemon=True)
-    server_process.start()
-    await asyncio.sleep(0.7)  # Give server a moment to start and bind to the port.
-    if not server_process.is_alive():
-        click.echo(click.style(
-            f"Webhook sink failed to start on {SINK_HOST}:{SINK_PORT} (port busy?).\n"
-            "Tip: ensure nothing else is listening on that port, or restart Docker Desktop.",
-            fg="red",
-            bold=True,
-        ))
-        try:
-            server_process.join(timeout=0.2)
-        except Exception:
-            pass
-        try:
-            manager.shutdown()
-        except Exception:
-            pass
-        return
+    """Optionally starts a local sink, sends the interaction, and waits for the response."""
+    # Decide whether to run local sink
+    manager = None
+    server_process = None
+    event = None
+    if not NO_SINK:
+        manager = multiprocessing.Manager()
+        event = manager.Event()
+        # Use a separate process for the sink server for robust cleanup.
+        server_process = multiprocessing.Process(target=run_sink_server, args=(event,), daemon=True)
+        server_process.start()
+        await asyncio.sleep(0.7)  # Give server a moment to start and bind to the port.
+        if not server_process.is_alive():
+            click.echo(click.style(
+                f"Webhook sink failed to start on {SINK_HOST}:{SINK_PORT} (port busy?).\n"
+                "Tip: ensure nothing else is listening on that port, or restart Docker Desktop.",
+                fg="red",
+                bold=True,
+            ))
+            try:
+                server_process.join(timeout=0.2)
+            except Exception:
+                pass
+            try:
+                if manager:
+                    manager.shutdown()
+            except Exception:
+                pass
+            return
 
     try:
         if command.subcommand:
@@ -161,6 +195,17 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
         message = timestamp.encode() + body
         signed = SIGNING_KEY.sign(message)
         headers = { "X-Signature-Ed25519": signed.signature.hex(), "X-Signature-Timestamp": timestamp, "Content-Type": "application/json" }
+        # Per-request webhook base override so app routes follow-ups back to our sink
+        # Priority: explicit --webhook-base > mode default
+        if CLI_WEBHOOK_BASE:
+            headers["X-Adventorator-Webhook-Base"] = CLI_WEBHOOK_BASE
+        else:
+            if NO_SINK:
+                # Use the sidecar service inside the compose network
+                headers["X-Adventorator-Webhook-Base"] = "http://cli-sink:19000"
+            else:
+                # Local sink on host; containers can reach it via host.docker.internal
+                headers["X-Adventorator-Webhook-Base"] = f"http://host.docker.internal:{SINK_PORT}"
 
         cmd_name_str = f"{command.name}{'.' + command.subcommand if command.subcommand else ''}"
         click.echo(f"-> POST {APP_URL}/interactions (command: {cmd_name_str})")
@@ -173,21 +218,25 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
             return
         click.echo(f"<- HTTP {response.status_code} {response.json()}")
 
-        # Wait for the webhook to be received by the sink, with a timeout.
-        received = event.wait(timeout=RESPONSE_TIMEOUT_SECONDS)
-        if not received:
-            click.echo(click.style(f"\nWarning: Did not receive a follow-up message within {RESPONSE_TIMEOUT_SECONDS} seconds.", fg="yellow"))
+        # Wait for the webhook to be received by the local sink, with a timeout.
+        if event is not None:
+            received = event.wait(timeout=RESPONSE_TIMEOUT_SECONDS)
+            if not received:
+                click.echo(click.style(f"\nWarning: Did not receive a follow-up message within {RESPONSE_TIMEOUT_SECONDS} seconds.", fg="yellow"))
+        else:
+            click.echo("(Follow-up will be delivered to sink service; check docker logs for cli-sink)")
 
     except httpx.ConnectError:
         click.echo(click.style(f"Connection Error: Is the app running at {APP_URL}?", fg="red", bold=True))
     finally:
         # Crucially, ensure the server process is terminated.
-        if server_process.is_alive():
+        if server_process is not None and server_process.is_alive():
             server_process.terminate()
             server_process.join()
         # Shut down the manager to clean up its server process.
         try:
-            manager.shutdown()
+            if manager is not None:
+                manager.shutdown()
         except Exception:
             pass
 
@@ -251,8 +300,22 @@ def build_app() -> click.Group:
     return app
 
 def main() -> None:
+    # Pre-parse custom flags then hand the rest to click
+    argv = sys.argv[1:]
+    argv = _preparse_args(argv)
+
+    # Sink-only mode: just run the sink server and exit
+    if SINK_ONLY:
+        # Use a local event that never gets waited on
+        manager = multiprocessing.Manager()
+        event = manager.Event()
+        click.echo(f"Starting webhook sink on {SINK_HOST}:{SINK_PORT} ...")
+        run_sink_server(event)
+        return
+
     app = build_app()
-    app()
+    # Invoke click with the remaining args
+    app(standalone_mode=True, prog_name="web-cli", args=argv)
 
 if __name__ == "__main__":
     main()

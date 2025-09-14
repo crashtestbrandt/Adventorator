@@ -27,18 +27,32 @@ services:
     environment:
       # Tell the app to connect to the 'db' service hostname instead of 'localhost'.
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      # Tell the app to send webhooks back to the host machine, where web_cli.py's sink will be listening.
-      # The port must match the SINK_PORT in web_cli.py (default 19000).
-      - DISCORD_WEBHOOK_URL_OVERRIDE=http://host.docker.internal:19000
-      - LLM_API_URL=http://host.docker.internal:11434
+      - LLM_API_URL=${LLM_API_URL:-http://ollama:11434}
     depends_on:
       db:
         condition: service_healthy
+      cli-sink:
+        condition: service_started
     ports:
       - target: 18000
         published: ${APP_PORT:-18000}
         protocol: tcp
         mode: host
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18000/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  cli-sink:
+    build: .
+    command: ["python", "scripts/web_cli.py", "--sink-only", "--sink-port", "19000"]
+    environment:
+      - CLI_SINK_PORT=19000
+    expose:
+      - "19000"
+    restart: unless-stopped
 
   # ollama:
   #   image: ollama/ollama:latest

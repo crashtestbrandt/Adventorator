@@ -4,6 +4,7 @@ import asyncio
 import time
 import uuid
 from typing import Any
+import contextvars
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request
@@ -112,6 +113,14 @@ async def request_id_middleware(request: Request, call_next):
     """Assign a request_id, bind it to structlog context, and measure duration."""
     from structlog.contextvars import bind_contextvars, clear_contextvars
 
+    # Stash request in a ContextVar for downstream helpers that need headers
+    global _current_request_var
+    try:
+        _current_request_var
+    except NameError:
+        _current_request_var = contextvars.ContextVar("current_request")
+
+    req_token = _current_request_var.set(request)
     request_id = str(uuid.uuid4())
     start = time.perf_counter()
     bind_contextvars(request_id=request_id)
@@ -130,6 +139,11 @@ async def request_id_middleware(request: Request, call_next):
                 http_status_code=status_code,
                 duration_ms=duration_ms,
             )
+        except Exception:
+            pass
+        # Reset the request ContextVar so it doesn't leak across requests
+        try:
+            _current_request_var.reset(req_token)
         except Exception:
             pass
         clear_contextvars()
@@ -154,10 +168,12 @@ async def _dispatch_command(inter: Interaction):
                 options[n] = o.get("value")
 
         class DiscordResponder(Responder):  # type: ignore[misc]
-            def __init__(self, application_id: str, token: str, settings: Settings):
+            def __init__(self, application_id: str, token: str, settings: Settings, webhook_base_url: str | None = None):
                 self.application_id = application_id
                 self.token = token
                 self.settings = settings
+                # Allows trusted callers (e.g., internal CLI) to request a per-interaction sink
+                self.webhook_base_url = webhook_base_url
 
             async def send(self, content: str, *, ephemeral: bool = False) -> None:
                 try:
@@ -167,6 +183,7 @@ async def _dispatch_command(inter: Interaction):
                         content,
                         ephemeral=ephemeral,
                         settings=self.settings,
+                        webhook_base_url=self.webhook_base_url,
                     )
                 except TypeError:
                     # Test spies may not accept the keyword-only 'settings' parameter
@@ -181,6 +198,8 @@ async def _dispatch_command(inter: Interaction):
                     )
 
         guild_id, channel_id, user_id, username = _infer_ids_from_interaction(inter)
+        # Allow a trusted caller to provide a one-off webhook base via header
+        webhook_base_url = request_header_override()
         inv = Invocation(
             name=name,
             subcommand=sub,
@@ -188,7 +207,7 @@ async def _dispatch_command(inter: Interaction):
             user_id=str(user_id),
             channel_id=str(channel_id) if channel_id else None,
             guild_id=str(guild_id) if guild_id else None,
-            responder=DiscordResponder(inter.application_id, inter.token, settings),
+            responder=DiscordResponder(inter.application_id, inter.token, settings, webhook_base_url),
             settings=settings,
             llm_client=llm_client,
         )
@@ -240,6 +259,29 @@ async def _dispatch_command(inter: Interaction):
                 duration_ms=int((time.perf_counter() - start) * 1000),
             )
     return
+
+
+def request_header_override() -> str | None:
+    """Placeholder for propagating a per-request webhook base URL.
+
+    When the web CLI calls /interactions, it can include a custom header
+    (e.g., X-Adventorator-Webhook-Base) that we trust in dev to route the
+    follow-up to the local sink service. In production, callers won't set it,
+    and the app falls back to Discord.
+    """
+    try:
+        import contextvars
+        # A small shim: stash the current request in a contextvar in middleware
+        current_request_var: contextvars.ContextVar | None = globals().get("_current_request_var")  # type: ignore[assignment]
+        if not current_request_var:
+            return None
+        req = current_request_var.get(None)
+        if not req:
+            return None
+        val = req.headers.get("X-Adventorator-Webhook-Base")
+        return val
+    except Exception:
+        return None
 
 
 def _subcommand(inter: Interaction) -> str | None:
