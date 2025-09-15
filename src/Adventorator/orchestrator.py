@@ -54,16 +54,50 @@ def _format_mechanics_block(result, ability: str, dc: int) -> str:
 def _validate_proposal(out: LLMOutput) -> tuple[bool, str | None]:
     p = out.proposal
     # action gate
-    if p.action != "ability_check":
-        return False, "Unsupported action"
-    # ability whitelist
-    if p.ability not in ABILS:
-        return False, "Unknown ability"
-    # DC guard (narrator can propose 1-40; orchestrator narrows to sane 5-30)
-    if not (5 <= p.suggested_dc <= 30):
-        return False, "DC out of acceptable range"
-    # reason is optional
-    return True, None
+    if p.action == "ability_check":
+        # ability whitelist
+        if p.ability not in ABILS:
+            return False, "Unknown ability"
+        # DC guard narrowed to 5-30
+        if p.suggested_dc is None or not (5 <= p.suggested_dc <= 30):
+            return False, "DC out of acceptable range"
+        return True, None
+    if p.action == "attack":
+        # Minimal defensive bounds; orchestrator still relies on executor schema
+        if not p.attacker or not p.target:
+            return False, "attacker/target required"
+        if p.attack_bonus is None or p.target_ac is None:
+            return False, "attack_bonus/target_ac required"
+        if p.attack_bonus < -5 or p.attack_bonus > 15:
+            return False, "attack_bonus out of range"
+        if p.target_ac < 5 or p.target_ac > 30:
+            return False, "target_ac out of range"
+        dmg = p.damage or {}
+        if not isinstance(dmg, dict) or not dmg.get("dice"):
+            return False, "damage spec required"
+        # Optional mod clamp if present
+        try:
+            if "mod" in dmg and dmg["mod"] is not None:
+                mv = int(dmg["mod"])
+                if mv < -5 or mv > 10:
+                    return False, "damage.mod out of range"
+        except Exception:
+            return False, "damage.mod invalid"
+        return True, None
+    if p.action in ("apply_condition", "remove_condition", "clear_condition"):
+        # Simple guardrails for conditions
+        if not p.target or not p.condition:
+            return False, "target/condition required"
+        # Optional small duration only for apply_condition
+        if p.action == "apply_condition" and p.duration is not None:
+            try:
+                dur = int(p.duration)
+                if dur < 0 or dur > 100:
+                    return False, "duration out of range"
+            except Exception:
+                return False, "duration invalid"
+        return True, None
+    return False, "Unsupported action"
 
 
 _BANNED_VERBS = (
@@ -285,6 +319,7 @@ async def run_orchestrator(
         player_msg,
         max_tokens=prompt_token_cap,
         character_summary=char_summary,
+        enable_attack=bool(getattr(settings, "features_combat", False)),
     )
     if not llm_client:
         return OrchestratorResult(
@@ -302,8 +337,6 @@ async def run_orchestrator(
         )
     inc_counter("llm.response.received")
     log.info("llm.response.received", scene_id=scene_id)
-
-    # 3) validate proposal defensively
     ok, why = _validate_proposal(out)
     if not ok:
         inc_counter("llm.defense.rejected")
@@ -321,7 +354,10 @@ async def run_orchestrator(
         )
 
     # 3b) additional defenses: banned verbs and unknown actors
-    if _contains_banned_verbs(out.proposal.reason) or _contains_banned_verbs(out.narration):
+    # For structured attack actions, allow the operation; still reject unsafe narration content
+    if _contains_banned_verbs(out.proposal.reason) or (
+        out.proposal.action != "attack" and _contains_banned_verbs(out.narration)
+    ):
         inc_counter("llm.defense.rejected")
         log.warning(
             "llm.defense.rejected",
@@ -368,11 +404,18 @@ async def run_orchestrator(
             }
         sheet_info_provider = _default_sheet_info
 
-    sheet_info = sheet_info_provider(p.ability)
-    score = int(sheet_info.get("score", 10))
-    proficient = bool(sheet_info.get("proficient", False))
-    expertise = bool(sheet_info.get("expertise", False))
-    prof_bonus = int(sheet_info.get("prof_bonus", 2))
+    # Only required for ability checks; use neutral values for other actions
+    if p.action == "ability_check":
+        sheet_info = sheet_info_provider(p.ability or "DEX")
+        score = int(sheet_info.get("score", 10))
+        proficient = bool(sheet_info.get("proficient", False))
+        expertise = bool(sheet_info.get("expertise", False))
+        prof_bonus = int(sheet_info.get("prof_bonus", 2))
+    else:
+        score = 10
+        proficient = False
+        expertise = False
+        prof_bonus = 2
 
     # 5) If Executor preview is enabled, use it for mechanics; otherwise, compute locally
     use_executor = bool(getattr(settings, "features_executor", False)) if (
@@ -380,13 +423,14 @@ async def run_orchestrator(
     ) else False
     mechanics: str
     chain_json: dict | None = None
+    preview_failed = False
     if use_executor and (_executor_mod is not None) and hasattr(_executor_mod, "Executor"):
         try:
             ex = _executor_mod.Executor()
-            chain = _executor_mod.ToolCallChain(
-                request_id=f"orc-{scene_id}-{int(now*1000)}",
-                scene_id=scene_id,
-                steps=[
+            # Build chain per action type
+            steps: list[Any] = []
+            if p.action == "ability_check":
+                steps.append(
                     _executor_mod.ToolStep(
                         tool="check",
                         args={
@@ -400,7 +444,41 @@ async def run_orchestrator(
                         },
                         requires_confirmation=True,
                     )
-                ],
+                )
+            elif p.action == "attack":
+                # Combat FF must be on; otherwise short-circuit later to stub
+                steps.append(
+                    _executor_mod.ToolStep(
+                        tool="attack",
+                        args={
+                            "attacker": p.attacker,
+                            "target": p.target,
+                            "attack_bonus": p.attack_bonus,
+                            "target_ac": p.target_ac,
+                            "damage": p.damage,
+                            "advantage": bool(p.advantage or False),
+                            "disadvantage": bool(p.disadvantage or False),
+                            "seed": rng_seed,
+                        },
+                        requires_confirmation=True,
+                    )
+                )
+            elif p.action in ("apply_condition", "remove_condition", "clear_condition"):
+                tool_name = p.action
+                args: dict[str, Any] = {"target": p.target, "condition": p.condition}
+                if tool_name == "apply_condition" and p.duration is not None:
+                    args["duration"] = p.duration
+                steps.append(
+                    _executor_mod.ToolStep(
+                        tool=tool_name,
+                        args=args,
+                        requires_confirmation=True,
+                    )
+                )
+            chain = _executor_mod.ToolCallChain(
+                request_id=f"orc-{scene_id}-{int(now*1000)}",
+                scene_id=scene_id,
+                steps=steps,
                 actor_id=actor_id,
             )
             _exec_start = time.monotonic()
@@ -430,21 +508,35 @@ async def run_orchestrator(
         except Exception:
             log.warning("executor.preview.error", scene_id=scene_id, exc_info=True)
             use_executor = False
+            preview_failed = True
     if not use_executor:
-        check_inp = CheckInput(
-            ability=p.ability,
-            score=score,
-            proficient=proficient,
-            expertise=expertise,
-            proficiency_bonus=prof_bonus,
-            dc=p.suggested_dc,
-            advantage=False,
-            disadvantage=False,
-        )
-        rng = DiceRNG(seed=rng_seed)
-        d20_rolls = [rng.roll("1d20").rolls[0]]
-        result = compute_check(check_inp, d20_rolls=d20_rolls)
-        mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
+        if p.action == "ability_check":
+            check_inp = CheckInput(
+                ability=p.ability,
+                score=score,
+                proficient=proficient,
+                expertise=expertise,
+                proficiency_bonus=prof_bonus,
+                dc=p.suggested_dc,
+                advantage=False,
+                disadvantage=False,
+            )
+            rng = DiceRNG(seed=rng_seed)
+            d20_rolls = [rng.roll("1d20").rolls[0]]
+            result = compute_check(check_inp, d20_rolls=d20_rolls)
+            mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
+        elif p.action == "attack":
+            mechanics = (
+                "Combat preview error; see logs." if preview_failed else "Combat tools unavailable (executor disabled)."
+            )
+        elif p.action in ("apply_condition", "remove_condition", "clear_condition"):
+            mechanics = (
+                "Condition preview error; see logs."
+                if preview_failed
+                else "Condition tools unavailable (executor disabled)."
+            )
+        else:
+            mechanics = "Proposal accepted but preview unavailable."
     final = OrchestratorResult(mechanics=mechanics, narration=out.narration, chain_json=chain_json)
     inc_counter("orchestrator.format.sent")
     try:

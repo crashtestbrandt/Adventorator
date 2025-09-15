@@ -1,8 +1,8 @@
-import os
 import asyncio
+import os
 
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from Adventorator.metrics import get_counter, reset_counters
 
@@ -41,5 +41,6 @@ async def test_pg_advisory_lock_path(monkeypatch):
 
     # Assert PG mode counter incremented
     assert get_counter("locks.mode.pg") >= 1
-    # Should have at least one success and histogram count present (indirectly via counters flattening)
+    # Should have at least one success and histogram count present
+    # (indirectly via counters flattening)
     assert get_counter("locks.acquire.success") >= 1

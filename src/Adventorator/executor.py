@@ -119,6 +119,116 @@ class Executor:
             )
         )
 
+        # attack: to-hit vs AC and damage on hit (crit on natural 20)
+        def attack_handler(args: dict[str, Any], dry_run: bool) -> dict[str, Any]:
+            from Adventorator.rules.engine import Dnd5eRuleset
+            # Required fields
+            attacker = str(args.get("attacker", ""))
+            target = str(args.get("target", ""))
+            attack_bonus = int(args.get("attack_bonus", 0))
+            target_ac = int(args.get("target_ac", 10))
+            dmg = args.get("damage") or {}
+            dmg_dice = str(dmg.get("dice", "1d4"))
+            # Gracefully handle null/None for mod by defaulting to 0
+            raw_mod = dmg.get("mod", 0)
+            dmg_mod = int(raw_mod if raw_mod is not None else 0)
+            dmg_type = str(dmg.get("type", "")).strip() or None
+            advantage = bool(args.get("advantage", False))
+            disadvantage = bool(args.get("disadvantage", False))
+            # XOR normalize: if both set, treat as neutral
+            if advantage and disadvantage:
+                advantage = False
+                disadvantage = False
+            seed = args.get("seed")
+
+            # Bounds (defensive clamps)
+            if attack_bonus < -5:
+                attack_bonus = -5
+            if attack_bonus > 15:
+                attack_bonus = 15
+            if target_ac < 5:
+                target_ac = 5
+            if target_ac > 30:
+                target_ac = 30
+            if dmg_mod < -5:
+                dmg_mod = -5
+            if dmg_mod > 10:
+                dmg_mod = 10
+
+            rules = Dnd5eRuleset(seed=seed)
+            roll = rules.make_attack_roll(
+                attack_bonus,
+                advantage=advantage,
+                disadvantage=disadvantage,
+            )
+            total = roll.total
+            d20 = int(getattr(roll, "d20_roll", total - attack_bonus))
+            is_crit = bool(getattr(roll, "is_critical_hit", False))
+            is_fumble = bool(getattr(roll, "is_critical_miss", False))
+            hit = (total >= target_ac) and not is_fumble
+
+            # Mechanics text
+            lines: list[str] = []
+            lines.append(f"Attack +{attack_bonus} vs AC {target_ac}")
+            outcome = "CRIT" if is_crit else ("HIT" if hit else "MISS")
+            lines.append(f"d20: {d20} | total: {total} -> {outcome}")
+
+            events: list[dict[str, Any]] = []
+            if hit:
+                # Roll damage; on crit, double the dice (mod not doubled)
+                try:
+                    dmg_roll = rules.roll_damage(dmg_dice, dmg_mod, is_critical=is_crit)
+                    dmg_total = int(getattr(dmg_roll, "total", 0))
+                except Exception:
+                    dmg_total = 0
+                lines.append(f"damage: {dmg_dice}{f'+{dmg_mod}' if dmg_mod else ''} = {dmg_total}")
+                payload: dict[str, Any] = {"target": target, "amount": dmg_total}
+                if attacker:
+                    payload["source"] = attacker
+                if is_crit:
+                    payload["crit"] = True
+                if dmg_type:
+                    payload["damage_type"] = dmg_type
+                events.append({"type": "apply_damage", "payload": payload})
+            else:
+                events.append(
+                    {
+                        "type": "attack.missed",
+                        "payload": {"attacker": attacker, "target": target},
+                    }
+                )
+
+            return {"mechanics": "\n".join(lines), "events": events}
+
+        self.registry.register(
+            ToolSpec(
+                name="attack",
+                schema={
+                    "type": "object",
+                    "properties": {
+                        "attacker": {"type": "string"},
+                        "target": {"type": "string"},
+                        "attack_bonus": {"type": "integer", "minimum": -5, "maximum": 15},
+                        "target_ac": {"type": "integer", "minimum": 5, "maximum": 30},
+                        "damage": {
+                            "type": "object",
+                            "properties": {
+                                "dice": {"type": "string"},
+                                "mod": {"type": "integer"},
+                                "type": {"type": "string"},
+                            },
+                            "required": ["dice"],
+                        },
+                        "advantage": {"type": "boolean"},
+                        "disadvantage": {"type": "boolean"},
+                        "seed": {"type": "integer"},
+                    },
+                    "required": ["attacker", "target", "attack_bonus", "target_ac", "damage"],
+                },
+                handler=attack_handler,
+            )
+        )
+
         # apply_damage: stub mutating tool that produces a domain event
         def apply_damage_handler(args: dict[str, Any], dry_run: bool) -> dict[str, Any]:
             target = str(args.get("target", ""))
@@ -437,6 +547,9 @@ class Executor:
                     for step, item in zip(chain.steps, res.items, strict=True):
                         name = step.tool
                         evs: list[dict[str, Any]] = []
+                        if name == "attack":
+                            # No direct DB mutations here; rely on predicted events
+                            inc_counter("executor.apply.tool.attack")
                         if name == "start_encounter":
                             mech, evs = await encounter_service.start_encounter(
                                 s, scene_id=int(step.args.get("scene_id", 0))

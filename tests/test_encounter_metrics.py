@@ -1,7 +1,7 @@
 import pytest
 
-from Adventorator.metrics import get_counter, get_counters, reset_counters
 from Adventorator import repos
+from Adventorator.metrics import get_counter, get_counters, reset_counters
 from Adventorator.models import EncounterStatus
 
 
