@@ -7,12 +7,12 @@ from Adventorator.metrics import inc_counter
 
 
 class HelpOpts(Option):
-	# Optional focus area; capped to keep payloads tiny and avoid abuse.
-	topic: str | None = Field(
-		default=None,
-		description="Optional topic to focus help on (e.g., roll, check, sheet)",
-		max_length=24,
-	)
+    # Optional focus area; capped to keep payloads tiny and avoid abuse.
+    topic: str | None = Field(
+        default=None,
+        description="Optional topic to focus help on (e.g., roll, check, sheet)",
+        max_length=24,
+    )
 
 
 def _has_command(name: str, sub: str | None = None) -> bool:
