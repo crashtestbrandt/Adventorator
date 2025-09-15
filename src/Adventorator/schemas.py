@@ -40,8 +40,14 @@ class CharacterSheet(BaseModel):
 # -----------------------------
 
 LLMAction = Literal[
-    # Keep tight for milestone 0; expand as new actions are supported
+    # Phase 3: ability checks
     "ability_check",
+    # Phase 11: minimal combat attack
+    "attack",
+    # Phase 11.3: simple conditions
+    "apply_condition",
+    "remove_condition",
+    "clear_condition",
 ]
 
 
@@ -52,9 +58,21 @@ class LLMProposal(BaseModel):
     """
 
     action: LLMAction
-    # Allow any string here; the orchestrator will defensively validate against ABILS.
-    ability: str
-    suggested_dc: int = Field(ge=1, le=40)
+    # ability_check fields
+    ability: str | None = None
+    suggested_dc: int | None = Field(default=None, ge=1, le=40)
+    # attack fields
+    attacker: str | None = None
+    target: str | None = None
+    attack_bonus: int | None = Field(default=None, ge=-5, le=15)
+    target_ac: int | None = Field(default=None, ge=5, le=30)
+    damage: dict | None = None  # { dice: str, mod?: int, type?: str }
+    advantage: bool | None = None
+    disadvantage: bool | None = None
+    # condition fields
+    condition: str | None = None
+    duration: int | None = None
+
     reason: str
 
     model_config = dict(extra="forbid")

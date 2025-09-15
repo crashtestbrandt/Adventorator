@@ -2,7 +2,7 @@
 
 The best adventures are the ones no one has to plan.
 
-A Discord-native Dungeon Master bot that blends deterministic 5e mechanics with AI-powered narration. Play end-to-end inside a Discord channel with party character sheets, campaign data, exploration or encounter modes, and safe preview→confirm flows for state changes.
+A Discord-native Dungeon Master bot that blends deterministic 5e mechanics with dynamic narration. Play end-to-end inside a Discord channel with party character sheets, campaign data, exploration or encounter modes, and safe preview→confirm flows for state changes.
 
 - [MVP Definition](#mvp-definition)
 - [Overview](#overview)

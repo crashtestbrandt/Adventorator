@@ -496,7 +496,11 @@ async def expire_stale_pending_actions(s: AsyncSession) -> int:
     count = 0
     now = datetime.now(timezone.utc)
     for pa in q.scalars().all():
-        if pa.expires_at is not None and pa.expires_at <= now:
+        # Be tolerant of naive datetimes (e.g., from legacy rows); interpret as UTC
+        exp = pa.expires_at
+        if exp is not None and getattr(exp, "tzinfo", None) is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp is not None and exp <= now:
             pa.status = "expired"
             count += 1
     if count:

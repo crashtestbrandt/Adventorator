@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 from collections.abc import AsyncIterator
 
 import structlog
@@ -61,6 +62,10 @@ def get_engine() -> AsyncEngine:
                 ":memory:" in DATABASE_URL
                 or "file::memory:?cache=shared" in DATABASE_URL
             ):
+                kwargs.update(poolclass=StaticPool)
+            # Optionally force a single shared connection even for file-backed SQLite
+            # to serialize writers during tests and avoid "database is locked".
+            if os.environ.get("ADVENTORATOR_SQLITE_STATIC_POOL") == "1":
                 kwargs.update(poolclass=StaticPool)
         elif DATABASE_URL.startswith("postgresql+asyncpg://"):
             # Production-oriented Postgres pool settings (per-instance)

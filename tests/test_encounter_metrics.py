@@ -1,7 +1,7 @@
 import pytest
 
-from Adventorator.metrics import get_counter, get_counters, reset_counters
 from Adventorator import repos
+from Adventorator.metrics import get_counter, get_counters, reset_counters
 from Adventorator.models import EncounterStatus
 
 
@@ -9,7 +9,10 @@ from Adventorator.models import EncounterStatus
 async def test_next_turn_metrics_ok(db):
     reset_counters()
     # Setup: encounter with two combatants, initiatives set, active
-    enc = await repos.create_encounter(db, scene_id=42)
+    # Satisfy FKs by creating campaign and scene first
+    camp = await repos.get_or_create_campaign(db, guild_id=901, name="M1")
+    scene = await repos.ensure_scene(db, campaign_id=camp.id, channel_id=902)
+    enc = await repos.create_encounter(db, scene_id=scene.id)
     await repos.add_combatant(db, encounter_id=enc.id, name="A")
     await repos.add_combatant(db, encounter_id=enc.id, name="B")
     cbs = await repos.list_combatants(db, encounter_id=enc.id)
@@ -36,7 +39,9 @@ async def test_next_turn_metrics_ok(db):
 @pytest.mark.asyncio
 async def test_add_and_set_initiative_metrics(db):
     reset_counters()
-    enc = await repos.create_encounter(db, scene_id=7)
+    camp = await repos.get_or_create_campaign(db, guild_id=903, name="M2")
+    scene = await repos.ensure_scene(db, campaign_id=camp.id, channel_id=904)
+    enc = await repos.create_encounter(db, scene_id=scene.id)
     from Adventorator.services import encounter_service
     mech, evs = await encounter_service.add_combatant(db, encounter_id=enc.id, name="Rogue")
     assert get_counter("encounter.add.ok") == 1

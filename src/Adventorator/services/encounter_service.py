@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
 import time
+from typing import Any
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Adventorator import repos
+from Adventorator.metrics import inc_counter, observe_histogram
 from Adventorator.models import EncounterStatus
 from Adventorator.services.lock_service import acquire_encounter_locks
-from Adventorator.metrics import inc_counter, observe_histogram
 
 log = structlog.get_logger()
 

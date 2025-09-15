@@ -42,10 +42,20 @@ async def acquire_encounter_locks(
     mode = "inproc_only"
     await local_lock.acquire()
     try:
-        # Try Postgres advisory lock
-        if settings.database_url.startswith("postgresql") or settings.database_url.startswith(
-            "postgresql+asyncpg"
-        ):
+        # Detect DB dialect from the active session to decide on advisory locks
+        use_pg_lock = False
+        try:
+            bind = getattr(s, "bind", None)
+            if bind is not None and getattr(bind, "dialect", None) is not None:
+                use_pg_lock = (bind.dialect.name or "").lower().startswith("postgres")
+            else:
+                # Fallback to URL sniffing if bind is unavailable
+                use_pg_lock = settings.database_url.lower().startswith("postgresql")
+        except Exception:
+            use_pg_lock = settings.database_url.lower().startswith("postgresql")
+
+        # Try Postgres advisory lock when applicable
+        if use_pg_lock:
             mode = "pg+inproc"
             try:
                 # Use a 32-bit key space via two-int variant: (class=1001, key=encounter_id)

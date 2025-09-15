@@ -21,6 +21,7 @@ SYSTEM_PROMPT_OOC = (
 )
 
 # Narrator system prompt: strictly emit a single JSON object only.
+# Base narrator prompt focused on ability checks (Phase 3)
 SYSTEM_PROMPT_NARRATOR = (
     "You are the Narrator. Using the provided facts and the player's latest input, "
     "decide if a single d20 ability check is warranted. Respond with ONLY a single JSON object, "
@@ -36,6 +37,41 @@ SYSTEM_PROMPT_NARRATOR = (
     "}\n"
     "Rules: If no check is needed, pick the most relevant ability and a reasonable DC anyway. "
     "Always include a concise 'narration' string. Do not include commentary outside the JSON."
+)
+
+# Combat-enabled narrator prompt (Phase 11): allow proposing an attack
+SYSTEM_PROMPT_NARRATOR_WITH_ATTACK = (
+    "You are the Narrator. Using the provided facts and the player's latest input, "
+    "decide between a single d20 ability check, a minimal combat attack, or a simple "
+    "condition application/removal. Respond with ONLY a single JSON object, "
+    "no extra text or markdown. The JSON schema (both keys required) is:\n"
+    "{\n"
+    '  "proposal": {\n'
+    '    "action": "ability_check|attack|apply_condition|remove_condition|clear_condition",\n'
+    '    "ability": "STR|DEX|CON|INT|WIS|CHA" | null,\n'
+    '    "suggested_dc": <int 1-40> | null,\n'
+    '    "attacker": <string> | null,\n'
+    '    "target": <string> | null,\n'
+    '    "attack_bonus": <int -5..15> | null,\n'
+    '    "target_ac": <int 5..30> | null,\n'
+    '    "damage": { '
+    '"dice": <string like "1d8" or "2d6">, '
+    '"mod": <int -5..10> | null, '
+    '"type": <string> | null '
+    '} | null,\n'
+    '    "advantage": <bool> | null,\n'
+    '    "disadvantage": <bool> | null,\n'
+    '    "condition": <string> | null,\n'
+    '    "duration": <int> | null,\n'
+    '    "reason": "short justification"\n'
+    "  },\n"
+    '  "narration": "brief evocative narration"\n'
+    "}\n"
+    "Rules: Keep mechanics minimal and bounded (attack bonus -5..15, AC 5..30, "
+    "damage mod -5..10). "
+    "For conditions, provide target and condition; include a small integer duration "
+    "only if it clearly applies. "
+    "Never include extra commentary or markdown; output MUST be valid JSON."
 )
 
 
@@ -101,6 +137,8 @@ def build_narrator_messages(
     player_msg: str | None,
     max_tokens: int | None = None,
     character_summary: str | None = None,
+    *,
+    enable_attack: bool = False,
 ) -> list[dict[str, Any]]:
     """Build messages for the narrator in JSON-only mode.
 
@@ -108,7 +146,8 @@ def build_narrator_messages(
     - Ensures the player's current input is included
     - Applies a rough token cap if provided (not counting system prompt)
     """
-    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT_NARRATOR}]
+    system_prompt = SYSTEM_PROMPT_NARRATOR_WITH_ATTACK if enable_attack else SYSTEM_PROMPT_NARRATOR
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
     budget = max_tokens or 10_000
     used = 0
