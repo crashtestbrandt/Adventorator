@@ -94,6 +94,7 @@ from pydantic.fields import FieldInfo
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import all_commands
 from Adventorator.config import load_settings
+import asyncio
 
 # Discord API constants
 CMD_CHAT_INPUT = 1
@@ -330,6 +331,7 @@ async def main():
                     registered_commands = await _fetch_commands(client, url, headers)
                     commands_to_process = await _validate_and_get_commands(local_commands, registered_commands, action)
                     await _process_commands(client, url, headers, commands_to_process, action)
+                    await asyncio.sleep(2)  # Add delay to alleviate rate-limiting
                     registered_commands = await _fetch_commands(client, url, headers)
                     print_status(local_commands, registered_commands, scope)
 
