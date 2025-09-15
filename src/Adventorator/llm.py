@@ -55,10 +55,22 @@ class LLMClient:
             self._client = httpx.AsyncClient(timeout=60.0, headers=headers)
         
         elif self.provider == "openai":
-            # Ensure the API URL is valid for OpenAI
-            self.api_url = settings.llm_api_url or "https://api.openai.com/v1"
-            if not self.api_url.endswith("/v1"):
-                self.api_url = f"{self.api_url.rstrip('/')}/v1"
+            # Ensure the API URL is valid for OpenAI-compatible providers.
+            # Accept a variety of inputs and normalize them:
+            #  - host root:            https://api.provider.com  -> +/v1
+            #  - explicit version:     https://api.provider.com/v1 (keep)
+            #  - provider prefix:      https://api.provider.com/openai/v1 (keep)
+            #  - accidental ollama:    http://host:11434/api or /api/chat -> replace with /v1
+            raw = (settings.llm_api_url or "https://api.openai.com/v1").rstrip("/")
+            # Fix common misconfig where Ollama path is supplied while provider=openai
+            if raw.endswith("/api/chat"):
+                raw = raw[: -len("/api/chat")] + "/v1"
+            elif raw.endswith("/api"):
+                raw = raw[: -len("/api")] + "/v1"
+            # If already has a version suffix, keep; otherwise append /v1
+            if not (raw.endswith("/v1") or raw.endswith("/openai/v1")):
+                raw = f"{raw}/v1"
+            self.api_url = raw
 
             api_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else None
 
