@@ -30,14 +30,15 @@ if os.environ.get("ADVENTORATOR_SQLITE_STATIC_POOL", "1") != "0":
 # Ensure the DB module uses our chosen DATABASE_URL (TOML has higher precedence than env)
 # so we must override the module-level constant before any engine is created.
 import Adventorator.db as _db
+
 _db.DATABASE_URL = os.environ["DATABASE_URL"]
 _db._engine = None
 _db._sessionmaker = None
 _db._schema_initialized = False
 
 # Import models so all ORM tables are registered on Base.metadata before create_all
-from Adventorator import models as _models  # noqa: F401
-from Adventorator.db import Base, get_engine, get_sessionmaker
+from Adventorator import models as _models  # noqa: F401,E402
+from Adventorator.db import Base, get_engine, get_sessionmaker  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)

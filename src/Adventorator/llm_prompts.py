@@ -42,7 +42,8 @@ SYSTEM_PROMPT_NARRATOR = (
 # Combat-enabled narrator prompt (Phase 11): allow proposing an attack
 SYSTEM_PROMPT_NARRATOR_WITH_ATTACK = (
     "You are the Narrator. Using the provided facts and the player's latest input, "
-    "decide between a single d20 ability check, a minimal combat attack, or a simple condition application/removal. Respond with ONLY a single JSON object, "
+    "decide between a single d20 ability check, a minimal combat attack, or a simple "
+    "condition application/removal. Respond with ONLY a single JSON object, "
     "no extra text or markdown. The JSON schema (both keys required) is:\n"
     "{\n"
     '  "proposal": {\n'
@@ -53,7 +54,11 @@ SYSTEM_PROMPT_NARRATOR_WITH_ATTACK = (
     '    "target": <string> | null,\n'
     '    "attack_bonus": <int -5..15> | null,\n'
     '    "target_ac": <int 5..30> | null,\n'
-    '    "damage": { "dice": <string like "1d8" or "2d6">, "mod": <int -5..10> | null, "type": <string> | null } | null,\n'
+    '    "damage": { '
+    '"dice": <string like "1d8" or "2d6">, '
+    '"mod": <int -5..10> | null, '
+    '"type": <string> | null '
+    '} | null,\n'
     '    "advantage": <bool> | null,\n'
     '    "disadvantage": <bool> | null,\n'
     '    "condition": <string> | null,\n'
@@ -62,8 +67,10 @@ SYSTEM_PROMPT_NARRATOR_WITH_ATTACK = (
     "  },\n"
     '  "narration": "brief evocative narration"\n'
     "}\n"
-    "Rules: Keep mechanics minimal and bounded (attack bonus -5..15, AC 5..30, damage mod -5..10). "
-    "For conditions, provide target and condition; include a small integer duration only if it clearly applies. "
+    "Rules: Keep mechanics minimal and bounded (attack bonus -5..15, AC 5..30, "
+    "damage mod -5..10). "
+    "For conditions, provide target and condition; include a small integer duration "
+    "only if it clearly applies. "
     "Never include extra commentary or markdown; output MUST be valid JSON."
 )
 

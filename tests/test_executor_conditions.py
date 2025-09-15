@@ -33,4 +33,6 @@ async def test_executor_preview_apply_condition_and_clear():
     )
     prev2 = await ex.execute_chain(chain_clear, dry_run=True)
     assert prev2.items and "Clear condition 'Prone'" in prev2.items[0].mechanics
-    assert prev2.items[0].predicted_events and prev2.items[0].predicted_events[0]["type"] == "condition.cleared"
+    assert prev2.items[0].predicted_events and (
+        prev2.items[0].predicted_events[0]["type"] == "condition.cleared"
+    )

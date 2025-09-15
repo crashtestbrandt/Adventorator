@@ -2,6 +2,7 @@ import types
 
 import pytest
 
+from Adventorator import repos
 from Adventorator.db import session_scope
 from Adventorator.metrics import get_counter, reset_counters
 from Adventorator.models import ContentNode, NodeType
@@ -16,8 +17,9 @@ class _Settings(types.SimpleNamespace):
 async def test_sql_retriever_metrics_success():
     # Insert a simple content node
     async with session_scope() as s:
+        camp = await repos.get_or_create_campaign(s, guild_id=42, name="Campaign")
         n = ContentNode(
-            campaign_id=1,
+            campaign_id=camp.id,
             node_type=NodeType.lore,
             title="Ancient Door",
             player_text="A heavy stone door with faded runes.",
@@ -27,7 +29,7 @@ async def test_sql_retriever_metrics_success():
 
     reset_counters()
     r = SqlFallbackRetriever()
-    out = await r.retrieve(1, "door", k=5)
+    out = await r.retrieve(camp.id, "door", k=5)
     assert len(out) >= 1
     assert get_counter("retrieval.calls") == 1
     # at least one snippet recorded

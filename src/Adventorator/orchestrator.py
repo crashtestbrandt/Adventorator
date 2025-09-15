@@ -527,7 +527,9 @@ async def run_orchestrator(
             mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
         elif p.action == "attack":
             mechanics = (
-                "Combat preview error; see logs." if preview_failed else "Combat tools unavailable (executor disabled)."
+                "Combat preview error; see logs."
+                if preview_failed
+                else "Combat tools unavailable (executor disabled)."
             )
         elif p.action in ("apply_condition", "remove_condition", "clear_condition"):
             mechanics = (

@@ -204,14 +204,14 @@ class Settings(BaseSettings):
         # Precedence (highest to lowest):
         # 1) init_settings (explicit overrides in code/tests)
         # 2) dotenv (.env in cwd) — developer-local overrides
-        # 3) TOML (repo config.toml) — project defaults
-        # 4) env_settings (OS env) — lowest to avoid leaking CI/machine env into tests
+        # 3) env_settings (OS env)
+        # 4) TOML (repo config.toml) — project defaults
         # 5) file_secret_settings
         return (
             init_settings,
             dotenv_settings,
-            _toml_settings_source,
             env_settings,
+            _toml_settings_source,
             file_secret_settings,
         )
 

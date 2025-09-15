@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from Adventorator import repos
 from Adventorator.db import session_scope
 from Adventorator.models import ContentNode, NodeType
 from Adventorator.retrieval import SqlFallbackRetriever
@@ -11,9 +12,10 @@ from Adventorator.retrieval import SqlFallbackRetriever
 async def test_retrieval_returns_player_text_only(db):
     # Arrange: insert content with both player_text and gm_text
     async with session_scope() as s:
+        camp = await repos.get_or_create_campaign(s, guild_id=1, name="Test")
         s.add(
             ContentNode(
-                campaign_id=1,
+                campaign_id=camp.id,
                 node_type=NodeType.location,
                 title="Goblin Warrens",
                 player_text="A reeking tunnel leads into darkness.",
@@ -25,7 +27,7 @@ async def test_retrieval_returns_player_text_only(db):
     r = SqlFallbackRetriever()
 
     # Act
-    out = await r.retrieve(campaign_id=1, query="trap entrance", k=2)
+    out = await r.retrieve(campaign_id=camp.id, query="trap entrance", k=2)
 
     # Assert: we never expose gm_text; only player_text is returned
     assert len(out) == 1

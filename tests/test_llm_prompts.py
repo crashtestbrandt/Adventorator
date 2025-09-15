@@ -49,9 +49,17 @@ def test_narrator_prompt_without_attack():
 
 
 def test_narrator_prompt_with_attack():
-    msgs = build_narrator_messages([], player_msg="swing sword", max_tokens=200, enable_attack=True)
+    msgs = build_narrator_messages(
+        [], player_msg="swing sword", max_tokens=200, enable_attack=True
+    )
     system = msgs[0]["content"]
-    # Should advertise ability_check|attack|apply_condition|remove_condition|clear_condition and include bounded fields
-    assert "\"action\": \"ability_check|attack|apply_condition|remove_condition|clear_condition\"" in system
-    assert "attack_bonus" in system and "target_ac" in system and "damage" in system
+    # Should advertise ability_check|attack|apply_condition|remove_condition|clear_condition
+    # and include bounded fields
+    assert (
+        "\"action\": \"ability_check|attack|apply_condition|remove_condition|clear_condition\""
+        in system
+    )
+    assert (
+        "attack_bonus" in system and "target_ac" in system and "damage" in system
+    )
     assert "condition" in system
