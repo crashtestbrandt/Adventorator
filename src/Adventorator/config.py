@@ -21,6 +21,13 @@ def _toml_settings_source() -> dict[str, Any]:
     out: dict[str, Any] = {
         "env": t.get("app", {}).get("env", "dev"),
         "features_llm": t.get("features", {}).get("llm", False),
+        # Map rendering (Phase 12) — prefer [map].enabled with legacy fallback
+        "features_map": bool(
+            (t.get("map", {}) or {}).get(
+                "enabled",
+                (t.get("features", {}) or {}).get("map", False),
+            )
+        ),
     # Default visibility to False for safe-by-default shadow mode
     "features_llm_visible": t.get("features", {}).get("llm_visible", False),
     # Planner hard-toggle; prefer [planner].enabled, fallback to legacy [features].planner
@@ -143,6 +150,7 @@ class Settings(BaseSettings):
     feature_planner_enabled: bool = True
     features_rules: bool = False
     features_combat: bool = False
+    features_map: bool = False
     features_events: bool = False
     features_executor: bool = False
     features_executor_confirm: bool = True

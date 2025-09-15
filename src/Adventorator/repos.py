@@ -228,6 +228,24 @@ async def healthcheck(s: AsyncSession) -> None:
     await s.execute(select(models.Campaign).limit(1))
 
 
+async def get_latest_event_id_for_scene(s: AsyncSession, *, scene_id: int) -> int | None:
+    """Return the most recent Event.id for a scene, or None if none exist.
+
+    This is used to key renderer cache by the last event applied to the scene.
+    """
+    stmt = (
+        select(models.Event.id)
+        .where(models.Event.scene_id == scene_id)
+        .order_by(models.Event.id.desc())
+        .limit(1)
+    )
+    q = await s.execute(stmt)
+    row = q.first()
+    if not row:
+        return None
+    return int(row[0])
+
+
 # -----------------------------
 # Encounters & Combatants (Phase 10)
 # -----------------------------

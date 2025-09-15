@@ -31,6 +31,9 @@ timeout_seconds = 20
 [combat]
 enabled = true
 
+[map]
+enabled = true
+
 [logging]
 # Enable verbose debugging during development
 enabled = true
