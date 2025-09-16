@@ -295,7 +295,7 @@ RB
 
 ---
 
-## Phase 10 — Encounter & Turn Engine (Foundations) ([#14](https://github.com/crashtestbrandt/Adventorator/issues/14)) — status: open
+## Phase 10 — Encounter & Turn Engine (Foundations) ([#14](https://github.com/crashtestbrandt/Adventorator/issues/14)) — status: closed
 
 Goal
 - Introduce minimal encounter model and synchronous turn sequencing with locks.
@@ -323,7 +323,7 @@ RB
 
 ---
 
-## Phase 11 — Minimal Combat Actions ([#75](https://github.com/crashtestbrandt/Adventorator/issues/75)) — status: open
+## Phase 11 — Minimal Combat Actions ([#75](https://github.com/crashtestbrandt/Adventorator/issues/75)) — status: closed
 
 Goal
 - Enable core actions: to-hit, damage, simple conditions; keep scope tight.
