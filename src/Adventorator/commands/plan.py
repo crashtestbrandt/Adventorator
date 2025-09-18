@@ -116,8 +116,6 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         except Exception:
             plan_obj = None
             out = None
-        else:
-            inc_counter("planner.cache.hit")
     else:
         # Plan using LLM with a soft timeout; fallback to roll 1d20 on timeout
         try:
