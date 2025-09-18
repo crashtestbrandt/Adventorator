@@ -46,6 +46,7 @@ async def test_do_then_confirm_attack_writes_events(monkeypatch, db):
             "features_executor_confirm": True,
             "features_events": True,
             "features_combat": True,
+            "features_action_validation": True,
             "llm_max_prompt_tokens": None,
         },
     )()
