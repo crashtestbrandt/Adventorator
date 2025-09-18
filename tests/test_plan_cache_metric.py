@@ -1,5 +1,6 @@
 import pytest
 
+from Adventorator.action_validation import plan_registry
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import Invocation, find_command
 from Adventorator.metrics import get_counter, reset_counters
@@ -22,8 +23,10 @@ class _FakeLLM:
 
 
 @pytest.mark.asyncio
-async def test_plan_planner_cache_hit_increments():
+@pytest.mark.parametrize("use_action_validation", [False, True])
+async def test_plan_planner_cache_hit_increments(use_action_validation):
     reset_counters()
+    plan_registry.reset()
     load_all_commands()
     cmd = find_command("plan", None)
     assert cmd is not None
@@ -38,7 +41,15 @@ async def test_plan_planner_cache_hit_increments():
         channel_id="501",
         guild_id="601",
         responder=responder,
-        settings=type("S", (), {"features_llm": True, "features_llm_visible": False})(),
+        settings=type(
+            "S",
+            (),
+            {
+                "features_llm": True,
+                "features_llm_visible": False,
+                "features_action_validation": use_action_validation,
+            },
+        )(),
         llm_client=_FakeLLM('{"command": "roll", "args": {"expr": "1d20"}}'),
     )
     opts1 = cmd.option_model.model_validate(inv1.options)
@@ -53,7 +64,15 @@ async def test_plan_planner_cache_hit_increments():
         channel_id="501",
         guild_id="601",
         responder=_SpyResponder(),
-        settings=type("S", (), {"features_llm": True, "features_llm_visible": False})(),
+        settings=type(
+            "S",
+            (),
+            {
+                "features_llm": True,
+                "features_llm_visible": False,
+                "features_action_validation": use_action_validation,
+            },
+        )(),
         llm_client=_FakeLLM('{"command": "roll", "args": {"expr": "1d20"}}'),
     )
     opts2 = cmd.option_model.model_validate(inv2.options)

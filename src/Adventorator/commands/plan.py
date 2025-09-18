@@ -8,8 +8,10 @@ from pydantic import Field
 
 from Adventorator import repos
 from Adventorator.action_validation import (
+    Plan,
     plan_from_planner_output,
     plan_registry,
+    planner_output_from_plan,
     record_plan_steps,
 )
 from Adventorator.commanding import Invocation, Option, find_command, slash_command
@@ -96,18 +98,33 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         timeout_s = _PLAN_TIMEOUT
 
     # Cache check
+    use_action_validation = bool(getattr(settings, "features_action_validation", False))
+    plan_obj: Plan | None = None
+    out: PlannerOutput | None = None
+
     cached = _cache_get(scene_id, user_msg)
     if cached is not None:
+        cached_payload, schema = cached
         try:
-            out = PlannerOutput.model_validate(cached)  # type: ignore[name-defined]
+            if schema == "plan":
+                plan_obj = Plan.model_validate(cached_payload)
+                out = planner_output_from_plan(plan_obj)
+            else:
+                out = PlannerOutput.model_validate(cached_payload)  # type: ignore[name-defined]
+                if use_action_validation:
+                    plan_obj = plan_from_planner_output(out)
         except Exception:
+            plan_obj = None
             out = None
         else:
             inc_counter("planner.cache.hit")
     else:
         # Plan using LLM with a soft timeout; fallback to roll 1d20 on timeout
         try:
-            out = await asyncio.wait_for(plan(inv.llm_client, user_msg), timeout=timeout_s)  # type: ignore[arg-type]
+            result = await asyncio.wait_for(
+                plan(inv.llm_client, user_msg, return_plan=use_action_validation),  # type: ignore[arg-type]
+                timeout=timeout_s,
+            )
         except asyncio.TimeoutError:
             # Friendly fallback
             fallback_text = "I couldn't decide in time; rolling a d20."
@@ -120,6 +137,15 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
             await cmd.handler(inv, opt_obj)
             return
 
+        else:
+            if isinstance(result, Plan):
+                plan_obj = result
+                out = planner_output_from_plan(result)
+            else:
+                out = result
+                if use_action_validation and out is not None:
+                    plan_obj = plan_from_planner_output(out)
+
     if not out:
         inc_counter("planner.parse_failed")
         await inv.responder.send("⚠️ I couldn't figure out a valid command.", ephemeral=True)
@@ -127,7 +153,10 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
 
     # Save to cache
     try:
-        _cache_put(scene_id, user_msg, out.model_dump())  # type: ignore[arg-type]
+        if plan_obj is not None:
+            _cache_put(scene_id, user_msg, plan_obj.model_dump(), schema="plan")
+        else:
+            _cache_put(scene_id, user_msg, out.model_dump(), schema="planner_output")  # type: ignore[arg-type]
     except Exception:
         pass
 
@@ -198,8 +227,9 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         rationale=(getattr(out, "rationale", None) or "")[:120],
     )
 
-    if getattr(settings, "features_action_validation", False):
-        plan_obj = plan_from_planner_output(out)
+    if use_action_validation:
+        if plan_obj is None:
+            plan_obj = plan_from_planner_output(out)
         plan_registry.register_plan(plan_obj)
         record_plan_steps(plan_obj)
         log.info("planner.plan.built", plan=plan_obj.model_dump())

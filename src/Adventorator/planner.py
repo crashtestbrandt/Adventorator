@@ -8,6 +8,7 @@ from typing import Any
 import orjson
 import structlog
 
+from Adventorator.action_validation.schemas import Plan, plan_from_planner_output
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import all_commands
 from Adventorator.llm import LLMClient
@@ -24,21 +25,26 @@ def _is_allowed(name: str) -> bool:
 
 # --- Simple in-process cache to suppress duplicate LLM calls for 30s ---
 _CACHE_TTL = 30.0
-_plan_cache: dict[tuple[int, str], tuple[float, dict[str, Any]]] = {}
+_CachedPayload = tuple[float, dict[str, Any]] | tuple[float, dict[str, Any], str]
+_plan_cache: dict[tuple[int, str], _CachedPayload] = {}
 
-def _cache_get(scene_id: int, msg: str) -> dict[str, Any] | None:
+def _cache_get(scene_id: int, msg: str) -> tuple[dict[str, Any], str] | None:
     key = (scene_id, msg.strip())
     now = time.time()
     v = _plan_cache.get(key)
     if not v:
         return None
-    ts, payload = v
+    if len(v) == 3:
+        ts, payload, schema = v
+    else:
+        ts, payload = v  # type: ignore[misc]
+        schema = "planner_output"
     if now - ts <= _CACHE_TTL:
-        return payload
+        return payload, schema
     return None
 
-def _cache_put(scene_id: int, msg: str, plan_json: dict[str, Any]) -> None:
-    _plan_cache[(scene_id, msg.strip())] = (time.time(), plan_json)
+def _cache_put(scene_id: int, msg: str, plan_json: dict[str, Any], *, schema: str) -> None:
+    _plan_cache[(scene_id, msg.strip())] = (time.time(), plan_json, schema)
 
 
 def reset_plan_cache() -> None:
@@ -95,7 +101,9 @@ def build_planner_messages(user_msg: str) -> list[dict[str, Any]]:
     ]
 
 
-async def plan(llm: LLMClient, user_msg: str) -> PlannerOutput | None:
+async def plan(
+    llm: LLMClient, user_msg: str, *, return_plan: bool = False
+) -> Plan | PlannerOutput | None:
     log = structlog.get_logger()
     started = time.monotonic()
     log.info("planner.request.initiated", user_msg=user_msg)
@@ -118,6 +126,8 @@ async def plan(llm: LLMClient, user_msg: str) -> PlannerOutput | None:
             status="success",
             duration_ms=int((time.monotonic() - started) * 1000),
         )
+        if return_plan:
+            return plan_from_planner_output(out)
         return out
     except Exception:
         log.warning("planner.validation.failed", raw_text_preview=(text or "")[:200])
