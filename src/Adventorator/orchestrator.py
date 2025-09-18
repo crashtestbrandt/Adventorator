@@ -578,6 +578,18 @@ async def run_orchestrator(
                     for st in chain.steps
                 ],
             }
+            if feature_action_validation and req_for_execution is not None:
+                try:
+                    chain_json["execution_request"] = req_for_execution.model_dump()
+                except Exception:
+                    # Defensive: model_dump should always succeed, but do not
+                    # let serialization issues break previews.
+                    log.warning(
+                        "orchestrator.execution_request.dump_error",
+                        scene_id=scene_id,
+                        request_id=req_for_execution.plan_id,
+                        exc_info=True,
+                    )
         except Exception:
             log.warning("executor.preview.error", scene_id=scene_id, exc_info=True)
             use_executor = False
