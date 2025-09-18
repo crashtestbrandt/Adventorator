@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import orjson
@@ -25,8 +26,34 @@ def _is_allowed(name: str) -> bool:
 
 # --- Simple in-process cache to suppress duplicate LLM calls for 30s ---
 _CACHE_TTL = 30.0
-_CachedPayload = tuple[float, dict[str, Any]] | tuple[float, dict[str, Any], str]
-_plan_cache: dict[tuple[int, str], _CachedPayload] = {}
+@dataclass(slots=True)
+class _CacheEntry:
+    timestamp: float
+    payload: dict[str, Any]
+    schema: str = "planner_output"
+
+
+_LegacyCacheEntry = tuple[float, dict[str, Any]] | tuple[float, dict[str, Any], str]
+_plan_cache: dict[tuple[int, str], _CacheEntry | _LegacyCacheEntry] = {}
+
+
+def _normalize_cache_entry(
+    key: tuple[int, str], value: _CacheEntry | _LegacyCacheEntry
+) -> _CacheEntry:
+    if isinstance(value, _CacheEntry):
+        return value
+
+    match value:
+        case (timestamp, payload, schema):
+            entry = _CacheEntry(timestamp, payload, schema)
+        case (timestamp, payload):
+            entry = _CacheEntry(timestamp, payload)
+        case _:
+            raise ValueError("Unexpected planner cache entry")
+
+    _plan_cache[key] = entry
+    return entry
+
 
 def _cache_get(scene_id: int, msg: str) -> tuple[dict[str, Any], str] | None:
     key = (scene_id, msg.strip())
@@ -34,17 +61,16 @@ def _cache_get(scene_id: int, msg: str) -> tuple[dict[str, Any], str] | None:
     v = _plan_cache.get(key)
     if not v:
         return None
-    if len(v) == 3:
-        ts, payload, schema = v
-    else:
-        ts, payload = v  # type: ignore[misc]
-        schema = "planner_output"
-    if now - ts <= _CACHE_TTL:
-        return payload, schema
+    entry = _normalize_cache_entry(key, v)
+    if now - entry.timestamp <= _CACHE_TTL:
+        return entry.payload, entry.schema
     return None
 
+
 def _cache_put(scene_id: int, msg: str, plan_json: dict[str, Any], *, schema: str) -> None:
-    _plan_cache[(scene_id, msg.strip())] = (time.time(), plan_json, schema)
+    _plan_cache[(scene_id, msg.strip())] = _CacheEntry(
+        time.time(), plan_json, schema
+    )
 
 
 def reset_plan_cache() -> None:
