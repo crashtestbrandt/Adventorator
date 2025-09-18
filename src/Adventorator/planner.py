@@ -16,6 +16,7 @@ from Adventorator.llm import LLMClient
 from Adventorator.llm_utils import extract_first_json
 from Adventorator.planner_prompts import SYSTEM_PLANNER
 from Adventorator.planner_schemas import PlannerOutput
+from Adventorator.metrics import inc_counter, register_reset_plan_cache_callback
 
 # --- Allowlist of commands the planner may route to (defense-in-depth) ---
 _ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do", "ooc"}
@@ -63,6 +64,7 @@ def _cache_get(scene_id: int, msg: str) -> tuple[dict[str, Any], str] | None:
         return None
     entry = _normalize_cache_entry(key, v)
     if now - entry.timestamp <= _CACHE_TTL:
+        inc_counter("planner.cache.hit")
         return entry.payload, entry.schema
     return None
 
@@ -79,6 +81,9 @@ def reset_plan_cache() -> None:
     This is primarily used by tests to avoid cross-test interference.
     """
     _plan_cache.clear()
+
+
+register_reset_plan_cache_callback(reset_plan_cache)
 
 
 def _catalog() -> list[dict[str, Any]]:
