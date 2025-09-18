@@ -1,10 +1,19 @@
-from pydantic import Field
+import logging
+
+from pydantic import Field, ValidationError
 from sqlalchemy import select
 
 from Adventorator import models, repos
+from Adventorator.action_validation import (
+    ExecutionRequest,
+    tool_chain_from_execution_request,
+)
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.db import session_scope
 from Adventorator.metrics import inc_counter
+
+
+logger = logging.getLogger(__name__)
 
 
 class ConfirmOpts(Option):
@@ -50,15 +59,54 @@ async def confirm(inv: Invocation, opts: ConfirmOpts):
         # Apply chain via executor
         try:
             from Adventorator.executor import Executor, ToolCallChain, ToolStep
-            steps = []
-            for st in (pa.chain.get("steps") or []):
-                steps.append(ToolStep(tool=st.get("tool"), args=st.get("args", {})))
-            chain = ToolCallChain(
-                request_id=pa.request_id,
-                scene_id=pa.scene_id,
-                steps=steps,
-                actor_id=user_id,
-            )
+
+            chain_payload = pa.chain or {}
+            chain: ToolCallChain | None = None
+
+            if (
+                settings
+                and getattr(settings, "features_action_validation", False)
+                and isinstance(chain_payload, dict)
+            ):
+                req_payload = chain_payload.get("execution_request")
+                if isinstance(req_payload, dict):
+                    try:
+                        req = ExecutionRequest.model_validate(req_payload)
+                    except ValidationError:
+                        inc_counter("pending.confirm.execution_request.invalid")
+                        logger.warning(
+                            "Invalid execution_request payload on pending action id=%s", pa.id
+                        )
+                    else:
+                        chain = tool_chain_from_execution_request(req)
+
+            if chain is None:
+                steps = []
+                for st in (chain_payload.get("steps") or []):
+                    steps.append(
+                        ToolStep(
+                            tool=st.get("tool"),
+                            args=st.get("args", {}),
+                            requires_confirmation=bool(
+                                st.get("requires_confirmation", False)
+                            ),
+                            visibility=str(st.get("visibility", "ephemeral")),
+                        )
+                    )
+                chain = ToolCallChain(
+                    request_id=chain_payload.get("request_id", pa.request_id),
+                    scene_id=int(chain_payload.get("scene_id", pa.scene_id)),
+                    steps=steps,
+                    actor_id=chain_payload.get("actor_id") or user_id,
+                )
+            elif not chain.actor_id:
+                chain = ToolCallChain(
+                    request_id=chain.request_id,
+                    scene_id=chain.scene_id,
+                    steps=chain.steps,
+                    actor_id=chain_payload.get("actor_id") or user_id,
+                )
+
             ex = Executor()
             await ex.apply_chain(chain)
             # Write bot transcript and mark complete

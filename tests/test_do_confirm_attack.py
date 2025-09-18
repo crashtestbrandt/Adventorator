@@ -1,5 +1,7 @@
 import pytest
+from sqlalchemy import select
 
+from Adventorator import models
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import Invocation, find_command
 from Adventorator.metrics import get_counter, reset_counters
@@ -46,6 +48,7 @@ async def test_do_then_confirm_attack_writes_events(monkeypatch, db):
             "features_executor_confirm": True,
             "features_events": True,
             "features_combat": True,
+            "features_action_validation": True,
             "llm_max_prompt_tokens": None,
         },
     )()
@@ -88,7 +91,26 @@ async def test_do_then_confirm_attack_writes_events(monkeypatch, db):
     assert responder.messages, "Expected a pending message"
     assert any("Confirm with /confirm" in m[0] for m in responder.messages)
 
-    # Now run /confirm
+    # Inspect pending action stored in DB to ensure ExecutionRequest persisted
+    result = await db.execute(select(models.PendingAction))
+    pa = result.scalar_one()
+    assert "execution_request" in pa.chain
+    assert pa.chain["execution_request"]["steps"][0]["op"] == "attack"
+
+    # Now run /confirm (ensure adapter path engaged)
+    from Adventorator.commands import confirm as confirm_module
+
+    real_adapter = confirm_module.tool_chain_from_execution_request
+    called = {"flag": False}
+
+    def _tracking_adapter(req):
+        called["flag"] = True
+        return real_adapter(req)
+
+    monkeypatch.setattr(
+        confirm_module, "tool_chain_from_execution_request", _tracking_adapter
+    )
+
     cmd_confirm = find_command("confirm", None)
     assert cmd_confirm is not None
     inv_confirm = Invocation(
@@ -108,3 +130,4 @@ async def test_do_then_confirm_attack_writes_events(monkeypatch, db):
     assert get_counter("pending.confirm.ok") >= 1
     assert get_counter("executor.apply.ok") >= 1
     assert get_counter("executor.apply.tool.attack") >= 1
+    assert called["flag"], "Expected ExecutionRequest adapter to be used"
