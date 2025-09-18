@@ -85,3 +85,4 @@ async def test_plan_rejects_unknown_tool(monkeypatch):
     assert any(ep for _, ep in responder.messages), "Expected an ephemeral message"
     # Rejected counter incremented
     assert get_counter("planner.decision.rejected") == 1
+    assert get_counter("planner.allowlist.rejected") == 1

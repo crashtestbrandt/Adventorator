@@ -7,7 +7,11 @@ import structlog
 from pydantic import Field
 
 from Adventorator import repos
-from Adventorator.action_validation import plan_from_planner_output, plan_registry
+from Adventorator.action_validation import (
+    plan_from_planner_output,
+    plan_registry,
+    record_plan_steps,
+)
 from Adventorator.commanding import Invocation, Option, find_command, slash_command
 from Adventorator.db import session_scope
 from Adventorator.metrics import inc_counter
@@ -197,7 +201,7 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
     if getattr(settings, "features_action_validation", False):
         plan_obj = plan_from_planner_output(out)
         plan_registry.register_plan(plan_obj)
-        inc_counter("plan.steps.count", len(plan_obj.steps))
+        record_plan_steps(plan_obj)
         log.info("planner.plan.built", plan=plan_obj.model_dump())
 
     # Re-dispatch to the planned command handler with the SAME invocation context

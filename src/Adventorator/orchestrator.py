@@ -279,11 +279,33 @@ async def run_orchestrator(
     now = time.time()
     execution_request: ExecutionRequest | None = None
     request_id_seed = int(now * 1000)
+    log.info(
+        "orchestrator.run.initiated",
+        scene_id=scene_id,
+        has_llm=bool(llm_client),
+        allowed_actor_count=len(allowed_actors) if allowed_actors is not None else None,
+    )
+
+    def _complete(result: OrchestratorResult, status: str) -> OrchestratorResult:
+        duration_ms = int((time.monotonic() - _orc_start) * 1000)
+        try:
+            inc_counter("orchestrator.total_ms", duration_ms)
+        except Exception:
+            pass
+        log.info(
+            "orchestrator.run.completed",
+            scene_id=scene_id,
+            status=status,
+            rejected=result.rejected,
+            reason=result.reason,
+            duration_ms=duration_ms,
+        )
+        return result
     if player_msg and cache_key in _prompt_cache:
         ts, cached = _prompt_cache[cache_key]
         if now - ts <= _CACHE_TTL:
             log.info("orchestrator.cache.hit", scene_id=scene_id)
-            return cached
+            return _complete(cached, "cache_hit")
 
     inc_counter("llm.request.enqueued")
     log.info("llm.request.enqueued", scene_id=scene_id)
@@ -330,18 +352,24 @@ async def run_orchestrator(
         enable_attack=bool(getattr(settings, "features_combat", False)),
     )
     if not llm_client:
-        return OrchestratorResult(
+        return _complete(
+            OrchestratorResult(
             mechanics="LLM not configured.", narration="", rejected=True, reason="llm_unconfigured"
+        ),
+            "llm_unconfigured",
         )
     out = await llm_client.generate_json(narrator_msgs)  # type: ignore[attr-defined]
     if not out:
         inc_counter("llm.parse.failed")
         log.warning("llm.parse.failed", scene_id=scene_id)
-        return OrchestratorResult(
+        return _complete(
+            OrchestratorResult(
             mechanics="Unable to generate a proposal.",
             narration="",
             rejected=True,
             reason="llm_invalid_or_empty",
+        ),
+            "llm_invalid_or_empty",
         )
     inc_counter("llm.response.received")
     log.info("llm.response.received", scene_id=scene_id)
@@ -354,11 +382,14 @@ async def run_orchestrator(
             proposal=out.proposal.model_dump(),
             narration=out.narration,
         )
-        return OrchestratorResult(
+        return _complete(
+            OrchestratorResult(
             mechanics="Proposal rejected: invalid",
             narration="",
             rejected=True,
             reason=why,
+        ),
+            "defense_rejected",
         )
 
     # 3b) additional defenses: banned verbs and unknown actors
@@ -373,11 +404,14 @@ async def run_orchestrator(
             proposal=out.proposal.model_dump(),
             narration=out.narration,
         )
-        return OrchestratorResult(
+        return _complete(
+            OrchestratorResult(
             mechanics="Proposal rejected: unsafe content",
             narration="",
             rejected=True,
             reason="unsafe_verb",
+        ),
+            "defense_rejected",
         )
 
     if allowed_actors:
@@ -392,11 +426,14 @@ async def run_orchestrator(
                 proposal=out.proposal.model_dump(),
                 narration=out.narration,
             )
-            return OrchestratorResult(
+            return _complete(
+                OrchestratorResult(
                 mechanics="Proposal rejected: unknown actors",
                 narration="",
                 rejected=True,
                 reason="unknown_actor",
+            ),
+                "defense_rejected",
             )
 
     # 4) map proposal -> rules.CheckInput using provided sheet_getter
@@ -579,10 +616,6 @@ async def run_orchestrator(
         execution_request=execution_request,
     )
     inc_counter("orchestrator.format.sent")
-    try:
-        inc_counter("orchestrator.total_ms", int((time.monotonic() - _orc_start) * 1000))
-    except Exception:
-        pass
     log.info("orchestrator.format.sent", scene_id=scene_id)
     _prompt_cache[cache_key] = (now, final)
-    return final
+    return _complete(final, "success")

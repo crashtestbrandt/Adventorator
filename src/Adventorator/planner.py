@@ -97,17 +97,33 @@ def build_planner_messages(user_msg: str) -> list[dict[str, Any]]:
 
 async def plan(llm: LLMClient, user_msg: str) -> PlannerOutput | None:
     log = structlog.get_logger()
+    started = time.monotonic()
     log.info("planner.request.initiated", user_msg=user_msg)
     msgs = build_planner_messages(user_msg)
     text = await llm.generate_response(msgs)
     data = extract_first_json(text or "")
     if not data or not isinstance(data, dict):
         log.warning("planner.parse.failed", raw_text_preview=(text or "")[:200])
+        log.info(
+            "planner.request.completed",
+            status="parse_failed",
+            duration_ms=int((time.monotonic() - started) * 1000),
+        )
         return None
     try:
         out = PlannerOutput.model_validate(data)
         log.info("planner.parse.valid", plan=out.model_dump())
+        log.info(
+            "planner.request.completed",
+            status="success",
+            duration_ms=int((time.monotonic() - started) * 1000),
+        )
         return out
     except Exception:
         log.warning("planner.validation.failed", raw_text_preview=(text or "")[:200])
+        log.info(
+            "planner.request.completed",
+            status="validation_failed",
+            duration_ms=int((time.monotonic() - started) * 1000),
+        )
         return None

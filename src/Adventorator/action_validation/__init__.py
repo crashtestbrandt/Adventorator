@@ -1,5 +1,6 @@
 """Action validation public exports."""
 
+from .metrics import record_plan_steps, record_predicate_gate_outcome
 from .schemas import (
     AskReport,
     ExecutionRequest,
@@ -16,6 +17,8 @@ from . import registry as plan_registry
 
 __all__ = [
     "AskReport",
+    "record_plan_steps",
+    "record_predicate_gate_outcome",
     "plan_registry",
     "ExecutionRequest",
     "ExecutionResult",
