@@ -24,7 +24,7 @@ class FakeLLM:
 @pytest.mark.asyncio
 async def test_orchestrator_attack_preview_and_chain(monkeypatch):
     # Enable executor preview path
-    settings = type("S", (), {"features_executor": True})()
+    settings = type("S", (), {"features_executor": True, "features_action_validation": True})()
 
     out = LLMOutput(
         proposal=LLMProposal(
@@ -56,6 +56,8 @@ async def test_orchestrator_attack_preview_and_chain(monkeypatch):
     assert res.chain_json is not None
     steps = res.chain_json.get("steps")
     assert steps and steps[0]["tool"] == "attack"
+    assert res.execution_request is not None
+    assert res.execution_request.steps[0].op == "attack"
 
 
 @pytest.mark.asyncio

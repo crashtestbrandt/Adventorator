@@ -40,6 +40,12 @@ def reset_counters() -> None:
     except Exception:
         # If planner isn't importable in some contexts, ignore silently.
         pass
+    try:
+        from Adventorator.action_validation import plan_registry
+
+        plan_registry.reset()
+    except Exception:
+        pass
 
 
 def get_counters() -> dict[str, int]:

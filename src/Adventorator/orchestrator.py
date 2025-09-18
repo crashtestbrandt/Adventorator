@@ -9,6 +9,11 @@ from typing import Any, TypedDict
 import structlog
 
 from Adventorator import models as _models
+from Adventorator.action_validation import (
+    ExecutionRequest,
+    PlanStep,
+    tool_chain_from_execution_request,
+)
 from Adventorator import repos
 from Adventorator.db import session_scope
 from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messages
@@ -34,6 +39,7 @@ class OrchestratorResult:
     rejected: bool = False
     reason: str | None = None
     chain_json: dict | None = None
+    execution_request: ExecutionRequest | None = None
 
 
 def _format_mechanics_block(result, ability: str, dc: int) -> str:
@@ -271,6 +277,8 @@ async def run_orchestrator(
     _orc_start = time.monotonic()
     cache_key = (scene_id, player_msg.strip())
     now = time.time()
+    execution_request: ExecutionRequest | None = None
+    request_id_seed = int(now * 1000)
     if player_msg and cache_key in _prompt_cache:
         ts, cached = _prompt_cache[cache_key]
         if now - ts <= _CACHE_TTL:
@@ -424,63 +432,88 @@ async def run_orchestrator(
     mechanics: str
     chain_json: dict | None = None
     preview_failed = False
+    plan_steps: list[PlanStep] = []
+    req_for_execution: ExecutionRequest | None = None
+    if p.action == "ability_check":
+        dc_value = int(p.suggested_dc or 0)
+        step_args = {
+            "ability": p.ability,
+            "score": int(score),
+            "dc": dc_value,
+            "proficient": proficient,
+            "expertise": expertise,
+            "prof_bonus": int(prof_bonus),
+            "seed": rng_seed,
+        }
+        plan_steps.append(PlanStep(op="check", args=step_args))
+    elif p.action == "attack":
+        dmg = p.damage or {}
+        dmg_dice = str(dmg.get("dice", "1d4"))
+        raw_mod = dmg.get("mod", 0)
+        dmg_mod = int(raw_mod if raw_mod is not None else 0)
+        dmg_type = str(dmg.get("type", "")).strip() or None
+        advantage = bool(p.advantage or False)
+        disadvantage = bool(p.disadvantage or False)
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
+        attack_bonus = int(p.attack_bonus or 0)
+        target_ac = int(p.target_ac or 10)
+        if attack_bonus < -5:
+            attack_bonus = -5
+        if attack_bonus > 15:
+            attack_bonus = 15
+        if target_ac < 5:
+            target_ac = 5
+        if target_ac > 30:
+            target_ac = 30
+        if dmg_mod < -5:
+            dmg_mod = -5
+        if dmg_mod > 10:
+            dmg_mod = 10
+        damage_payload: dict[str, Any] = {"dice": dmg_dice, "mod": dmg_mod}
+        if dmg_type:
+            damage_payload["type"] = dmg_type
+        step_args = {
+            "attacker": p.attacker,
+            "target": p.target,
+            "attack_bonus": attack_bonus,
+            "target_ac": target_ac,
+            "damage": damage_payload,
+            "advantage": advantage,
+            "disadvantage": disadvantage,
+            "seed": rng_seed,
+        }
+        plan_steps.append(PlanStep(op="attack", args=step_args))
+    elif p.action in ("apply_condition", "remove_condition", "clear_condition"):
+        step_args = {"target": p.target, "condition": p.condition}
+        if p.action == "apply_condition" and p.duration is not None:
+            step_args["duration"] = int(p.duration)
+        plan_steps.append(PlanStep(op=p.action, args=step_args))
+
+    if plan_steps:
+        ctx = {"scene_id": scene_id, "request_id": f"orc-{scene_id}-{request_id_seed}"}
+        if actor_id is not None:
+            ctx["actor_id"] = actor_id
+        req_for_execution = ExecutionRequest(plan_id=ctx["request_id"], steps=plan_steps, context=ctx)
+        if getattr(settings, "features_action_validation", False):
+            execution_request = req_for_execution
+
     if use_executor and (_executor_mod is not None) and hasattr(_executor_mod, "Executor"):
         try:
             ex = _executor_mod.Executor()
-            # Build chain per action type
-            steps: list[Any] = []
-            if p.action == "ability_check":
-                steps.append(
-                    _executor_mod.ToolStep(
-                        tool="check",
-                        args={
-                            "ability": p.ability,
-                            "score": score,
-                            "dc": p.suggested_dc,
-                            "proficient": proficient,
-                            "expertise": expertise,
-                            "prof_bonus": prof_bonus,
-                            "seed": rng_seed,
-                        },
-                        requires_confirmation=True,
-                    )
-                )
-            elif p.action == "attack":
-                # Combat FF must be on; otherwise short-circuit later to stub
-                steps.append(
-                    _executor_mod.ToolStep(
-                        tool="attack",
-                        args={
-                            "attacker": p.attacker,
-                            "target": p.target,
-                            "attack_bonus": p.attack_bonus,
-                            "target_ac": p.target_ac,
-                            "damage": p.damage,
-                            "advantage": bool(p.advantage or False),
-                            "disadvantage": bool(p.disadvantage or False),
-                            "seed": rng_seed,
-                        },
-                        requires_confirmation=True,
-                    )
-                )
-            elif p.action in ("apply_condition", "remove_condition", "clear_condition"):
-                tool_name = p.action
-                args: dict[str, Any] = {"target": p.target, "condition": p.condition}
-                if tool_name == "apply_condition" and p.duration is not None:
-                    args["duration"] = p.duration
-                steps.append(
-                    _executor_mod.ToolStep(
-                        tool=tool_name,
-                        args=args,
-                        requires_confirmation=True,
-                    )
-                )
-            chain = _executor_mod.ToolCallChain(
-                request_id=f"orc-{scene_id}-{int(now*1000)}",
-                scene_id=scene_id,
-                steps=steps,
-                actor_id=actor_id,
+            chain = (
+                tool_chain_from_execution_request(req_for_execution)
+                if req_for_execution is not None
+                else None
             )
+            if chain is None:
+                chain = _executor_mod.ToolCallChain(
+                    request_id=f"orc-{scene_id}-{request_id_seed}",
+                    scene_id=scene_id,
+                    steps=[],
+                    actor_id=actor_id,
+                )
             _exec_start = time.monotonic()
             prev = await ex.execute_chain(chain, dry_run=True)
             try:
@@ -517,14 +550,14 @@ async def run_orchestrator(
                 proficient=proficient,
                 expertise=expertise,
                 proficiency_bonus=prof_bonus,
-                dc=p.suggested_dc,
+                dc=dc_value,
                 advantage=False,
                 disadvantage=False,
             )
             rng = DiceRNG(seed=rng_seed)
             d20_rolls = [rng.roll("1d20").rolls[0]]
             result = compute_check(check_inp, d20_rolls=d20_rolls)
-            mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
+            mechanics = _format_mechanics_block(result, ability=p.ability, dc=dc_value)
         elif p.action == "attack":
             mechanics = (
                 "Combat preview error; see logs."
@@ -539,7 +572,12 @@ async def run_orchestrator(
             )
         else:
             mechanics = "Proposal accepted but preview unavailable."
-    final = OrchestratorResult(mechanics=mechanics, narration=out.narration, chain_json=chain_json)
+    final = OrchestratorResult(
+        mechanics=mechanics,
+        narration=out.narration,
+        chain_json=chain_json,
+        execution_request=execution_request,
+    )
     inc_counter("orchestrator.format.sent")
     try:
         inc_counter("orchestrator.total_ms", int((time.monotonic() - _orc_start) * 1000))

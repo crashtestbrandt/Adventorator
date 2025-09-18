@@ -21,6 +21,9 @@ def _toml_settings_source() -> dict[str, Any]:
     out: dict[str, Any] = {
         "env": t.get("app", {}).get("env", "dev"),
         "features_llm": t.get("features", {}).get("llm", False),
+        "features_action_validation": t.get("features", {}).get("action_validation", False),
+        "features_predicate_gate": t.get("features", {}).get("predicate_gate", False),
+        "features_mcp": t.get("features", {}).get("mcp", False),
         # Map rendering (Phase 12) — prefer [map].enabled with legacy fallback
         "features_map": bool(
             (t.get("map", {}) or {}).get(
@@ -28,15 +31,15 @@ def _toml_settings_source() -> dict[str, Any]:
                 (t.get("features", {}) or {}).get("map", False),
             )
         ),
-    # Default visibility to False for safe-by-default shadow mode
-    "features_llm_visible": t.get("features", {}).get("llm_visible", False),
-    # Planner hard-toggle; prefer [planner].enabled, fallback to legacy [features].planner
-    "feature_planner_enabled": bool(
-        (t.get("planner", {}) or {}).get(
-            "enabled",
-            (t.get("features", {}) or {}).get("planner", True),
-        )
-    ),
+        # Default visibility to False for safe-by-default shadow mode
+        "features_llm_visible": t.get("features", {}).get("llm_visible", False),
+        # Planner hard-toggle; prefer [planner].enabled, fallback to legacy [features].planner
+        "feature_planner_enabled": bool(
+            (t.get("planner", {}) or {}).get(
+                "enabled",
+                (t.get("features", {}) or {}).get("planner", True),
+            )
+        ),
         "features_rules": t.get("features", {}).get("rules", False),
         # Combat FF now lives under [combat].enabled; keep a fallback to legacy [features].combat
         # Example:
@@ -51,16 +54,16 @@ def _toml_settings_source() -> dict[str, Any]:
                 (t.get("features", {}) or {}).get("combat", False),
             )
         ),
-    # Events ledger (Phase 9) — default disabled
-    "features_events": t.get("features", {}).get("events", False),
-    # Executor (Phase 7+) — default disabled
-    "features_executor": t.get("features", {}).get("executor", False),
-    # Confirmation gating FF (Phase 8); default true so it can be disabled in dev
-    "features_executor_confirm": t.get("features", {}).get("executor_confirm", True),
-    "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
-    # When set, app will post follow-ups to this base URL instead of Discord.
-    # Example: "http://host.docker.internal:19000"
-    "discord_webhook_url_override": t.get("discord", {}).get("webhook_url_override"),
+        # Events ledger (Phase 9) — default disabled
+        "features_events": t.get("features", {}).get("events", False),
+        # Executor (Phase 7+) — default disabled
+        "features_executor": t.get("features", {}).get("executor", False),
+        # Confirmation gating FF (Phase 8); default true so it can be disabled in dev
+        "features_executor_confirm": t.get("features", {}).get("executor_confirm", True),
+        "response_timeout_seconds": t.get("discord", {}).get("response_timeout_seconds", 3),
+        # When set, app will post follow-ups to this base URL instead of Discord.
+        # Example: "http://host.docker.internal:19000"
+        "discord_webhook_url_override": t.get("discord", {}).get("webhook_url_override"),
         "llm_api_provider": t.get("llm", {}).get("api_provider", "ollama"),
         "llm_api_url": t.get("llm", {}).get("api_url"),
         "llm_model_name": t.get("llm", {}).get("model_name"),
@@ -68,10 +71,10 @@ def _toml_settings_source() -> dict[str, Any]:
         # Logging config
         "logging_enabled": t.get("logging", {}).get("enabled", True),
         "logging_level": t.get("logging", {}).get("level", "INFO"),
-    # Per-handler levels: strings INFO|DEBUG|WARNING|ERROR|CRITICAL|NONE
-    # Backward-compatible: if console/to_file are bools, map True->level, False->NONE
-    "logging_console": None,
-    "logging_file": None,
+        # Per-handler levels: strings INFO|DEBUG|WARNING|ERROR|CRITICAL|NONE
+        # Backward-compatible: if console/to_file are bools, map True->level, False->NONE
+        "logging_console": None,
+        "logging_file": None,
         "logging_file_path": t.get("logging", {}).get("file_path", "logs/adventorator.jsonl"),
         "logging_max_bytes": t.get("logging", {}).get("max_bytes", 5_000_000),
         "logging_backup_count": t.get("logging", {}).get("backup_count", 5),
@@ -150,6 +153,9 @@ class Settings(BaseSettings):
     feature_planner_enabled: bool = True
     features_rules: bool = False
     features_combat: bool = False
+    features_action_validation: bool = False
+    features_predicate_gate: bool = False
+    features_mcp: bool = False
     features_map: bool = False
     features_events: bool = False
     features_executor: bool = False
