@@ -275,7 +275,10 @@ async def run_orchestrator(
 
     # Cache check to control duplicate prompts spam
     _orc_start = time.monotonic()
-    cache_key = (scene_id, player_msg.strip())
+    feature_action_validation = bool(
+        getattr(settings, "features_action_validation", False) if settings is not None else False
+    )
+    cache_key = (scene_id, player_msg.strip(), feature_action_validation)
     now = time.time()
     execution_request: ExecutionRequest | None = None
     request_id_seed = int(now * 1000)
@@ -533,7 +536,7 @@ async def run_orchestrator(
         if actor_id is not None:
             ctx["actor_id"] = actor_id
         req_for_execution = ExecutionRequest(plan_id=ctx["request_id"], steps=plan_steps, context=ctx)
-        if getattr(settings, "features_action_validation", False):
+        if feature_action_validation:
             execution_request = req_for_execution
 
     if use_executor and (_executor_mod is not None) and hasattr(_executor_mod, "Executor"):

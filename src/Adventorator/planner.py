@@ -63,6 +63,12 @@ def _cache_get(scene_id: int, msg: str) -> tuple[dict[str, Any], str] | None:
         return None
     entry = _normalize_cache_entry(key, v)
     if now - entry.timestamp <= _CACHE_TTL:
+        try:
+            from Adventorator.metrics import inc_counter  # local import to avoid cycles
+
+            inc_counter("planner.cache.hit")
+        except Exception:  # pragma: no cover - defensive, metrics optional in tests
+            pass
         return entry.payload, entry.schema
     return None
 
