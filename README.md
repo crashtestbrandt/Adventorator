@@ -13,6 +13,7 @@ A Discord-native Dungeon Master bot that blends deterministic 5e mechanics with 
 - [Retrieval & Safety](#retrieval--safety)
 - [Key Command Flows](#key-command-flows)
 - [Operations](#operations)
+- [AI Development Pipeline Onboarding](#ai-development-pipeline-onboarding)
 - [Repo Structure](#repo-structure)
 - [Contributing](./CONTRIBUTING.md)
 - [Changelog](./CHANGELOG.md)
@@ -537,6 +538,30 @@ The FastAPI app exposes two operational endpoints:
 
   * `GET /healthz`: A lightweight check that the application can load commands and connect to the database. Returns `{"status":"ok"}` or a 500 error.
   * `GET /metrics`: A JSON dump of internal counters. Disabled by default; enable with `ops.metrics_endpoint_enabled=true`.
+
+## AI Development Pipeline Onboarding
+
+Adventorator now follows the AI-Driven Development (AIDD) pipeline that anchors every change to traceable governance assets and automated quality gates. Start with the [alignment plan](./docs/implementation/aidd-plan.md) for a phased roadmap of how Epics, Stories, Tasks, and CI checks fit together.
+
+### Governance & Architecture
+- Author and catalog architectural decisions in [`docs/adr/`](./docs/adr/); use [`ADR-TEMPLATE.md`](./docs/adr/ADR-TEMPLATE.md) and the directory [`README`](./docs/adr/README.md) to keep decisions immutable and linked to delivery work.
+- Capture C4 and epic-level diagrams in [`docs/architecture/`](./docs/architecture) and tie them back to Feature Epics.
+- Map active initiatives inside [`docs/implementation/epics/`](./docs/implementation/epics/) and keep DoR/DoD expectations in sync using the [pipeline ritual guide](./docs/implementation/dor-dod-guide.md).
+
+### Templates & Traceability
+- GitHub issue templates for Feature Epics, Stories, and Tasks live in [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/); each field enforces Definition of Ready/Done and contract-first planning.
+- Pull requests must follow [`.github/pull_request_template.md`](./.github/pull_request_template.md) so reviewers can verify linked issues, ADRs, and quality gates.
+- Prompts and contracts referenced in issues should point to concrete assets (see below) and note evaluation coverage.
+
+### Prompts, Contracts, and Evaluations
+- Manage AI prompts in the [`prompts/`](./prompts) registry and follow its [versioning guidance](./prompts/README.md).
+- Store API and schema definitions under [`contracts/`](./contracts) with the accompanying [contract workflow notes](./contracts/README.md).
+- Document evaluation harnesses (e.g., prompt smoke tests) in [`prompts/evals/`](./prompts/evals) or adjacent directories so automated checks can discover them.
+
+### Quality Gates for Humans and AI Assistants
+- Run `make quality-gates` locally to exercise coverage, mutation, security, artifact validation, and AI evaluation checks before opening a PR. CI mirrors these gates through [`tests.yml`](./.github/workflows/tests.yml) and [`pr-quality-gates.yml`](./.github/workflows/pr-quality-gates.yml).
+- When updating prompts or contracts, accompany the change with the relevant validation scripts (see [`scripts/validate_prompts_and_contracts.py`](./scripts/validate_prompts_and_contracts.py)) and note results in the PR template.
+- Ensure DoR/DoD checklists remain satisfied throughout delivery; blockers should be captured in the linked issue templates for asynchronous hand-offs between humans and agents.
 
 -----
 
