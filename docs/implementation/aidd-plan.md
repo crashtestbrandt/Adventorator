@@ -1,5 +1,11 @@
 # Align Adventorator with AI Development Pipeline
 
+**Reference Framework**
+- [AI Development Pipeline Overview](https://github.com/crashtestbrandt/ai-dev-pipeline/blob/main/README.md)
+- [Quality Gates](https://github.com/crashtestbrandt/ai-dev-pipeline/blob/main/GATES.md)
+- [Workflow Templates](https://github.com/crashtestbrandt/ai-dev-pipeline/blob/main/TEMPLATES.md)
+- [Prompt Registry Guidance](https://github.com/crashtestbrandt/ai-dev-pipeline/blob/main/PROMPTS.md)
+
 ## Overview
 The AI-driven development pipeline emphasizes tight traceability from Feature Epics down to per-prompt Tasks, contract-first delivery, and automated quality gates spanning ADR conformance, testing, and AI evaluation. Adventorator already has rich documentation and modular architecture, but its current structure does not yet follow the Epic → Story → Task workflow or enforce the prescribed governance artifacts and CI checks.
 
