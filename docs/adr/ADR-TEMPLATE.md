@@ -6,7 +6,7 @@ A short, descriptive title (e.g., "Use GraphQL for API contracts").
 ## Status
 Proposed | Accepted | Deprecated | Superseded by ADR-XXX
 
-> Include date and decision owner; keep ADRs immutable after “Accepted” (create a new ADR to change course).
+> Include date and decision owner; keep ADRs immutable after "Accepted" (create a new ADR to change course).
 
 ## Context
 What problem are we trying to solve?
