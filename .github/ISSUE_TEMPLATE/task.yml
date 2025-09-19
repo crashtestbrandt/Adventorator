@@ -3,6 +3,7 @@ description: "Per-prompt unit of work or small developer action supporting a Sto
 title: "[Task] <Actionable verb + object>"
 labels: ["type: task"]
 assignees: []
+about: "A per-prompt unit of work. Represents one or a few changes or tool runs that move a story forward. Multiple tasks roll into a story."
 body:
   - type: input
     id: story_link

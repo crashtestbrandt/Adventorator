@@ -2,6 +2,7 @@ name: "Story"
 description: "PR-sized unit of work delivering a vertical slice."
 title: "[Story] <Concise description>"
 labels: ["type: story"]
+about: "A PR-sized unit of work. Represents a coherent slice of functionality (often vertical: UI → API → DB). Carries acceptance criteria, tests, and contracts."
 assignees: []
 body:
   - type: input

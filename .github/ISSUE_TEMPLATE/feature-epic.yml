@@ -3,6 +3,7 @@ description: "Production-ready feature composed of multiple Stories."
 title: "[Epic] <Feature name>"
 labels: ["type: epic"]
 assignees: []
+about: "A production-ready feature composed of multiple stories. Anchors architecture, ADRs, and traceability. Lives across multiple sprints if needed."
 body:
   - type: input
     id: summary
