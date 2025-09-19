@@ -102,6 +102,9 @@ class Transcript(Base):
     content: Mapped[str] = mapped_column(Text)
     meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # rolls, dc, etc.
     status: Mapped[str] = mapped_column(String(16), default="complete")  # pending|complete|error
+    activity_log_id: Mapped[int | None] = mapped_column(
+        ForeignKey("activity_logs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -113,6 +116,36 @@ Index(
     Transcript.channel_id,
     Transcript.created_at,
 )
+
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
+    )
+    scene_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    actor_ref: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    summary: Mapped[str] = mapped_column(String(200))
+    payload: Mapped[dict] = mapped_column(JSON)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_activity_logs_campaign_scene_time",
+            "campaign_id",
+            "scene_id",
+            "created_at",
+        ),
+    )
 
 
 # -----------------------------
@@ -183,6 +216,9 @@ class PendingAction(Base):
     # Link to associated transcripts created during proposal
     player_tx_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bot_tx_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    activity_log_id: Mapped[int | None] = mapped_column(
+        ForeignKey("activity_logs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

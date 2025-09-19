@@ -11,6 +11,7 @@ llm_visible = true
 action_validation = false
 predicate_gate = false
 mcp = false
+activity_log = false
 
 # Retrieval-augmented orchestration.
 # Note: provider "none" uses the built-in SQL fallback retriever.

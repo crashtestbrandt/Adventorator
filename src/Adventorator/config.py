@@ -24,6 +24,7 @@ def _toml_settings_source() -> dict[str, Any]:
         "features_action_validation": t.get("features", {}).get("action_validation", False),
         "features_predicate_gate": t.get("features", {}).get("predicate_gate", False),
         "features_mcp": t.get("features", {}).get("mcp", False),
+        "features_activity_log": t.get("features", {}).get("activity_log", False),
         # Map rendering (Phase 12) — prefer [map].enabled with legacy fallback
         "features_map": bool(
             (t.get("map", {}) or {}).get(
@@ -156,6 +157,7 @@ class Settings(BaseSettings):
     features_action_validation: bool = False
     features_predicate_gate: bool = False
     features_mcp: bool = False
+    features_activity_log: bool = False
     features_map: bool = False
     features_events: bool = False
     features_executor: bool = False

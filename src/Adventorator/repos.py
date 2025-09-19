@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -14,6 +15,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from Adventorator import models
 from Adventorator.metrics import inc_counter
 from Adventorator.schemas import CharacterSheet
+
+_MAX_ACTIVITY_SUMMARY_LEN = 160
+_MAX_ACTIVITY_PAYLOAD_BYTES = 4096
+
+
+def _clamp_summary(summary: str, *, max_length: int = _MAX_ACTIVITY_SUMMARY_LEN) -> str:
+    text = (summary or "").strip()
+    if len(text) <= max_length:
+        return text
+    return text[: max_length - 3] + "..."
+
+
+def _sanitize_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not payload:
+        return {}
+    try:
+        canonical = json.loads(json.dumps(payload, ensure_ascii=False, default=str))
+    except Exception:
+        return {"error": "unserializable"}
+    encoded = json.dumps(canonical, ensure_ascii=False).encode("utf-8")
+    if len(encoded) <= _MAX_ACTIVITY_PAYLOAD_BYTES:
+        return canonical
+    return {"truncated": True}
 
 
 async def get_or_create_campaign(
@@ -153,6 +177,7 @@ async def write_transcript(
     author_ref: str | None = None,
     meta: dict | None = None,
     status: str | None = None,
+    activity_log_id: int | None = None,
 ) -> models.Transcript:
     t = models.Transcript(
         campaign_id=campaign_id,
@@ -163,10 +188,41 @@ async def write_transcript(
         content=content,
         meta=meta or {},
         status=status or "complete",
+        activity_log_id=activity_log_id,
     )
     s.add(t)
     await _flush_retry(s)
+    if activity_log_id is not None:
+        inc_counter("activity_log.linked_to_transcript")
     return t
+
+
+async def create_activity_log(
+    s: AsyncSession,
+    *,
+    campaign_id: int,
+    scene_id: int | None,
+    actor_ref: str | None,
+    event_type: str,
+    summary: str,
+    payload: dict[str, Any] | None = None,
+    correlation_id: str | None = None,
+    request_id: str | None = None,
+) -> models.ActivityLog:
+    obj = models.ActivityLog(
+        campaign_id=campaign_id,
+        scene_id=scene_id,
+        actor_ref=actor_ref,
+        event_type=event_type,
+        summary=_clamp_summary(summary),
+        payload=_sanitize_payload(payload),
+        correlation_id=correlation_id,
+        request_id=request_id,
+    )
+    s.add(obj)
+    await _flush_retry(s)
+    inc_counter("activity_log.created")
+    return obj
 
 
 async def update_transcript_status(s: AsyncSession, transcript_id: int, status: str) -> None:
@@ -386,6 +442,7 @@ async def create_pending_action(
     narration: str,
     player_tx_id: int | None,
     bot_tx_id: int | None,
+    activity_log_id: int | None = None,
     ttl_seconds: int | None = 300,
 ) -> models.PendingAction:
     expires_at = None
@@ -428,6 +485,7 @@ async def create_pending_action(
         narration=narration,
         player_tx_id=player_tx_id,
         bot_tx_id=bot_tx_id,
+        activity_log_id=activity_log_id,
         status="pending",
         expires_at=expires_at,
         dedup_hash=dedup_hash,

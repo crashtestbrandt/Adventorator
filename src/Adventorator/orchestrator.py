@@ -40,6 +40,43 @@ class OrchestratorResult:
     reason: str | None = None
     chain_json: dict | None = None
     execution_request: ExecutionRequest | None = None
+    activity_log_id: int | None = None
+
+
+def _activity_event_type(steps: list[PlanStep]) -> str:
+    if not steps:
+        return "mechanics.unknown"
+    return f"mechanics.{steps[0].op}"
+
+
+def _activity_summary(steps: list[PlanStep], mechanics: str) -> str:
+    if steps:
+        step = steps[0]
+        op = step.op
+        args = step.args or {}
+        if op == "check":
+            ability = str(args.get("ability") or "").upper() or "Ability"
+            dc = args.get("dc")
+            if dc is not None:
+                return f"{ability} check vs DC {dc}"
+            return f"{ability} check"
+        if op == "attack":
+            attacker = str(args.get("attacker") or "attacker")
+            target = str(args.get("target") or "target")
+            return f"Attack {attacker} -> {target}"
+        if op in {"apply_condition", "remove_condition", "clear_condition"}:
+            condition = str(args.get("condition") or "").strip()
+            target = str(args.get("target") or "").strip()
+            base = op.replace("_", " ")
+            if condition and target:
+                return f"{base} {condition} on {target}"
+            if condition:
+                return f"{base} {condition}".strip()
+            if target:
+                return f"{base} {target}".strip()
+            return base
+    first_line = (mechanics or "").strip().splitlines()[0]
+    return first_line or "mechanics preview"
 
 
 def _format_mechanics_block(result, ability: str, dc: int) -> str:
@@ -277,6 +314,9 @@ async def run_orchestrator(
     _orc_start = time.monotonic()
     feature_action_validation = bool(
         getattr(settings, "features_action_validation", False) if settings is not None else False
+    )
+    feature_activity_log = bool(
+        getattr(settings, "features_activity_log", False) if settings is not None else False
     )
     cache_key = (scene_id, player_msg.strip(), feature_action_validation)
     now = time.time()
@@ -612,11 +652,62 @@ async def run_orchestrator(
             )
         else:
             mechanics = "Proposal accepted but preview unavailable."
+    activity_log_id: int | None = None
+    if (
+        req_for_execution is not None
+        and feature_action_validation
+        and feature_activity_log
+    ):
+        try:
+            async with session_scope() as s:
+                scene_obj = await s.get(_models.Scene, scene_id)
+                campaign_id = getattr(scene_obj, "campaign_id", None)
+                if campaign_id is not None:
+                    actor_ref = None
+                    if actor_id is not None:
+                        actor_ref = str(actor_id)
+                    elif ctx.get("actor_id"):
+                        actor_ref = str(ctx["actor_id"])
+                    payload = {
+                        "plan_id": req_for_execution.plan_id,
+                        "execution_request": req_for_execution.model_dump(),
+                        "mechanics": mechanics,
+                        "narration": out.narration,
+                    }
+                    if preview_failed:
+                        payload["preview_failed"] = True
+                    row = await repos.create_activity_log(
+                        s,
+                        campaign_id=campaign_id,
+                        scene_id=scene_id,
+                        actor_ref=actor_ref,
+                        event_type=_activity_event_type(plan_steps),
+                        summary=_activity_summary(plan_steps, mechanics),
+                        payload=payload,
+                        correlation_id=req_for_execution.plan_id,
+                        request_id=req_for_execution.plan_id,
+                    )
+                    activity_log_id = getattr(row, "id", None)
+                else:
+                    inc_counter("activity_log.failed")
+                    log.warning(
+                        "activity_log.write_failed",
+                        scene_id=scene_id,
+                        reason="scene_missing",
+                    )
+        except Exception:
+            inc_counter("activity_log.failed")
+            log.warning(
+                "activity_log.write_failed",
+                scene_id=scene_id,
+                exc_info=True,
+            )
     final = OrchestratorResult(
         mechanics=mechanics,
         narration=out.narration,
         chain_json=chain_json,
         execution_request=execution_request,
+        activity_log_id=activity_log_id,
     )
     inc_counter("orchestrator.format.sent")
     log.info("orchestrator.format.sent", scene_id=scene_id)

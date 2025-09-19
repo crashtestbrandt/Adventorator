@@ -213,6 +213,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                 narration=res.narration,
                 player_tx_id=player_tx_id,
                 bot_tx_id=None,
+                activity_log_id=res.activity_log_id,
             )
             await inv.responder.send(
                 (
@@ -239,6 +240,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
             str(user_id),
             meta={"mechanics": res.mechanics},
             status="pending",
+            activity_log_id=res.activity_log_id,
         )
         bot_tx_id = getattr(bot_tx, "id", None)
 
