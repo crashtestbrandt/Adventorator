@@ -27,15 +27,17 @@ jobs:
               }
             }
 
+            const isNotApplicable = (value) => value.trim().toLowerCase() === "n/a";
+
             const epicLine = /- \*\*Feature Epic\(s\):\*\*\s*(.+)/i.exec(body);
-            if (!epicLine || !/#\d+/.test(epicLine[1])) {
+            if (!epicLine || (!isNotApplicable(epicLine[1]) && !/#\d+/.test(epicLine[1]))) {
               errors.push("Link at least one Feature Epic issue using '#<number>'.");
             }
 
             const storyLine = /- \*\*Story\(ies\):\*\*\s*(.+)/i.exec(body);
             const taskLine = /- \*\*Task\(s\):\*\*\s*(.+)/i.exec(body);
-            const storyHasRef = storyLine && /#\d+/.test(storyLine[1]);
-            const taskHasRef = taskLine && /#\d+/.test(taskLine[1]);
+            const storyHasRef = storyLine && (isNotApplicable(storyLine[1]) || /#\d+/.test(storyLine[1]));
+            const taskHasRef = taskLine && (isNotApplicable(taskLine[1]) || /#\d+/.test(taskLine[1]));
             if (!storyHasRef && !taskHasRef) {
               errors.push("Reference at least one Story or Task issue in the PR body.");
             }
