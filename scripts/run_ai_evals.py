@@ -22,8 +22,6 @@ def parse_front_matter(path: Path) -> dict[str, str]:
         if not line.strip() or ":" not in line:
             continue
         parts = line.split(":", 1)
-        if len(parts) != 2:
-            continue
         key, value = parts
         key = key.strip()
         if not key:
