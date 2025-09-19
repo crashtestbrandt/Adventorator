@@ -5,7 +5,7 @@
 - **Feature Epic(s):** #EPIC-ID
 - **Story(ies):** #STORY-ID
 - **Task(s):** #TASK-ID
-- **ADR(s):** [ADR-###](./docs/adr/ADR-###-title.md)
+- **ADR(s):** [ADR-###](../docs/adr/ADR-###-title.md)
 
 ## Architecture Impact
 <!-- Does this PR introduce or modify architecture? -->
