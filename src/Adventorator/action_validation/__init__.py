@@ -1,6 +1,12 @@
 """Action validation public exports."""
 
 from .metrics import record_plan_steps, record_predicate_gate_outcome
+from .predicate_gate import (
+    PredicateContext,
+    PredicateFailure,
+    PredicateGateResult,
+    evaluate_predicates,
+)
 from .schemas import (
     AskReport,
     ExecutionRequest,
@@ -19,6 +25,10 @@ __all__ = [
     "AskReport",
     "record_plan_steps",
     "record_predicate_gate_outcome",
+    "PredicateContext",
+    "PredicateFailure",
+    "PredicateGateResult",
+    "evaluate_predicates",
     "plan_registry",
     "ExecutionRequest",
     "ExecutionResult",

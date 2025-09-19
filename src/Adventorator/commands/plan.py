@@ -9,10 +9,13 @@ from pydantic import Field
 from Adventorator import repos
 from Adventorator.action_validation import (
     Plan,
+    PredicateContext,
+    evaluate_predicates,
     plan_from_planner_output,
     plan_registry,
     planner_output_from_plan,
     record_plan_steps,
+    record_predicate_gate_outcome,
 )
 from Adventorator.commanding import Invocation, Option, find_command, slash_command
 from Adventorator.db import session_scope
@@ -77,6 +80,11 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
     guild_id = int(inv.guild_id or 0)
     channel_id = int(inv.channel_id or 0)
     user_id = int(inv.user_id or 0)
+    use_action_validation = bool(getattr(settings, "features_action_validation", False))
+    use_predicate_gate = bool(getattr(settings, "features_predicate_gate", False))
+
+    allowed_actor_names: list[str] = []
+    campaign_id = 0
     async with session_scope() as s:
         campaign = await repos.get_or_create_campaign(s, guild_id)
         scene = await repos.ensure_scene(s, campaign.id, channel_id)
@@ -90,6 +98,12 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
             str(user_id),
         )
         scene_id = scene.id
+        campaign_id = campaign.id
+        if use_action_validation and use_predicate_gate:
+            try:
+                allowed_actor_names = await repos.list_character_names(s, campaign.id)
+            except Exception:
+                allowed_actor_names = []
 
     # Planner timeout (allow override via settings)
     try:
@@ -98,7 +112,6 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         timeout_s = _PLAN_TIMEOUT
 
     # Cache check
-    use_action_validation = bool(getattr(settings, "features_action_validation", False))
     plan_obj: Plan | None = None
     out: PlannerOutput | None = None
 
@@ -180,6 +193,42 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         await inv.responder.send("⚠️ Planned command was not found.", ephemeral=True)
         return
 
+    if use_action_validation and use_predicate_gate:
+        try:
+            ctx = PredicateContext(
+                campaign_id=int(campaign_id),
+                scene_id=int(scene_id),
+                user_id=int(user_id) if user_id else None,
+                allowed_actors=tuple(allowed_actor_names),
+            )
+        except Exception:
+            ctx = PredicateContext(
+                campaign_id=int(campaign_id),
+                scene_id=int(scene_id),
+                user_id=None,
+                allowed_actors=tuple(allowed_actor_names),
+            )
+        gate_result = await evaluate_predicates(out, context=ctx)
+        record_predicate_gate_outcome(ok=gate_result.ok)
+        if not gate_result.ok:
+            plan_obj = plan_from_planner_output(out)
+            plan_obj = plan_obj.model_copy(
+                update={
+                    "feasible": False,
+                    "steps": [],
+                    "failed_predicates": [failure.as_dict() for failure in gate_result.failed],
+                }
+            )
+            plan_registry.register_plan(plan_obj)
+            log.info(
+                "planner.predicate_gate.failed",
+                cmd=cmd_name_flat,
+                failures=[failure.as_dict() for failure in gate_result.failed],
+            )
+            inc_counter("planner.decision.rejected")
+            reason = gate_result.failed[0].message if gate_result.failed else "Action not feasible."
+            await inv.responder.send(f"🛑 {reason}", ephemeral=True)
+            return
     # Validate args against the command's option model
     try:
         option_obj = cmd.option_model.model_validate(out.args)  # type: ignore[attr-defined]
