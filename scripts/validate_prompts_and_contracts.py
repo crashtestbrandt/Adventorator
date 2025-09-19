@@ -37,8 +37,6 @@ def parse_front_matter(text: str) -> dict[str, str]:
         if ":" not in line:
             continue
         parts = line.split(":", 1)
-        if len(parts) != 2:
-            continue
         key, value = parts
         key = key.strip()
         if not key:
