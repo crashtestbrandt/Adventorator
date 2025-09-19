@@ -218,16 +218,16 @@
 
 | Artifact | Link | Notes |
 | --- | --- | --- |
-| Epic Issue | _Pending_ | Create via Feature Epic template and link here. |
-| Story 001A | _Pending_ | Reference this document and associated contracts. |
-| Story 001B | _Pending_ | Include observability sign-offs. |
-| Story 001C | _Pending_ | Attach cache regression evidence. |
-| Story 001D | _Pending_ | Provide preview parity screenshots/logs. |
-| Story 001E | _Pending_ | Link integration test results. |
-| Story 001F | _Pending_ | Attach predicate fixtures and outcomes. |
-| Story 001G | _Pending_ | Reference ActivityLog schema approvals. |
-| Story 001H | _Pending_ | Include MCP interface review notes. |
-| Story 001I | _Pending_ | Capture tiered planning roadmap alignment. |
-| Story 001J | _Pending_ | Document rollout rehearsal artifacts. |
+| Epic Issue | [#124](https://github.com/crashtestbrandt/Adventorator/issues/124) | Action Validation Pipeline Enablement. |
+| Story 001A | [#125](https://github.com/crashtestbrandt/Adventorator/issues/125) | Contracts & feature flags. Tasks: #135-#138 |
+| Story 001B | [#126](https://github.com/crashtestbrandt/Adventorator/issues/126) | Logging & metrics. Tasks: #139-#141 |
+| Story 001C | [#127](https://github.com/crashtestbrandt/Adventorator/issues/127) | Planner Plan contract. Tasks: #142-#144 |
+| Story 001D | [#128](https://github.com/crashtestbrandt/Adventorator/issues/128) | Orchestrator ExecutionRequest shim. Tasks: #145-#147 |
+| Story 001E | [#129](https://github.com/crashtestbrandt/Adventorator/issues/129) | Executor adapter interoperability. Tasks: #148-#150 |
+| Story 001F | [#130](https://github.com/crashtestbrandt/Adventorator/issues/130) | Predicate Gate v0. Tasks: #151-#153 |
+| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | ActivityLog mechanics capture. Tasks: #154-#156 |
+| Story 001H | [#132](https://github.com/crashtestbrandt/Adventorator/issues/132) | MCP adapter scaffold. Tasks: #157-#159 |
+| Story 001I | [#133](https://github.com/crashtestbrandt/Adventorator/issues/133) | Tiered planning scaffolding. Tasks: #160-#162 |
+| Story 001J | [#134](https://github.com/crashtestbrandt/Adventorator/issues/134) | Operational hardening & rollout. Tasks: #163-#165 |
 
 Update the table as GitHub issues are created to preserve AIDD traceability.

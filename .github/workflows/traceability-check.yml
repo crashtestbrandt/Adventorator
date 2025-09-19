@@ -1,0 +1,32 @@
+name: Traceability Check
+
+on:
+  pull_request:
+    paths:
+      - 'docs/implementation/epics/action-validation-architecture.md'
+      - 'scripts/update_action_validation_traceability.py'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/implementation/epics/action-validation-architecture.md'
+      - 'scripts/update_action_validation_traceability.py'
+
+jobs:
+  verify-traceability:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          pip install -e .
+      - name: Verify traceability table
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/update_action_validation_traceability.py --verify || (echo 'Run script with --write locally to update table.' && exit 1)
