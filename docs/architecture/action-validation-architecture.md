@@ -1,6 +1,6 @@
 # ARCH-AVA-001 — Action Validation Architecture
 
-**Status:** Draft — pending Phase 0 kickoff  \
+**Status:** Active — Phases 0–6 implemented/in progress; remaining phases (7–9) planned behind feature flags  \
 **Last Updated:** 2025-09-19  \
 **Primary Epic:** [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implementation/epics/action-validation-architecture.md)  \
 **Implementation Plan:** [Action Validation Implementation Plan](../implementation/action-validation-implementation.md)  \

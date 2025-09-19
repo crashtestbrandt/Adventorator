@@ -55,7 +55,24 @@ This playbook documents budgets, metrics, and rollout/rollback guidance required
 | `features.planner` | Enables `/plan` AI routing | 1) Internal guilds, 2) Opt-in beta servers, 3) General availability | Set to `false` in config, invalidate planner cache, notify #ops-adventorator |
 | `features.executor` | Connects orchestrator to executor preview/apply | 1) Preview-only flows, 2) Partial apply (non-destructive), 3) Full apply | Disable flag, run `scripts/cleanup_pending.py`, replay events for audit |
 | `features.combat` | Activates encounter engine | 1) Staging playtests, 2) 10% guild cohort, 3) 50% guilds, 4) 100% rollout | Toggle flag off, execute rollback checklist in STORY-ENC-002C, notify players |
-| `features.events` | Emits domain events for ledger | 1) Observability shadow mode, 2) Apply flows, 3) External integrations | Turn off flag, prune queued events, communicate to downstream consumers |
+### Consolidated Feature Flag Reference (Current Defaults)
+
+| Flag | Default | Domain | Description | Related Epics / Stories | Rollout Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `features.llm` | true | LLM | Enables core LLM responses (baseline chat) | Core AI Systems | Medium | Disable to force pure deterministic command mode |
+| `features.llm_visible` | true | LLM | Surfaces LLM output directly to users (vs shadow) | Core AI Systems | Low | Set false for shadow validation |
+| `features.planner` | true | Planning | Routes `/plan` through planner pipeline | Core AI Systems / Planner Stories | Medium | Cache invalidation on disable |
+| `features.action_validation` | false | Action Validation | Enables Plan/ExecutionRequest internal contracts | EPIC-AVA-001 (Phases 0–6) | Low | Wraps legacy paths; flip off for rollback |
+| `features.predicate_gate` | false | Action Validation | Activates deterministic predicate feasibility checks | STORY-AVA-001F | Low | Bypass returns legacy feasibility behavior |
+| `features.mcp` | false | Action Validation / MCP | Routes executor tooling via MCP adapter layer | STORY-AVA-001H | Medium | Off → direct rules path |
+| `features.activity_log` | false | Observability | Persists mechanics ActivityLog entries | STORY-AVA-001G | Low | Off retains metrics/logs only |
+| `features.executor` | true | Execution | Connects orchestrator to executor preview/apply | Multiple | Medium | Disable to isolate planning without apply |
+| `features.executor_confirm` | (implied true when confirmation flow active) | Safety | Requires explicit confirm for mutating actions | Pending Action / Safety Stories | Low | Use for high-risk tool gating |
+| `features.events` | true | Events | Emits domain events for ledger & integration | Event Epics | Medium | Off halts downstream integrations |
+| `features.rules` | true | Rules Engine | Enables deterministic rules module usage | Core Systems | Low | Rarely disabled outside tests |
+| `features.combat` | true | Encounter | Activates encounter/turn engine | Encounter Turn Engine | Medium | Off pauses active encounters (gracefully) |
+| `features.retrieval.enabled` | true | Retrieval | Enables retrieval-augmented context injection | Retrieval Epic | Medium | provider sub-flags control backend |
+| `features.retrieval.provider` | "none" | Retrieval | Selects retrieval backend (`none|pgvector|qdrant`) | Retrieval Epic | Medium | Changing may impact latency |
 
 ## Rollout/Rollback Checklist Template
 

@@ -3,7 +3,7 @@
 > **Traceability**
 > - Architecture: [ARCH-AVA-001 — Action Validation Architecture](../architecture/action-validation-architecture.md)
 > - Epic: [EPIC-AVA-001 — Action Validation Pipeline Enablement](./epics/action-validation-architecture.md)
-> - Workflow Templates: [Feature Epic](../../.github/ISSUE_TEMPLATE/feature_epic.md), [Story](../../.github/ISSUE_TEMPLATE/story.md), [Task](../../.github/ISSUE_TEMPLATE/task.md)
+> - Workflow Templates: Feature Epic / Story / Task issue templates (see `.github/ISSUE_TEMPLATE/` forms)
 
 The phases below correspond to Story-level slices captured in [EPIC-AVA-001](./epics/action-validation-architecture.md). Each story aggregates the Definition of Ready/Done expectations from the AIDD framework and references the tasks enumerated here.
 

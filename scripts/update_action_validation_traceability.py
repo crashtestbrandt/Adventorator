@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 REPO = "crashtestbrandt/Adventorator"
-EPIC_DOC = Path("docs/implementation/epics/action-validation-architecture.md")
+DEFAULT_EPIC = Path("docs/implementation/epics/action-validation-architecture.md")
 TRACE_HEADER = "## Traceability Log"
 
 STORY_KEY_PATTERN = re.compile(r"STORY-AVA-(001[A-J])")
@@ -98,33 +98,43 @@ def build_table() -> str:
     header = "| Artifact | Link | Notes |\n| --- | --- | --- |"
     return header + "\n" + "\n".join(rows)
 
-def update_file(table: str) -> None:
-    text = EPIC_DOC.read_text()
+def update_file(epic_doc: Path, table: str) -> None:
+    text = epic_doc.read_text()
     pattern = re.compile(r"## Traceability Log\n\n\| Artifact.*?(?:\n\n|\Z)", re.DOTALL)
     replacement = f"{TRACE_HEADER}\n\n{table}\n\n"
     new_text = pattern.sub(replacement, text)
-    EPIC_DOC.write_text(new_text)
+    epic_doc.write_text(new_text)
 
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--epic", help="Path to a single epic markdown file", default=str(DEFAULT_EPIC))
+    ap.add_argument("--all", action="store_true", help="Update all epic docs under docs/implementation/epics/")
     ap.add_argument("--write", action="store_true", help="Write changes instead of printing table")
-    ap.add_argument("--verify", action="store_true", help="Exit non-zero if file is out of sync")
+    ap.add_argument("--verify", action="store_true", help="Exit non-zero if file(s) out of sync")
     args = ap.parse_args()
-    table = build_table()
-    if args.verify:
-        current = EPIC_DOC.read_text()
-        if table in current:
-            print("Traceability Log in sync.")
-        else:
-            print("Traceability Log NOT in sync.")
-            print(table)
-            raise SystemExit(1)
-    elif args.write:
-        update_file(table)
-        print("Traceability Log updated.")
+    epic_paths: list[Path]
+    if args.all:
+        epic_paths = sorted(Path("docs/implementation/epics").glob("*.md"))
     else:
-        print(table)
+        epic_paths = [Path(args.epic)]
+    exit_code = 0
+    for epic_doc in epic_paths:
+        table = build_table()  # currently only AVA-aware; future: parse epic_doc name for filtering
+        if args.verify:
+            current = epic_doc.read_text()
+            if table in current:
+                print(f"[OK] {epic_doc}")
+            else:
+                print(f"[FAIL] {epic_doc} out of sync")
+                exit_code = 1
+        elif args.write:
+            update_file(epic_doc, table)
+            print(f"Updated {epic_doc}")
+        else:
+            print(f"=== {epic_doc} ===\n{table}\n")
+    if args.verify and exit_code:
+        raise SystemExit(exit_code)
 
 if __name__ == "__main__":
     main()

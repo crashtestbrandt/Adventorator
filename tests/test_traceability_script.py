@@ -1,5 +1,6 @@
 import types
 import scripts.update_action_validation_traceability as mod
+from pathlib import Path
 
 class GhCallRecorder:
     def __init__(self):
@@ -39,3 +40,13 @@ def test_build_table_monkeypatch(monkeypatch):
     assert "Epic Issue" in table
     assert "Story 001A" in table
     assert "#135-#136" in table or "#135, #136" in table
+
+def test_verify_mode_single_epic(monkeypatch, tmp_path):
+    monkeypatch.setattr(mod.subprocess, 'check_output', fake_check_output)
+    # Create a temp epic doc with placeholder traceability log
+    epic_doc = tmp_path / 'epic-temp.md'
+    epic_doc.write_text('## Traceability Log\n\n| Artifact | Link | Notes |\n| --- | --- | --- |\n| placeholder | placeholder | placeholder |\n')
+    # Build table and write
+    table = mod.build_table()
+    mod.update_file(epic_doc, table)
+    assert table in epic_doc.read_text()
