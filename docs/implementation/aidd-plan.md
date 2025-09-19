@@ -59,6 +59,12 @@ The AI-driven development pipeline emphasizes tight traceability from Feature Ep
 3. **Automate Prompt/Contract Validation**
    - Add schema validators or golden test harnesses for prompts and contracts to support the contract-first, AI-evaluated workflow.
 
+#### Phase 3 Implementation Notes
+- `.github/workflows/pr-quality-gates.yml` enforces PR template hygiene and runs ADR linting for architecture-impacting changes.
+- Extended `.github/workflows/tests.yml` adds coverage thresholds, a mutation smoke test, security scanning, and artifact validation jobs keyed to the Makefile targets.
+- New governance scripts under `scripts/` validate ADRs, prompt/contract registries, AI evaluation manifests, and observability budgets.
+- Seeded `prompts/planner/planner-v1.md`, `prompts/evals/planner-smoke.json`, and `contracts/http/encounter/v1/encounter-openapi.json` with metadata to exercise the automated quality gates.
+
 ### Phase 4 – Cultural Adoption & Continuous Improvement
 1. **Run Pilot Epic**
    - Select an upcoming feature, manage it end-to-end using the new Epic→Story→Task templates, and gather feedback from contributors and AI agents.

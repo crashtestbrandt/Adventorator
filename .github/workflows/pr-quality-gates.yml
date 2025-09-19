@@ -1,0 +1,75 @@
+name: pr-quality-gates
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+jobs:
+  pr-metadata:
+    name: Validate PR metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce template placeholders
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = (context.payload.pull_request && context.payload.pull_request.body) || "";
+            const errors = [];
+            const placeholders = ["#EPIC-ID", "#STORY-ID", "#TASK-ID", "ADR-###"];
+            for (const placeholder of placeholders) {
+              if (body.includes(placeholder)) {
+                errors.push(`Replace placeholder ${placeholder} in PR body.`);
+              }
+            }
+
+            const epicLine = /- \*\*Feature Epic\(s\):\*\*\s*(.+)/i.exec(body);
+            if (!epicLine || !/#\d+/.test(epicLine[1])) {
+              errors.push("Link at least one Feature Epic issue using '#<number>'.");
+            }
+
+            const storyLine = /- \*\*Story\(ies\):\*\*\s*(.+)/i.exec(body);
+            const taskLine = /- \*\*Task\(s\):\*\*\s*(.+)/i.exec(body);
+            const storyHasRef = storyLine && /#\d+/.test(storyLine[1]);
+            const taskHasRef = taskLine && /#\d+/.test(taskLine[1]);
+            if (!storyHasRef && !taskHasRef) {
+              errors.push("Reference at least one Story or Task issue in the PR body.");
+            }
+
+            const adrLinks = body.match(/ADR-\d{4}/g) || [];
+            const architectureChecked = /\[x\]\s*Yes, ADR\(s\) linked above/i.test(body);
+            if (architectureChecked && adrLinks.length === 0) {
+              errors.push("Architecture impact marked as 'Yes' but no ADR links found.");
+            }
+
+            if (errors.length) {
+              core.setFailed(errors.join("\n"));
+            }
+  
+  adr-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect ADR changes
+        id: changes
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            docs/adr/ADR-*.md
+
+      - name: Lint ADRs
+        if: steps.changes.outputs.any_changed == 'true'
+        run: |
+          python scripts/adr_lint.py ${{ steps.changes.outputs.all_changed_files }}
+
+      - name: Skip ADR lint (no changes)
+        if: steps.changes.outputs.any_changed != 'true'
+        run: echo "No ADR modifications detected."
