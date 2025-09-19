@@ -32,10 +32,10 @@
   - Legacy planner, orchestrator, and executor paths round-trip through adapters without regressions.
   - Feature flags (`features.action_validation`, `features.predicate_gate`, `features.mcp`) default to safe/off values.
 - **Tasks.**
-  - [ ] `TASK-AVA-SCHEMA-01` — Implement IntentFrame/AskReport/Plan/PlanStep/ExecutionRequest/ExecutionResult models and serialization helpers.
-  - [ ] `TASK-AVA-CONVERT-02` — Add converters bridging legacy planner/orchestrator/executor types to the new contracts.
-  - [ ] `TASK-AVA-FLAGS-03` — Extend `config.toml` and config dataclasses with Action Validation feature flags and documentation.
-  - [ ] `TASK-AVA-TEST-04` — Add round-trip tests covering roll/check/attack flows to validate adapters.
+  - [x] `TASK-AVA-SCHEMA-01` — Implement IntentFrame/AskReport/Plan/PlanStep/ExecutionRequest/ExecutionResult models and serialization helpers.
+  - [x] `TASK-AVA-CONVERT-02` — Add converters bridging legacy planner/orchestrator/executor types to the new contracts.
+  - [x] `TASK-AVA-FLAGS-03` — Extend `config.toml` and config dataclasses with Action Validation feature flags and documentation.
+  - [x] `TASK-AVA-TEST-04` — Add round-trip tests covering roll/check/attack flows to validate adapters.
 - **DoR.**
   - Contract change proposal reviewed with planner/orchestrator maintainers.
   - Test plan outlines identity fixtures for roll/check/attack cases.
@@ -52,9 +52,9 @@
   - Metrics counters (`planner.allowlist.rejected`, `predicate.gate.ok/error`, `plan.steps.count`) recorded and documented.
   - Unit tests assert metric increments via reset/get helpers.
 - **Tasks.**
-  - [ ] `TASK-AVA-LOG-05` — Audit planner/orchestrator logs and add structured events per logging plan alignment.
-  - [ ] `TASK-AVA-METRIC-06` — Register counters for planner and predicate gate outcomes with taxonomy updates.
-  - [ ] `TASK-AVA-TEST-07` — Create unit tests validating logging hooks and metric counters fire as expected.
+  - [x] `TASK-AVA-LOG-05` — Audit planner/orchestrator logs and add structured events per logging plan alignment.
+  - [x] `TASK-AVA-METRIC-06` — Register counters for planner and predicate gate outcomes with taxonomy updates.
+  - [x] `TASK-AVA-TEST-07` — Create unit tests validating logging hooks and metric counters fire as expected.
 - **DoR.**
   - Observability acceptance criteria reviewed with logging maintainers.
   - Metric naming vetted against observability guide.
@@ -71,9 +71,9 @@
   - Plan logging and caching remain identical to baseline behavior.
   - Dispatcher continues using existing handlers with Plan stored for observability.
 - **Tasks.**
-  - [ ] `TASK-AVA-PLAN-08` — Wrap planner results into Plan objects with deterministic plan_id generation.
-  - [ ] `TASK-AVA-CMD-09` — Update `/plan` command handler to persist/log Plans while dispatching legacy flows.
-  - [ ] `TASK-AVA-CACHE-10` — Confirm cache hit/miss behavior with Plan integration through tests.
+  - [x] `TASK-AVA-PLAN-08` — Wrap planner results into Plan objects with deterministic plan_id generation.
+  - [x] `TASK-AVA-CMD-09` — Update `/plan` command handler to persist/log Plans while dispatching legacy flows.
+  - [x] `TASK-AVA-CACHE-10` — Confirm cache hit/miss behavior with Plan integration through tests.
 - **DoR.**
   - Planner prompt/catalog updates (if any) reviewed and linked.
   - Cache regression scenarios enumerated with expected outputs.
@@ -90,9 +90,9 @@
   - User-facing previews remain unchanged.
   - Rejection counters and logs remain stable.
 - **Tasks.**
-  - [ ] `TASK-AVA-ORCH-11` — Map orchestrator approvals to ExecutionRequest structures with drift checks.
-  - [ ] `TASK-AVA-PREVIEW-12` — Ensure preview rendering uses existing formatting paths while logging ExecutionRequests.
-  - [ ] `TASK-AVA-REJECT-13` — Validate rejection analytics remain accurate with new data structures.
+  - [x] `TASK-AVA-ORCH-11` — Map orchestrator approvals to ExecutionRequest structures with drift checks.
+  - [x] `TASK-AVA-PREVIEW-12` — Ensure preview rendering uses existing formatting paths while logging ExecutionRequests.
+  - [x] `TASK-AVA-REJECT-13` — Validate rejection analytics remain accurate with new data structures.
 - **DoR.**
   - Updated orchestrator contract documented and reviewed with stakeholders.
   - Test cases prepared for approval, repair, and rejection flows.
@@ -109,9 +109,9 @@
   - Idempotency keys and argument clamps reused without duplication.
   - Integration tests confirm parity for roll/check scenarios.
 - **Tasks.**
-  - [ ] `TASK-AVA-EXEC-14` — Build adapter functions translating ExecutionRequest into ToolCallChain/ToolStep.
-  - [ ] `TASK-AVA-IDEMP-15` — Reuse existing idempotency/deduplication logic within adapter path.
-  - [ ] `TASK-AVA-INTEG-16` — Add integration tests verifying dry-run/apply parity with adapter enabled.
+  - [x] `TASK-AVA-EXEC-14` — Build adapter functions translating ExecutionRequest into ToolCallChain/ToolStep.
+  - [x] `TASK-AVA-IDEMP-15` — Reuse existing idempotency/deduplication logic within adapter path.
+  - [x] `TASK-AVA-INTEG-16` — Add integration tests verifying dry-run/apply parity with adapter enabled.
 - **DoR.**
   - Executor maintainers sign off on adapter design.
   - Test fixtures prepared for preview/apply comparisons.
@@ -128,9 +128,9 @@
   - Planner marks plans infeasible with failed predicate metadata when checks fail.
   - Unit tests cover pass/fail scenarios using seeded data.
 - **Tasks.**
-  - [ ] `TASK-AVA-PRED-17` — Implement predicate module leveraging repos/rules helpers.
-  - [ ] `TASK-AVA-PLUG-18` — Invoke Predicate Gate within planner when feature flag enabled.
-  - [ ] `TASK-AVA-UNIT-19` — Write unit tests for predicates and planner infeasible responses.
+  - [x] `TASK-AVA-PRED-17` — Implement predicate module leveraging repos/rules helpers.
+  - [x] `TASK-AVA-PLUG-18` — Invoke Predicate Gate within planner when feature flag enabled.
+  - [x] `TASK-AVA-UNIT-19` — Write unit tests for predicates and planner infeasible responses.
 - **DoR.**
   - Data fixtures defined for predicate evaluation.
   - Rollback plan validated (flag disable).
@@ -147,9 +147,9 @@
   - Transcript records reference ActivityLog IDs for mechanics-driven narration.
   - E2E tests confirm /roll and /check create consistent ActivityLog payloads.
 - **Tasks.**
-  - [ ] `TASK-AVA-LOG-20` — Write ActivityLog integration capturing ExecutionRequest details per plan.
-  - [ ] `TASK-AVA-LINK-21` — Link transcript records to ActivityLog IDs for mechanics responses.
-  - [ ] `TASK-AVA-E2E-22` — Implement E2E tests verifying ActivityLog payload stability and counters.
+  - [x] `TASK-AVA-LOG-20` — Write ActivityLog integration capturing ExecutionRequest details per plan.
+  - [x] `TASK-AVA-LINK-21` — Link transcript records to ActivityLog IDs for mechanics responses.
+  - [x] `TASK-AVA-E2E-22` — Implement E2E tests verifying ActivityLog payload stability and counters.
 - **DoR.**
   - ActivityLog schema/ownership confirmed with data team.
   - Privacy review scheduled for stored payloads.
@@ -166,7 +166,7 @@
   - Executor uses MCP adapters internally without network I/O when flag enabled.
   - Unit tests compare MCP adapter results with direct rules calls.
 - **Tasks.**
-  - [ ] `TASK-AVA-MCP-23` — Specify MCP interface modules and placeholder implementations.
+  - [ ] `TASK-AVA-MCP-23` — Specify MCP interface modules and placeholder implementations. *(Not started; only `features.mcp` flag stub exists.)*
   - [ ] `TASK-AVA-EXEC-24` — Update executor tool handlers to call MCP adapters when flag enabled.
   - [ ] `TASK-AVA-TEST-25` — Add tests confirming MCP adapters produce identical results to direct calls.
 - **DoR.**
@@ -186,7 +186,7 @@
   - Feature flag disables Level 2+ paths.
 - **Tasks.**
   - [ ] `TASK-AVA-TIER-26` — Implement tier selection scaffolding with flags controlling Level 2/3 entry points.
-  - [ ] `TASK-AVA-GUARD-27` — Populate guards metadata and document serialization expectations.
+  - [ ] `TASK-AVA-GUARD-27` — Populate guards metadata and document serialization expectations. *(PlanStep `guards` field exists but remains empty in practice.)*
   - [ ] `TASK-AVA-TEST-28` — Add tests ensuring Plan serialization stability and guards formatting.
 - **DoR.**
   - Planning roadmap for Level 2/3 reviewed and documented.
@@ -204,8 +204,8 @@
   - Metrics for planner feasibility, predicate failures, executor preview/apply, and ActivityLog creation captured.
   - Rollout plan defines dev, canary, and GA enablement with rollback triggers.
 - **Tasks.**
-  - [ ] `TASK-AVA-TIMEOUT-29` — Implement timeout and payload bound configurations with safe defaults.
-  - [ ] `TASK-AVA-METRIC-30` — Expand metrics taxonomy and dashboards for rollout monitoring.
+  - [ ] `TASK-AVA-TIMEOUT-29` — Implement timeout and payload bound configurations with safe defaults. *(Planner timeout wired; payload bounding and executor knobs outstanding.)*
+  - [ ] `TASK-AVA-METRIC-30` — Expand metrics taxonomy and dashboards for rollout monitoring. *(Planner/predicate metrics exist; rollout dashboards pending.)*
   - [ ] `TASK-AVA-RUNBOOK-31` — Document rollout/canary plan with escalation and rollback procedures.
 - **DoR.**
   - Operations team reviews rollout plan outline.
