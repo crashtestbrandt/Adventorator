@@ -1,0 +1,50 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Encounter Service",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/encounters": {
+      "post": {
+        "summary": "Create a new encounter",
+        "operationId": "createEncounter",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["guild_id", "scene"],
+                "properties": {
+                  "guild_id": {"type": "string"},
+                  "scene": {"type": "string"},
+                  "actors": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Encounter created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["encounter_id"],
+                  "properties": {
+                    "encounter_id": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

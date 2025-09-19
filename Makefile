@@ -44,6 +44,23 @@ type:
 format:
 	. .venv/bin/activate && ruff format src tests
 
+coverage:
+	. .venv/bin/activate && pytest --cov=Adventorator --cov-report=term-missing --cov-fail-under=80
+
+mutation-guard:
+	. .venv/bin/activate && python scripts/check_mutation_guard.py
+
+security:
+	. .venv/bin/activate && bandit -q -r src -ll
+
+quality-artifacts:
+	. .venv/bin/activate && python scripts/validate_prompts_and_contracts.py
+
+ai-evals:
+	. .venv/bin/activate && python scripts/run_ai_evals.py
+
+quality-gates: coverage mutation-guard security quality-artifacts ai-evals
+
 # --- Pending expiration helper ---
 expire-pending:
 	. .venv/bin/activate && python -m Adventorator.scripts.expire_pending

@@ -5,6 +5,7 @@ annotated-types==0.7.0
 anyio==4.10.0
 asyncpg==0.30.0
 attrs==25.3.0
+bandit==1.7.10
 certifi==2025.8.3
 cffi==1.17.1
 charset-normalizer==3.4.3
