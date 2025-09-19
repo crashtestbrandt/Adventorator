@@ -15,6 +15,7 @@ A Discord-native Dungeon Master bot that blends deterministic 5e mechanics with 
 - [Operations](#operations)
 - [Repo Structure](#repo-structure)
 - [Contributing](./CONTRIBUTING.md)
+ - [Changelog](./docs/CHANGELOG.md)
 
 > Encounters (Phase 10)
 - See docs: [Encounters (dev notes)](./docs/dev/encounters.md)

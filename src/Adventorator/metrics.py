@@ -54,6 +54,15 @@ def reset_counters() -> None:
         plan_registry.reset()
     except Exception:
         pass
+    # Also clear per-user planner rate limiter (plan command) so prior tests
+    # do not cause inadvertent rate-limit early returns in cache metric tests.
+    try:
+        from Adventorator.commands import plan as _plan_module  # type: ignore
+
+        if hasattr(_plan_module, "_rl") and isinstance(_plan_module._rl, dict):  # noqa: SLF001
+            _plan_module._rl.clear()  # noqa: SLF001
+    except Exception:
+        pass
 
 
 def get_counters() -> dict[str, int]:

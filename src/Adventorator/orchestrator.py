@@ -578,6 +578,15 @@ async def run_orchestrator(
         req_for_execution = ExecutionRequest(plan_id=ctx["request_id"], steps=plan_steps, context=ctx)
         if feature_action_validation:
             execution_request = req_for_execution
+            try:
+                import structlog
+                structlog.get_logger().info(
+                    "orchestrator.execution_request.built",
+                    plan_id=req_for_execution.plan_id,
+                    step_count=len(plan_steps),
+                )
+            except Exception:
+                pass
 
     if use_executor and (_executor_mod is not None) and hasattr(_executor_mod, "Executor"):
         try:

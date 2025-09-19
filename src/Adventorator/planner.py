@@ -35,7 +35,7 @@ class _CacheEntry:
 
 
 _LegacyCacheEntry = tuple[float, dict[str, Any]] | tuple[float, dict[str, Any], str]
-_plan_cache: dict[tuple[int, str], _CacheEntry | _LegacyCacheEntry] = {}
+_plan_cache: dict[tuple[int, int, str], _CacheEntry | _LegacyCacheEntry] = {}
 
 
 def _normalize_cache_entry(
@@ -56,23 +56,73 @@ def _normalize_cache_entry(
     return entry
 
 
-def _cache_get(scene_id: int, msg: str) -> tuple[dict[str, Any], str] | None:
-    key = (scene_id, msg.strip())
+def _cache_get(guild_id: int, channel_id: int, msg: str) -> tuple[dict[str, Any], str] | None:
+    """Fetch a cached planner output/plan.
+
+    Key is (guild_id, channel_id, message). Instrumented with detailed events
+    to diagnose miss conditions seen in tests where a hit was expected.
+    """
+    log = structlog.get_logger()
+    key = (guild_id, channel_id, msg.strip())
     now = time.time()
     v = _plan_cache.get(key)
     if not v:
+        inc_counter("planner.cache.miss")
+        log.info(
+            "planner.cache.miss",
+            guild_id=guild_id,
+            channel_id=channel_id,
+            msg_hash=hash(msg.strip()),
+            msg_preview=msg[:60],
+            cache_size=len(_plan_cache),
+        )
         return None
     entry = _normalize_cache_entry(key, v)
-    if now - entry.timestamp <= _CACHE_TTL:
+    age = now - entry.timestamp
+    if age <= _CACHE_TTL:
         inc_counter("planner.cache.hit")
+        log.info(
+            "planner.cache.hit",
+            guild_id=guild_id,
+            channel_id=channel_id,
+            msg_hash=hash(msg.strip()),
+            age_ms=int(age * 1000),
+            schema=entry.schema,
+        )
         return entry.payload, entry.schema
+    # Expired
+    inc_counter("planner.cache.expired")
+    log.info(
+        "planner.cache.expired",
+        guild_id=guild_id,
+        channel_id=channel_id,
+        msg_hash=hash(msg.strip()),
+        age_ms=int(age * 1000),
+        ttl_s=_CACHE_TTL,
+    )
+    # Remove stale entry to keep cache tidy
+    try:
+        del _plan_cache[key]
+    except Exception:
+        pass
     return None
 
 
-def _cache_put(scene_id: int, msg: str, plan_json: dict[str, Any], *, schema: str) -> None:
-    _plan_cache[(scene_id, msg.strip())] = _CacheEntry(
-        time.time(), plan_json, schema
-    )
+def _cache_put(guild_id: int, channel_id: int, msg: str, plan_json: dict[str, Any], *, schema: str) -> None:
+    key = (guild_id, channel_id, msg.strip())
+    _plan_cache[key] = _CacheEntry(time.time(), plan_json, schema)
+    try:
+        log = structlog.get_logger()
+        log.info(
+            "planner.cache.store",
+            guild_id=guild_id,
+            channel_id=channel_id,
+            msg_hash=hash(msg.strip()),
+            schema=schema,
+            cache_size=len(_plan_cache),
+        )
+    except Exception:
+        pass
 
 
 def reset_plan_cache() -> None:
