@@ -27,6 +27,12 @@ The AI-driven development pipeline emphasizes tight traceability from Feature Ep
    - Install GitHub templates for Feature Epics, Stories, Tasks, and PRs using the pipeline-provided structures to enforce scope, acceptance criteria, and DoR/DoD fields.
    - Wire templates into `.github/ISSUE_TEMPLATE/` and `.github/pull_request_template.md` for immediate usage.
 
+#### Phase 1 Implementation Notes
+- `docs/adr/` now contains an ADR authoring template and README describing how to manage immutable decisions.
+- `docs/architecture/` provides a landing page for C4 diagrams and other epic-level artifacts tied back to ADRs.
+- `prompts/` and `contracts/` directories are available with governance READMEs outlining versioning, traceability, and quality-gate expectations.
+- GitHub issue templates for Feature Epics, Stories, and Tasks plus a PR template and issue configuration are installed under `.github/` to enforce the AIDD workflow structure.
+
 ### Phase 2 – Workflow & Traceability Enablement
 1. **Map Existing Roadmap Items**
    - Convert ongoing initiatives (e.g., Encounter feature) into Feature Epics with linked Stories and Tasks, capturing objectives, risks, and traceability back to ADRs and architecture documents.

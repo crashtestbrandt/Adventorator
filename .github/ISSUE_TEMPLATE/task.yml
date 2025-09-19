@@ -1,0 +1,67 @@
+name: "Task"
+description: "Per-prompt unit of work or small developer action supporting a Story."
+title: "[Task] <Actionable verb + object>"
+labels: ["type: task"]
+assignees: []
+body:
+  - type: input
+    id: story_link
+    attributes:
+      label: Story Link
+      description: Link to the parent Story.
+      placeholder: "#<StoryID>"
+    validations:
+      required: true
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What this Task achieves toward the Story.
+      placeholder: "Generate OpenAPI delta + scaffolding tests for /v1/foo"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: Steps (as applicable)
+      options:
+        - label: Update/define contracts (OpenAPI/Proto/GraphQL SDL)
+        - label: Write acceptance tests (ATDD/BDD) and unit/property tests
+        - label: Implement code changes against tests
+        - label: Add/adjust metrics, logs, traces
+        - label: Update documentation/runbook
+
+  - type: textarea
+    id: outputs
+    attributes:
+      label: Outputs
+      description: PR/commit links, generated files, test artifacts.
+      placeholder: |
+        - PR: #1234
+        - File: openapi/foo.yaml
+        - Tests: tests/foo_spec.py
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceability
+    attributes:
+      label: Traceability
+      description: Map to Story acceptance criteria and any ADRs touched.
+      placeholder: "- Supports AC-2 and AC-3; references ADR-005"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: dod
+    attributes:
+      label: Definition of Done (Task)
+      options:
+        - label: Tests written and passing locally/CI
+          required: true
+        - label: Changes linked to Story; references ADRs if applicable
+          required: true
+        - label: Code reviewed/approved or attached to PR
+          required: true

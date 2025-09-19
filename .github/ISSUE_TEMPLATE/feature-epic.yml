@@ -1,0 +1,89 @@
+name: "Feature Epic"
+description: "Production-ready feature composed of multiple Stories."
+title: "[Epic] <Feature name>"
+labels: ["type: epic"]
+assignees: []
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the feature.
+      placeholder: "Deliver X so that Y can Z."
+    validations:
+      required: true
+
+  - type: textarea
+    id: architecture_overview
+    attributes:
+      label: Architecture Overview (C4/ADRs)
+      description: Link Context/Container/Component diagrams and relevant ADRs.
+      placeholder: |
+        - C4 Context: <link>
+        - C4 Container: <link>
+        - C4 Component: <link>
+        - ADRs: ADR-001, ADR-002
+    validations:
+      required: true
+
+  - type: textarea
+    id: conformance
+    attributes:
+      label: Architecture Conformance & Traceability
+      description: Explain how this Epic aligns with ADRs and architecture. Include IDs/links.
+      placeholder: "Touches ADR-003 and ADR-004; aligns with Component A and Service B."
+    validations:
+      required: true
+
+  - type: textarea
+    id: objectives
+    attributes:
+      label: Objectives & Success Criteria
+      description: Business/technical goals; include SLOs/SLAs and cost/safety targets.
+      placeholder: |
+        - SLO: p95 latency ≤ 200ms
+        - Availability: 99.9%
+        - Cost: ≤ $X/1k requests
+        - Safety: no PII disclosure in outputs
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks & Mitigations (risk-first)
+      description: Key risks, mitigations, and rollback strategy.
+      placeholder: |
+        - Risk: schema break → Mitigation: contract tests + deprecation window
+        - Rollback: disable feature flag `feature.foo`
+    validations:
+      required: false
+
+  - type: textarea
+    id: stories
+    attributes:
+      label: Stories (to be created/linked)
+      description: List Story issues or planned Story titles. Use checklist for tracking.
+      value: |
+        - [ ] #<StoryID-or-placeholder> — <title>
+        - [ ] #<StoryID-or-placeholder> — <title>
+        - [ ] #<StoryID-or-placeholder> — <title>
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: dod
+    attributes:
+      label: Definition of Done (Epic)
+      description: All must be satisfied to close the Epic.
+      options:
+        - label: All Stories merged behind a feature flag with rollback plan
+          required: true
+        - label: Tests pass at all levels (unit, integration, contract, perf, security; AI eval if applicable)
+          required: true
+        - label: SLOs validated (no regression vs. budget)
+          required: true
+        - label: Observability (metrics/logs/traces) and alerts/dashboards in place
+          required: true
+        - label: Docs & runbooks updated; ADRs added/updated as needed
+          required: true

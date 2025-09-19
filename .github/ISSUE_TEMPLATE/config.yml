@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Adventorator Support
+    url: https://github.com/crashtestbrandt/Adventorator/discussions
+    about: Use discussions for questions that are not captured by Feature Epics, Stories, or Tasks.

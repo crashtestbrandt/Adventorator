@@ -1,0 +1,108 @@
+name: "Story"
+description: "PR-sized unit of work delivering a vertical slice."
+title: "[Story] <Concise description>"
+labels: ["type: story"]
+assignees: []
+body:
+  - type: input
+    id: epic_link
+    attributes:
+      label: Epic Link
+      description: Link to the parent Feature Epic.
+      placeholder: "#<EpicID>"
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary & Scope
+      description: What this Story delivers. Add an explicit out-of-scope list.
+      placeholder: |
+        In scope:
+        - …
+        Out of scope:
+        - …
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria (ATDD/BDD optional)
+      description: Concrete, testable criteria. Gherkin welcome.
+      placeholder: |
+        - Given …
+          When …
+          Then …
+        - …
+    validations:
+      required: true
+
+  - type: textarea
+    id: contracts
+    attributes:
+      label: Contracts (API/IPC)
+      description: OpenAPI/Protobuf/GraphQL SDL changes; versioning & deprecation policy; consumer-driven contracts.
+      placeholder: |
+        - OpenAPI: /v1/foo add field `bar` (backward compatible)
+        - CDCs: pact between Service A (consumer) and Service B (provider)
+    validations:
+      required: false
+
+  - type: textarea
+    id: test_strategy
+    attributes:
+      label: Test Strategy
+      description: Enumerate tests to add/update.
+      value: |
+        - Unit & property-based tests
+        - Contract tests (provider/consumer)
+        - Integration slice (service + datastore + 1 dependency)
+        - Performance budget checks
+        - Security/abuse cases (authZ/validation; secrets scan baseline)
+        - AI evals (if applicable): factuality, safety, cost/latency
+    validations:
+      required: true
+
+  - type: textarea
+    id: observability
+    attributes:
+      label: Observability Spec
+      description: Metrics, logs, traces; cardinality guardrails; dashboards/alerts to update.
+      placeholder: |
+        - Metric: app.request.duration (histogram), p95 budget 200ms
+        - Log: structured error with `error_code`
+        - Trace: span names <namespace>/<operation>
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks
+      description: Link per-prompt Tasks. Use checklist.
+      value: |
+        - [ ] #<TaskID-or-placeholder> — Define contract deltas
+        - [ ] #<TaskID-or-placeholder> — Write acceptance tests
+        - [ ] #<TaskID-or-placeholder> — Implement against tests
+        - [ ] #<TaskID-or-placeholder> — Add metrics/logs/traces
+        - [ ] #<TaskID-or-placeholder> — Update docs/runbook
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: dod
+    attributes:
+      label: Definition of Done (Story)
+      options:
+        - label: Acceptance criteria verified by automated tests
+          required: true
+        - label: Contracts versioned & backward compatible (CDC/compat checks pass)
+          required: true
+        - label: Observability signals implemented and documented
+          required: true
+        - label: Security/SCA/SAST/secrets checks pass; perf within budget
+          required: true
+        - label: Docs updated; PR merged with all quality gates green
+          required: true
