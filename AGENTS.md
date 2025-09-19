@@ -8,6 +8,12 @@ These instructions apply to the entire repository.
 - Set `PYTHONPATH=./src` when invoking helper scripts (e.g., `scripts/web_cli.py`, `scripts/register_commands.py`).
 - Database upgrades should use the provided Alembic tasks (`make alembic-up` / `make db-upgrade`) and Postgres via `make db-up` when persistent storage is required.
 
+## AI Development Pipeline
+- Align work with the [AIDD roadmap](./docs/implementation/aidd-plan.md) before making changes; confirm that Epics/Stories/Tasks in [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/) capture the scope, DoR/DoD status, and links to ADRs, prompts, and contracts.
+- Keep governance artifacts updated: ADRs live in [`docs/adr/`](./docs/adr/), architecture diagrams in [`docs/architecture/`](./docs/architecture), and traceability roll-ups in [`docs/implementation/epics/`](./docs/implementation/epics/).
+- Manage AI prompts in [`prompts/`](./prompts) and interface contracts in [`contracts/`](./contracts); run the supporting scripts (for example [`scripts/validate_prompts_and_contracts.py`](./scripts/validate_prompts_and_contracts.py)) plus `make quality-gates` whenever those assets change.
+- Pull requests must summarize quality gate results and follow the template in [`.github/pull_request_template.md`](./.github/pull_request_template.md) so reviewers can verify traceability.
+
 ## Coding conventions
 - Follow the FastAPI + async SQLAlchemy patterns already established in `src/Adventorator/app.py` and `src/Adventorator/repos.py` (async context managers, no inline SQL in handlers).
 - Use the command registry decorators (`@slash_command`) and responder abstraction (`inv.responder.send(...)`) when adding interaction handlers.
