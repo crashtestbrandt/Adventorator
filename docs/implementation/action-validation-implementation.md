@@ -1,6 +1,16 @@
-# Implementation Plan: [Action Validation Architecture](../design/action-validation-architecture.md)
+# Implementation Plan — Action Validation Architecture
 
-Phase 0 — Contracts, Shims, and Flags
+> **Traceability**
+> - Architecture: [ARCH-AVA-001 — Action Validation Architecture](../architecture/action-validation-architecture.md)
+> - Epic: [EPIC-AVA-001 — Action Validation Pipeline Enablement](./epics/action-validation-architecture.md)
+> - Workflow Templates: [Feature Epic](../../.github/ISSUE_TEMPLATE/feature_epic.md), [Story](../../.github/ISSUE_TEMPLATE/story.md), [Task](../../.github/ISSUE_TEMPLATE/task.md)
+
+The phases below correspond to Story-level slices captured in [EPIC-AVA-001](./epics/action-validation-architecture.md). Each story aggregates the Definition of Ready/Done expectations from the AIDD framework and references the tasks enumerated here.
+
+## Phase Breakdown
+
+
+Phase 0 — Contracts, Shims, and Flags *(Story: STORY-AVA-001A)*
 Goal: Introduce the new data contracts and interop shims without breaking current flows.
 
 - Add schemas (no behavior change)
@@ -16,7 +26,7 @@ Goal: Introduce the new data contracts and interop shims without breaking curren
 - Rollback
   - Flip features.action_validation=false to keep legacy shapes end-to-end.
 
-Phase 1 — Logging and Metrics Foundations (defensible by design)
+Phase 1 — Logging and Metrics Foundations (defensible by design) *(Story: STORY-AVA-001B)*
 Goal: Ensure traceability for all new decisions while staying within existing logging patterns.
 
 - Planner and orchestrator logging
@@ -28,7 +38,7 @@ Goal: Ensure traceability for all new decisions while staying within existing lo
 - Rollback
   - Logging only; no user-visible changes.
 
-Phase 2 — Planner Interop: “Plan” as internal representation
+Phase 2 — Planner Interop: “Plan” as internal representation *(Story: STORY-AVA-001C)*
 Goal: Keep the existing planner behavior but represent the decision as a Plan with single-step semantics.
 
 - Planner returns Plan (behind flag)
@@ -41,7 +51,7 @@ Goal: Keep the existing planner behavior but represent the decision as a Plan wi
 - Rollback
   - Flip feature flag off; planner returns legacy output.
 
-Phase 3 — Orchestrator adopts ExecutionRequest (shimmed)
+Phase 3 — Orchestrator adopts ExecutionRequest (shimmed) *(Story: STORY-AVA-001D)*
 Goal: Populate an ExecutionRequest from orchestrator decisions without changing executor behavior.
 
 - Internal mapping
@@ -54,7 +64,7 @@ Goal: Populate an ExecutionRequest from orchestrator decisions without changing 
 - Rollback
   - Disable features.action_validation; no ExecutionRequest created.
 
-Phase 4 — Executor interop with ExecutionRequest (no API break)
+Phase 4 — Executor interop with ExecutionRequest (no API break) *(Story: STORY-AVA-001E)*
 Goal: Validate ExecutionRequest → ToolCallChain → Executor path and keep dry-run/apply behavior unchanged.
 
 - Adapter
@@ -66,7 +76,7 @@ Goal: Validate ExecutionRequest → ToolCallChain → Executor path and keep dry
 - Rollback
   - Remove adapter usage by flag; executor continues with legacy ToolCallChain.
 
-Phase 5 — Predicate Gate v0 (read-only, in-process)
+Phase 5 — Predicate Gate v0 (read-only, in-process) *(Story: STORY-AVA-001F)*
 Goal: Introduce a fast “Predicate Gate” with deterministic checks that do not call external services.
 
 - Predicates module
@@ -79,7 +89,7 @@ Goal: Introduce a fast “Predicate Gate” with deterministic checks that do no
 - Rollback
   - Gate behind features.predicate_gate; off → bypass predicates.
 
-Phase 6 — ActivityLog integration (defensible audit of mechanics)
+Phase 6 — ActivityLog integration (defensible audit of mechanics) *(Story: STORY-AVA-001G)*
 Goal: Record mechanics decisions in a structured ledger as we evolve planning/execution.
 
 - Adopt the plan in ActivityLog-plan-overview.md.
@@ -90,7 +100,7 @@ Goal: Record mechanics decisions in a structured ledger as we evolve planning/ex
 - Rollback
   - Keep writes disabled via feature flag; fall back to logs/metrics only.
 
-Phase 7 — MCP scaffold (local, in-process servers)
+Phase 7 — MCP scaffold (local, in-process servers) *(Story: STORY-AVA-001H)*
 Goal: Establish the boundary and contracts without networking complexity.
 
 - MCP interface shape
@@ -105,7 +115,7 @@ Goal: Establish the boundary and contracts without networking complexity.
 - Rollback
   - features.mcp=false keeps the direct rules path.
 
-Phase 8 — Tiered Planning scaffold (Level 1 only)
+Phase 8 — Tiered Planning scaffold (Level 1 only) *(Story: STORY-AVA-001I)*
 Goal: Prepare for multi-step planning while keeping current single-step behavior.
 
 - Plan.step generation policy
@@ -116,7 +126,7 @@ Goal: Prepare for multi-step planning while keeping current single-step behavior
 - Rollback
   - Only Level 1 enabled; HTN code paths remain dead code with tests.
 
-Phase 9 — Ops hardening and rollout
+Phase 9 — Ops hardening and rollout *(Story: STORY-AVA-001J)*
 Goal: Safe rollout with clear rollback paths and observability.
 
 - Timeouts and bounds
