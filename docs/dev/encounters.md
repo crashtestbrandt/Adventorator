@@ -68,6 +68,7 @@ Indexes:
 - executor.apply.duration_ms (counter) + histo.executor.apply.ms.*
 - locks.acquire.success|timeout|error|mode
 - histo.locks.wait_ms.*
+- Encounter-specific budgets, alerting thresholds, and dashboard guidance live in [Observability & Feature Flags](../implementation/observability-and-flags.md#encounter-observability-budget).
 
 ## Notes
 
