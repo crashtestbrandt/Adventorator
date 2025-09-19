@@ -43,6 +43,12 @@ The AI-driven development pipeline emphasizes tight traceability from Feature Ep
 4. **Document Observability & Feature Flags**
    - Enhance existing docs with observability budgets, metrics, and feature flag rollout/rollback plans to satisfy story-level requirements.
 
+#### Phase 2 Implementation Notes
+- `docs/implementation/epics/` hosts Feature Epic source files that map current roadmap work to Story and Task-level traceability, including DoR/DoD callouts.
+- Initial ADRs (`ADR-0001`–`ADR-0003`) and a C4 PlantUML diagram document planner, orchestrator, and executor decisions and references for epics.
+- `docs/implementation/dor-dod-guide.md` integrates DoR/DoD checklists into sprint rituals per the GitHub templates.
+- Observability budgets and feature flag runbooks live in `docs/implementation/observability-and-flags.md` with links back to affected epics and developer guides.
+
 ### Phase 3 – Quality Gates & Automation
 1. **Implement PR Quality Gate Workflow**
    - Add the provided GitHub Actions workflow (`pr-quality-gates.yml`) to enforce Story/Task references and ADR linkage for architectural changes, tuning path regexes for Adventorator’s directory names.
