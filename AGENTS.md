@@ -27,3 +27,5 @@ These instructions apply to the entire repository.
 ## Pull requests & summaries
 - Summaries should highlight user-visible behavior changes, mention affected modules, and tie back to action-validation milestones when applicable.
 - If checks are skipped, call that out explicitly in the final response along with the reason.
+- When creating a PR with `make_pr`, copy the structure from [`.github/pull_request_template.md`](./.github/pull_request_template.md): include all headings, checklists, and placeholder guidance so reviewers receive the complete template.
+- Populate each checklist item with a checked (`- [x]`) or unchecked (`- [ ]`) box. Use `N/A` only inside the descriptive bullet text if something does not apply; do not delete template rows.
