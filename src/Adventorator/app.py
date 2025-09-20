@@ -388,6 +388,7 @@ async def dev_webhook(application_id: str, token: str, request: Request):
                     payload = _oj.loads(pj)
                 else:  # str branch
                     import orjson as _oj
+
                     pj_str = pj if isinstance(pj, str) else str(pj)
                     payload = _oj.loads(pj_str.encode())
         else:
