@@ -97,7 +97,7 @@ Adopt normalized names in new code; migrate legacy names opportunistically with 
 | `features.planner` | true | Planning | Routes `/plan` through planner pipeline | Core AI Systems / Planner Stories | Medium | Cache invalidation on disable |
 | `features.action_validation` | false | Action Validation | Enables Plan/ExecutionRequest internal contracts | EPIC-AVA-001 (Phases 0–6) | Low | Wraps legacy paths; flip off for rollback |
 | `features.predicate_gate` | false | Action Validation | Activates deterministic predicate feasibility checks | STORY-AVA-001F | Low | Bypass returns legacy feasibility behavior |
-| `features.mcp` | false | Action Validation / MCP | Routes executor tooling via MCP adapter layer | STORY-AVA-001H | Medium | Off → direct rules path |
+| `features.mcp` | false | Action Validation / MCP | Routes executor tooling via MCP adapter layer | STORY-AVA-001H | Medium | Off → direct rules path; on emits `executor.mcp.*` metrics |
 | `features.activity_log` | false | Observability | Persists mechanics ActivityLog entries | STORY-AVA-001G | Low | Off retains metrics/logs only |
 | `features.executor` | true | Execution | Connects orchestrator to executor preview/apply | Multiple | Medium | Disable to isolate planning without apply |
 | `features.executor_confirm` | (implied true when confirmation flow active) | Safety | Requires explicit confirm for mutating actions | Pending Action / Safety Stories | Low | Use for high-risk tool gating |

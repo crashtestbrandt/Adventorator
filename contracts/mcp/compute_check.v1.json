@@ -1,0 +1,96 @@
+{
+  "openapi": "3.1.0",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "rules.compute_check.v1",
+  "description": "Contract for deterministic skill checks routed through the MCP layer.",
+  "type": "object",
+  "properties": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "ability": {
+          "type": "string",
+          "description": "Ability code (e.g., STR, DEX)."
+        },
+        "score": {
+          "type": "integer",
+          "description": "Base ability score before modifiers."
+        },
+        "proficient": {
+          "type": "boolean",
+          "default": false
+        },
+        "expertise": {
+          "type": "boolean",
+          "default": false
+        },
+        "proficiency_bonus": {
+          "type": "integer",
+          "description": "Proficiency bonus applied when proficient or expertise is true."
+        },
+        "dc": {
+          "type": ["integer", "null"],
+          "description": "Difficulty class threshold; null disables success evaluation."
+        },
+        "advantage": {
+          "type": "boolean",
+          "default": false
+        },
+        "disadvantage": {
+          "type": "boolean",
+          "default": false
+        },
+        "seed": {
+          "type": ["integer", "null"],
+          "description": "Optional RNG seed for deterministic dice generation."
+        },
+        "d20_rolls": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "maxItems": 2,
+          "description": "Optional override for raw d20 rolls. When provided, adapter skips RNG."
+        }
+      },
+      "required": [
+        "ability",
+        "score",
+        "proficiency_bonus"
+      ]
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer",
+          "description": "Final check total including modifiers."
+        },
+        "d20": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "description": "Rolled d20 values (includes shadow roll for advantage/disadvantage)."
+        },
+        "pick": {
+          "type": "integer",
+          "description": "Selected d20 result after advantage/disadvantage logic."
+        },
+        "mod": {
+          "type": "integer",
+          "description": "Combined ability and proficiency modifier applied to the roll."
+        },
+        "success": {
+          "type": ["boolean", "null"],
+          "description": "Whether the check met the DC. Null when DC omitted."
+        }
+      },
+      "required": ["total", "d20", "pick", "mod", "success"]
+    }
+  },
+  "required": ["request", "response"]
+}

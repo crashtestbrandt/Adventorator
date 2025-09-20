@@ -113,6 +113,9 @@ Goal: Establish the boundary and contracts without networking complexity.
   - Implement “servers” as plain modules calling the existing rules in rules.
 - Executor as MCP client
   - Swap tool handlers to call MCP adapters internally (function calls). No network I/O yet; same determinism.
+- Implementation snapshot
+  - `src/Adventorator/mcp/` provides the in-process adapters registered by the executor.
+  - `contracts/mcp/*.v1.json` capture the request/response contracts for deterministic parity.
 - Tests
   - Unit: MCP adapter results match direct rules engine calls; same seeds → same outcomes.
 - Rollback
