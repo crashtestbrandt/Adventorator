@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 
 REPO = "crashtestbrandt/Adventorator"
-DEFAULT_EPIC = Path("docs/implementation/epics/action-validation-architecture.md")
+DEFAULT_EPIC = Path("docs/implementation/epics/EPIC-AVA-001-action-validation-architecture.md")
 TRACE_HEADER = "## Traceability Log"
 
 STORY_KEY_PATTERN = re.compile(r"STORY-AVA-(001[A-J])")
