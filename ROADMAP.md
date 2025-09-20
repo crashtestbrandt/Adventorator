@@ -1,6 +1,6 @@
 # Project Roadmap
 
-This high-level roadmap summarizes major milestones: what is **done**, what is **in progress / near-term**, and what is **planned / aspirational**. It abstracts away the granular “Phase N” issue text (now archived in `docs/implementation/implementation_plan.md`, which is retained as a historical snapshot generated from GitHub issues).
+This high-level roadmap summarizes major milestones: what is **done**, what is **in progress / near-term**, and what is **planned / aspirational**.
 
 Authoritative sources of truth:
 - Architecture & design decisions: `docs/architecture/` and `docs/adr/`
