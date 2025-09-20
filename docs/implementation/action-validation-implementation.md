@@ -97,6 +97,7 @@ Goal: Rely on Mechanics ActivityLog Enablement (EPIC-ACTLOG-001) for durable, qu
   - Feature flag `features.activity_log` provides rollback (disable writes; retain logs/metrics).
 - Behavior
   - On ExecutionRequest approval, write compact ActivityLog rows (no prompts/large blobs); link transcript entries for mechanics-driven messages.
+  - `/roll` and `/check` commands produce ActivityLog entries with deterministic payloads when `features.activity_log` is enabled.
 - Tests
   - E2E: /roll, /check produce stable ActivityLog payloads; counters increment (validated in ACTLOG test matrix).
 - Rollback

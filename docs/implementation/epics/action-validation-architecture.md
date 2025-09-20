@@ -144,8 +144,9 @@
 - **Summary.** Action Validation requires ActivityLog stories (ACTLOG 001A–001D minimum) to supply durable, queryable mechanics records (ExecutionRequest approvals, /roll, /check) and transcript linkage. Detailed milestones, tasks, and defenses live in EPIC-ACTLOG-001.
 - **Acceptance criteria (delegated).**
   - ActivityLog epic Stories 001A–001D completed (flag, schema, initial integrations, transcript linkage).
-  - Feature flag `features.activity_log` remains a rollback lever; AVA tests pass with flag on/off.
-  - Cross-epic traceability updated when ActivityLog issue numbers created.
+    - Status tracked in [EPIC-ACTLOG-001](activitylog-mechanics-ledger.md) with DoR/DoD checklists marked complete.
+  - Feature flag `features.activity_log` remains a rollback lever; AVA tests pass with flag on/off (`tests/test_action_validation_activity_log_phase6.py::test_roll_command_activity_log_toggle`).
+  - Cross-epic traceability updated when ActivityLog issue numbers created and validated via shared test coverage for orchestrator, `/check`, and `/roll` integrations (`tests/test_action_validation_activity_log_phase6.py`).
 - **Tasks (tracked in ACTLOG epic).** Former local tasks migrated and reissued with ACTLOG prefixes.
 - **DoR.** ActivityLog epic has approved taxonomy, migration, and privacy review.
 - **DoD.** AVA E2E tests observe stable ActivityLog payloads; observability docs link to ActivityLog metrics section.

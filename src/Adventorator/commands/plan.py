@@ -342,17 +342,15 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         guidance: str | None = None
         if cmd_name_flat in {"sheet.create"}:
             guidance = (
-                "Create a character: /sheet create json:{...}. Example: {\"name\": \"Aria\", "
-                "\"class\": \"Fighter\", \"level\": 1}"
+                'Create a character: /sheet create json:{...}. Example: {"name": "Aria", '
+                '"class": "Fighter", "level": 1}'
             )
         elif cmd_name_flat in {"sheet.show"}:
             guidance = (
                 "To show a character, use /sheet show with the name option. Example: name: Aria"
             )
         elif cmd_name_flat == "check":
-            guidance = (
-                "Check: /check ability:DEX dc:12 (dc optional)."
-            )
+            guidance = "Check: /check ability:DEX dc:12 (dc optional)."
         elif cmd_name_flat == "roll":
             guidance = 'Use /roll with an expr like 1d20 or 2d6+3. Example: expr: "1d20"'
         elif cmd_name_flat == "do":

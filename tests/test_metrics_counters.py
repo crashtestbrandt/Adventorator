@@ -71,3 +71,62 @@ async def test_metrics_rejection_path(monkeypatch):
     assert get_counter("llm.request.enqueued") == 1
     assert get_counter("llm.response.received") == 1
     assert get_counter("llm.defense.rejected") == 1
+
+
+def test_reset_counters_handles_failures(monkeypatch):
+    from Adventorator import metrics
+
+    metrics.inc_counter("example")
+    metrics.observe_histogram("latency", 42)
+
+    original_cb = getattr(metrics, "_reset_plan_cache_cb", None)
+
+    def _boom():
+        raise RuntimeError("callback fail")
+
+    def _restore_callback():
+        metrics._reset_plan_cache_cb = original_cb  # noqa: SLF001
+
+    metrics.register_reset_plan_cache_callback(_boom)
+
+    def _plan_reset():
+        raise RuntimeError("plan reset fail")
+
+    monkeypatch.setattr(
+        "Adventorator.action_validation.plan_registry.reset",
+        _plan_reset,
+    )
+
+    class _BadRateLimiter(dict):
+        def clear(self):  # type: ignore[override]
+            raise RuntimeError("rl clear fail")
+
+    monkeypatch.setattr(
+        "Adventorator.commands.plan._rl",
+        _BadRateLimiter({"user": 1}),
+        raising=False,
+    )
+
+    try:
+        metrics.reset_counters()
+    finally:
+        _restore_callback()
+        metrics.reset_counters()
+
+    assert metrics.get_counter("example") == 0
+    assert metrics.get_counters() == {}
+
+
+def test_observe_histogram_overflow_bucket():
+    from Adventorator import metrics
+
+    metrics.reset_counters()
+    metrics.observe_histogram("latency", 10_000, buckets=[1, 5, 10])
+
+    counters = metrics.get_counters()
+    try:
+        assert counters["histo.latency.gt_10"] == 1
+        assert counters["histo.latency.sum"] == 10_000
+        assert counters["histo.latency.count"] == 1
+    finally:
+        metrics.reset_counters()

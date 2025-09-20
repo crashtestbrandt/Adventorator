@@ -20,6 +20,17 @@
 - E2E determinism and latency budgets validated.
 
 ---
+### ActivityLog Event Taxonomy (Phase 6)
+
+| Event Type | Source | Notes |
+| --- | --- | --- |
+| `mechanics.roll` | `/roll` command | Captures dice expressions, rolls, totals, and rendered mechanics text. |
+| `mechanics.check` | `/check` command | Logs ability check inputs, RNG outputs, and presenter copy. |
+| `mechanics.<plan_op>` | Orchestrator approvals | Mirrors the first `PlanStep` verb (e.g., `mechanics.check`, `mechanics.attack`). |
+
+Event owners: Mechanics guild (primary) with Action Validation working group as secondary. Coverage verified in `tests/test_action_validation_activity_log_phase6.py`.
+
+---
 ## Stories
 
 ### STORY-ACTLOG-001A — Flag, taxonomy, and actor reference scaffold
@@ -30,9 +41,9 @@
   - Event taxonomy (dice.roll, check.ability, orchestrator.mechanics) documented with owners.
   - Actor/target identifier format (char:<id>, user:<discord>, npc:<key>) adopted.
 - **Tasks.**
-  - [ ] `TASK-ACTLOG-FLAG-01` — Add flag + settings wiring + doc update.
-  - [ ] `TASK-ACTLOG-TAX-02` — Draft taxonomy doc section.
-  - [ ] `TASK-ACTLOG-ACTOR-03` — Implement helper for stable actor/target refs.
+  - [x] `TASK-ACTLOG-FLAG-01` — Add flag + settings wiring + doc update. (`config.py`, `config.toml`, observability guide)
+  - [x] `TASK-ACTLOG-TAX-02` — Draft taxonomy doc section. (See "ActivityLog Event Taxonomy" above.)
+  - [x] `TASK-ACTLOG-ACTOR-03` — Implement helper for stable actor/target refs. (`repos.normalize_actor_ref`)
 
 ### STORY-ACTLOG-001B — Schema and repository foundations
 *Milestone 1*
@@ -42,10 +53,10 @@
   - Model fields: id, event_type, summary, payload (JSON), correlation_id, scene_id, campaign_id, actor_ref, target_ref, created_at (UTC).
   - Repository helper enforces size clamps & redaction.
 - **Tasks.**
-  - [ ] `TASK-ACTLOG-MIG-04` — Migration + downgrade path.
-  - [ ] `TASK-ACTLOG-MODEL-05` — Pydantic/ORM model & indices.
-  - [ ] `TASK-ACTLOG-HELPER-06` — Repo helper with redaction & caps.
-  - [ ] `TASK-ACTLOG-TEST-07` — Unit tests: create/read, UTC timestamp.
+  - [x] `TASK-ACTLOG-MIG-04` — Migration + downgrade path. (`migrations/versions/a1b2c3d4e5f6_add_activity_logs_and_fk.py`)
+  - [x] `TASK-ACTLOG-MODEL-05` — Pydantic/ORM model & indices. (`models.ActivityLog`)
+  - [x] `TASK-ACTLOG-HELPER-06` — Repo helper with redaction & caps. (`repos.create_activity_log`)
+  - [x] `TASK-ACTLOG-TEST-07` — Unit tests: create/read, UTC timestamp. (`tests/test_action_validation_activity_log_phase6.py`)
 
 ### STORY-ACTLOG-001C — Initial mechanics integration (/roll, /check, orchestrator)
 *Milestone 2*
@@ -55,10 +66,10 @@
   - Orchestrator mechanics path logs once per approval.
   - No user-visible message changes.
 - **Tasks.**
-  - [ ] `TASK-ACTLOG-ROLL-08` — Integrate /roll logging.
-  - [ ] `TASK-ACTLOG-CHECK-09` — Integrate /check logging.
-  - [ ] `TASK-ACTLOG-ORCH-10` — Orchestrator logging hook.
-  - [ ] `TASK-ACTLOG-INTEG-11` — Integration tests for basic events.
+  - [x] `TASK-ACTLOG-ROLL-08` — Integrate /roll logging. (`commands/roll.py`)
+  - [x] `TASK-ACTLOG-CHECK-09` — Integrate /check logging. (`commands/check.py`)
+  - [x] `TASK-ACTLOG-ORCH-10` — Orchestrator logging hook. (`orchestrator.py`)
+  - [x] `TASK-ACTLOG-INTEG-11` — Integration tests for basic events. (`tests/test_action_validation_activity_log_phase6.py`)
 
 ### STORY-ACTLOG-001D — Transcript linkage & narrative decoupling
 *Milestone 3*
@@ -67,9 +78,9 @@
   - Transcript.activity_log_id populated only for mechanics-driven bot messages.
   - Transcript content remains narrative-only (no raw mechanics payload duplication).
 - **Tasks.**
-  - [ ] `TASK-ACTLOG-LINK-12` — Add nullable FK / column + migration update if needed.
-  - [ ] `TASK-ACTLOG-POP-13` — Populate linkage in handlers.
-  - [ ] `TASK-ACTLOG-TRANS-14` — Tests verifying linkage & unchanged transcript content.
+  - [x] `TASK-ACTLOG-LINK-12` — Add nullable FK / column + migration update if needed. (`migrations/versions/a1b2c3d4e5f6_add_activity_logs_and_fk.py`)
+  - [x] `TASK-ACTLOG-POP-13` — Populate linkage in handlers. (`commands/do.py`, `repos.link_transcript_activity_log`)
+  - [x] `TASK-ACTLOG-TRANS-14` — Tests verifying linkage & unchanged transcript content. (`tests/test_action_validation_activity_log_phase6.py`)
 
 ### STORY-ACTLOG-001E — Defensive logging (caps, redaction, idempotency)
 *Milestone 4*

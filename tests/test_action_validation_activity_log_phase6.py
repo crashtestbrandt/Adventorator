@@ -1,9 +1,14 @@
 import pytest
+from sqlalchemy import select
 
 from Adventorator import models, repos
+from Adventorator.commanding import Invocation
+from Adventorator.commands.check import CheckOpts, check_command
+from Adventorator.commands.roll import RollOpts, roll
 from Adventorator.db import session_scope
 from Adventorator.metrics import get_counter, reset_counters
 from Adventorator.orchestrator import run_orchestrator
+from Adventorator.rules.engine import Dnd5eRuleset
 from Adventorator.schemas import LLMOutput, LLMProposal
 
 
@@ -22,6 +27,14 @@ def _sheet_info(_ability: str) -> dict[str, int | bool]:
         "expertise": False,
         "prof_bonus": 2,
     }
+
+
+class _SpyResponder:
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    async def send(self, content: str, *, ephemeral: bool = False) -> None:  # noqa: D401, ANN001
+        self.messages.append(content)
 
 
 @pytest.mark.asyncio
@@ -116,3 +129,404 @@ async def test_transcript_link_increments_counter(db):
         assert tx.activity_log_id == log_id
 
     assert get_counter("activity_log.linked_to_transcript") == 1
+
+
+@pytest.mark.asyncio
+async def test_check_command_records_activity_log(db):
+    reset_counters()
+
+    settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": True,
+            "features_events": False,
+        },
+    )()
+
+    inv = Invocation(
+        name="check",
+        subcommand=None,
+        options={},
+        user_id="55",
+        channel_id="303",
+        guild_id="404",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=11),
+    )
+    opts = CheckOpts(
+        ability="INT",
+        score=15,
+        prof_bonus=3,
+        proficient=False,
+        expertise=False,
+        dc=12,
+    )
+
+    await check_command(inv, opts)
+
+    assert len(inv.responder.messages) == 1
+    assert get_counter("activity_log.created") == 1
+
+    async with session_scope() as s:
+        logs = (await s.execute(select(models.ActivityLog))).scalars().all()
+        assert len(logs) == 1
+        row = logs[0]
+        assert row.event_type == "mechanics.check"
+        assert row.summary == "INT check vs DC 12"
+        assert row.actor_ref == "55"
+        assert row.payload.get("ability") == "INT"
+        assert row.payload.get("dc") == 12
+        assert row.payload.get("text") == inv.responder.messages[0]
+
+
+@pytest.mark.asyncio
+async def test_roll_command_activity_log_toggle(db):
+    reset_counters()
+
+    enabled_settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": True,
+            "features_events": False,
+        },
+    )()
+    disabled_settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": False,
+            "features_events": False,
+        },
+    )()
+
+    enabled_inv = Invocation(
+        name="roll",
+        subcommand=None,
+        options={},
+        user_id="77",
+        channel_id="909",
+        guild_id="808",
+        responder=_SpyResponder(),
+        settings=enabled_settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=17),
+    )
+    await roll(enabled_inv, RollOpts(expr="2d6+1"))
+
+    async with session_scope() as s:
+        logs = (await s.execute(select(models.ActivityLog))).scalars().all()
+        assert len(logs) == 1
+        row = logs[0]
+        assert row.event_type == "mechanics.roll"
+        assert row.summary == "Roll 2d6+1"
+        assert row.actor_ref == "77"
+        payload = row.payload
+        assert payload.get("expression") == "2d6+1"
+        assert payload.get("text") == enabled_inv.responder.messages[0]
+        assert isinstance(payload.get("total"), int)
+
+    # Disable flag and ensure no additional rows are written
+    disabled_inv = Invocation(
+        name="roll",
+        subcommand=None,
+        options={},
+        user_id="77",
+        channel_id="909",
+        guild_id="808",
+        responder=_SpyResponder(),
+        settings=disabled_settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=21),
+    )
+    await roll(disabled_inv, RollOpts(expr="1d20"))
+
+    assert get_counter("activity_log.created") == 1
+    async with session_scope() as s:
+        rows = (await s.execute(select(models.ActivityLog))).scalars().all()
+        assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_check_command_activity_log_invalid_guild_id(db):
+    reset_counters()
+
+    settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": True,
+            "features_events": False,
+        },
+    )()
+
+    inv = Invocation(
+        name="check",
+        subcommand=None,
+        options={},
+        user_id="55",
+        channel_id="303",
+        guild_id="guild-invalid",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=15),
+    )
+    opts = CheckOpts(
+        ability="INT", score=15, prof_bonus=3, proficient=False, expertise=False, dc=12
+    )
+
+    await check_command(inv, opts)
+
+    assert len(inv.responder.messages) == 1
+    assert get_counter("activity_log.failed") == 1
+    async with session_scope() as s:
+        logs = (await s.execute(select(models.ActivityLog))).scalars().all()
+        assert logs == []
+
+
+@pytest.mark.asyncio
+async def test_check_command_activity_log_invalid_channel_id(db):
+    reset_counters()
+
+    settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": True,
+            "features_events": False,
+        },
+    )()
+
+    inv = Invocation(
+        name="check",
+        subcommand=None,
+        options={},
+        user_id="55",
+        channel_id="channel-invalid",
+        guild_id="606",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=19),
+    )
+    opts = CheckOpts(
+        ability="INT", score=15, prof_bonus=3, proficient=False, expertise=False, dc=12
+    )
+
+    await check_command(inv, opts)
+
+    assert len(inv.responder.messages) == 1
+    assert get_counter("activity_log.failed") == 1
+    async with session_scope() as s:
+        logs = (await s.execute(select(models.ActivityLog))).scalars().all()
+        assert logs == []
+
+
+@pytest.mark.asyncio
+async def test_check_command_activity_log_repository_failure(monkeypatch, db):
+    reset_counters()
+
+    async def _boom(*args, **kwargs):  # noqa: ANN001
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr("Adventorator.commands.check.repos.create_activity_log", _boom)
+
+    settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": True,
+            "features_events": False,
+        },
+    )()
+
+    inv = Invocation(
+        name="check",
+        subcommand=None,
+        options={},
+        user_id="55",
+        channel_id="303",
+        guild_id="404",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=23),
+    )
+    opts = CheckOpts(
+        ability="INT", score=15, prof_bonus=3, proficient=False, expertise=False, dc=12
+    )
+
+    await check_command(inv, opts)
+
+    assert len(inv.responder.messages) == 1
+    assert get_counter("activity_log.failed") == 1
+    async with session_scope() as s:
+        logs = (await s.execute(select(models.ActivityLog))).scalars().all()
+        assert logs == []
+
+
+@pytest.mark.asyncio
+async def test_roll_command_activity_log_invalid_ids(db):
+    reset_counters()
+
+    settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": True,
+            "features_events": False,
+        },
+    )()
+
+    bad_guild_inv = Invocation(
+        name="roll",
+        subcommand=None,
+        options={},
+        user_id="77",
+        channel_id="909",
+        guild_id="guild",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=31),
+    )
+    await roll(bad_guild_inv, RollOpts(expr="1d4"))
+
+    assert get_counter("activity_log.failed") == 1
+
+    bad_channel_inv = Invocation(
+        name="roll",
+        subcommand=None,
+        options={},
+        user_id="77",
+        channel_id="channel",
+        guild_id="808",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=33),
+    )
+    await roll(bad_channel_inv, RollOpts(expr="1d6"))
+
+    assert get_counter("activity_log.failed") == 2
+    async with session_scope() as s:
+        rows = (await s.execute(select(models.ActivityLog))).scalars().all()
+        assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_roll_command_activity_log_repository_failure(monkeypatch, db):
+    reset_counters()
+
+    async def _boom(*args, **kwargs):  # noqa: ANN001
+        raise RuntimeError("ledger down")
+
+    monkeypatch.setattr("Adventorator.commands.roll.repos.create_activity_log", _boom)
+
+    settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": True,
+            "features_events": False,
+        },
+    )()
+
+    inv = Invocation(
+        name="roll",
+        subcommand=None,
+        options={},
+        user_id="77",
+        channel_id="909",
+        guild_id="808",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=35),
+    )
+
+    await roll(inv, RollOpts(expr="2d6"))
+
+    assert get_counter("activity_log.failed") == 1
+    async with session_scope() as s:
+        logs = (await s.execute(select(models.ActivityLog))).scalars().all()
+        assert logs == []
+
+
+@pytest.mark.asyncio
+async def test_check_command_event_append_failure(monkeypatch, db):
+    reset_counters()
+
+    async def _boom(*args, **kwargs):  # noqa: ANN001
+        raise RuntimeError("event ledger down")
+
+    monkeypatch.setattr("Adventorator.commands.check.repos.append_event", _boom)
+
+    settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": False,
+            "features_events": True,
+        },
+    )()
+
+    inv = Invocation(
+        name="check",
+        subcommand=None,
+        options={},
+        user_id="55",
+        channel_id="303",
+        guild_id="404",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=41),
+    )
+    opts = CheckOpts(
+        ability="INT", score=15, prof_bonus=3, proficient=False, expertise=False, dc=12
+    )
+
+    await check_command(inv, opts)
+
+    assert len(inv.responder.messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_roll_command_event_append_failure(monkeypatch, db):
+    reset_counters()
+
+    async def _boom(*args, **kwargs):  # noqa: ANN001
+        raise RuntimeError("event ledger down")
+
+    monkeypatch.setattr("Adventorator.commands.roll.repos.append_event", _boom)
+
+    settings = type(
+        "Settings",
+        (),
+        {
+            "features_activity_log": False,
+            "features_events": True,
+        },
+    )()
+
+    inv = Invocation(
+        name="roll",
+        subcommand=None,
+        options={},
+        user_id="77",
+        channel_id="909",
+        guild_id="808",
+        responder=_SpyResponder(),
+        settings=settings,
+        llm_client=None,
+        ruleset=Dnd5eRuleset(seed=43),
+    )
+
+    await roll(inv, RollOpts(expr="1d8"))
+
+    assert len(inv.responder.messages) == 1
