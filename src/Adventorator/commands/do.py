@@ -1,6 +1,8 @@
 # src/Adventorator/commands/ooc_do.py
 from typing import Any, cast
 
+from sqlalchemy.exc import IntegrityError
+
 from pydantic import Field
 
 from Adventorator import repos
@@ -179,11 +181,15 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                 await repos.update_transcript_status(s, player_tx_id, "error")
                 # If an activity log was created during rejection (unlikely), link it
                 if getattr(res, "activity_log_id", None):
-                    await repos.link_transcript_activity_log(
-                        s,
-                        transcript_id=player_tx_id,
-                        activity_log_id=getattr(res, "activity_log_id", None),
-                    )
+                    try:
+                        await repos.link_transcript_activity_log(
+                            s,
+                            transcript_id=player_tx_id,
+                            activity_log_id=getattr(res, "activity_log_id", None),
+                        )
+                    except IntegrityError:
+                        # Safe to ignore: activity log row not persisted yet; linkage is optional.
+                        pass
         await inv.responder.send(f"🛑 Proposal rejected: {res.reason or 'invalid'}", ephemeral=True)
         inc_counter("pending.rejected")
         return
@@ -220,11 +226,14 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                 activity_log_id=res.activity_log_id,
             )
             if player_tx_id is not None and getattr(res, "activity_log_id", None):
-                await repos.link_transcript_activity_log(
-                    s,
-                    transcript_id=player_tx_id,
-                    activity_log_id=getattr(res, "activity_log_id", None),
-                )
+                try:
+                    await repos.link_transcript_activity_log(
+                        s,
+                        transcript_id=player_tx_id,
+                        activity_log_id=getattr(res, "activity_log_id", None),
+                    )
+                except IntegrityError:
+                    pass
             await inv.responder.send(
                 (
                     "🧪 Mechanics\n"

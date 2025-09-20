@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 import tomllib
 from pydantic import BaseModel, Field, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, DotEnvSettingsSource
 
 
 def _toml_settings_source() -> dict[str, Any]:
@@ -205,11 +205,12 @@ class Settings(BaseSettings):
     # Prefer .env.local if present for host development; fall back to .env (legacy)
     import os as _os
 
-    _default_env_file = ".env.local" if _os.path.exists(".env.local") else ".env"
+    # Note: We intentionally do NOT fix the env_file at import time because tests
+    # (and some tooling) change the working directory after importing this module.
+    # Instead we provide a dynamic DotEnv loader in settings_customise_sources.
     model_config = SettingsConfigDict(
         env_prefix="",
         case_sensitive=False,
-        env_file=_default_env_file,
         extra="ignore",  # Safely ignore any extra env vars
     )
 
@@ -222,15 +223,27 @@ class Settings(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
+        # Provide a dynamic dotenv source that re-evaluates the current working
+        # directory at load time (allowing tests that chdir before calling
+        # load_settings() to have their temp .env/.env.local respected).
+        def dynamic_dotenv_settings() -> dict[str, Any]:
+            for candidate in (".env.local", ".env"):
+                p = Path(candidate)
+                if p.exists():
+                    # DotEnvSettingsSource is callable and returns the mapping when invoked.
+                    src = DotEnvSettingsSource(settings_cls, env_file=candidate)
+                    return src()  # type: ignore[call-arg]
+            return {}
+
         # Precedence (highest to lowest):
         # 1) init_settings (explicit overrides in code/tests)
-        # 2) dotenv (.env in cwd) — developer-local overrides
+        # 2) dynamic_dotenv_settings (project-local developer overrides)
         # 3) env_settings (OS env)
         # 4) TOML (repo config.toml) — project defaults
         # 5) file_secret_settings
         return (
             init_settings,
-            dotenv_settings,
+            dynamic_dotenv_settings,
             env_settings,
             _toml_settings_source,
             file_secret_settings,
