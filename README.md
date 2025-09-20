@@ -154,10 +154,10 @@ File: `Adventorator/planner.py`
 - How it works:
   - Builds a live catalog from the command registry (`command_loader` + `all_commands`), including Pydantic v2 option schemas.
   - Prompts the LLM with TOOLS + minimal rules context, then extracts the first JSON object.
-  - Validates against `PlannerOutput` and enforces an allowlist: `{roll, check, sheet.create, sheet.show, do, ooc}`.
+  - Produces a single-step `Plan` (legacy `PlannerOutput` internally adapted) and enforces an allowlist: `{roll, check, sheet.create, sheet.show, do, ooc}`.
 - Contract (inputs/outputs):
   - Input: `user_msg: str`
-  - Output: `PlannerOutput | None` with `{command: str, args: dict}`
+  - Output: `Plan | None` (Level 1 ⇒ exactly one `PlanStep {op,args}`)
   - Side effects: None (pure function over LLM; in-process 30s cache suppresses repeats)
 - Defenses & failure modes:
   - Rejects non-JSON or invalid JSON (returns `None`).
@@ -239,7 +239,7 @@ sequenceDiagram
   Planner->>LLM: generate_response(TOOLS + user)
   LLM-->>Planner: JSON text
   Planner->>Planner: extract_first_json + validate allowlist
-  Planner-->>App: PlannerOutput (command, args) | None
+  Planner-->>App: Plan (single step) | None
 
   Note over App: If valid, dispatch to target handler via registry
 

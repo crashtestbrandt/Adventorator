@@ -94,12 +94,12 @@ This work is divided into five distinct phases, which should be implemented in o
     *   **Objective:** To trace how natural language input is converted into a structured application command.
     *   **Key Actions:**
         1.  Inside the `plan` function, log the initiation of a planning request with the user's message.
-        2.  Log the successfully parsed and validated `PlannerOutput` object.
+    2.  Log the successfully parsed and validated `Plan` (single-step) object (legacy `PlannerOutput` adapter retained only for backward compatibility).
         3.  Log any failures during JSON extraction or Pydantic validation of the LLM's response.
     4.  Review the existing `planner.decision` logs in `commands/plan.py` and ensure they correctly inherit the `request_id` from the context.
     *   **Location(s):** `Adventorator/planner.py`; `Adventorator/commands/plan.py`.
     *   **Key Log Fields:** `user_msg`, `plan` (the full output object), `raw_text_preview` (on failure).
-    *   **Success Criteria:** We can follow the data flow from a raw user string to a validated `PlannerOutput` object and see the final accepted/rejected decision.
+    *   **Success Criteria:** We can follow the data flow from a raw user string to a validated `Plan` object and see the final accepted/rejected decision.
 
 *   **Task 2.2: Log Orchestrator Defensive Gate Rejections**
     *   **Objective:** To monitor the effectiveness of security and safety checks on LLM-generated content.

@@ -17,11 +17,11 @@ This survey highlights the primary data models and cross-boundary contracts you�
   - `Command` registry populated via `@slash_command`.
 
 ## AI Planner contract
-- Files: `src/Adventorator/planner.py`, `src/Adventorator/planner_schemas.py`
-- Output model: `PlannerOutput { command: str, subcommand?: str, args: dict, confidence?: number, rationale?: string }`.
+- Files: `src/Adventorator/planner.py`, `src/Adventorator/planner_schemas.py` (legacy adapter)
+- Output model (current): `Plan { feasible: bool, plan_id: str, steps: [PlanStep{ op, args, guards[] }], rationale?: str }` (Level 1 ⇒ exactly one step). Legacy `PlannerOutput` is internally adapted and deprecated.
 - Behavior:
   - Builds a catalog from registered commands and each option model’s JSON schema.
-  - Prompts LLM to select exactly one command; args validated strictly against the target option model.
+  - Prompts LLM to select exactly one command; wraps validated selection in a single-step Plan.
 
 ## Orchestrator output
 - File: `src/Adventorator/orchestrator.py`

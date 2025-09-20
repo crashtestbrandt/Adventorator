@@ -16,7 +16,7 @@ Goal: Introduce the new data contracts and interop shims without breaking curren
 - Add schemas (no behavior change)
   - New module with Pydantic v2 models mirroring section 5 of the design: IntentFrame, AskReport, Plan, PlanStep, ExecutionRequest, ExecutionResult.
   - Provide converters to/from existing types:
-    - Planner: to/from `Adventorator.planner_schemas.PlannerOutput`.
+  - Planner: legacy adapter to/from `Adventorator.planner_schemas.PlannerOutput` (deprecated) — primary contract is `Plan` (single-step Level 1).
     - Orchestrator: to/from its LLM output types inside `Adventorator.orchestrator.run_orchestrator`.
     - Executor: to/from `Adventorator.executor.ToolStep` and the ToolCallChain.
 - Feature flags

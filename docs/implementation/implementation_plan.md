@@ -121,7 +121,7 @@ Introduce an **LLM-driven planner** that can translate freeform user input into 
 **Key steps:**
 
 * **Groundwork fixes:** clean up small issues (OpenAI client response path, Pydantic API changes, timezone-aware timestamps, safe Pydantic defaults) to reduce noise during rollout.
-* **Planner contract:** define strict Pydantic models (`Plan`, `PlannerOutput`) and a system prompt that forces the LLM to output JSON with a single command and validated arguments.
+* **Planner contract:** define strict Pydantic model (`Plan`) (legacy `PlannerOutput` now wrapped; retained only for backward-compatible adapter) and a system prompt that forces the LLM to output JSON with a single command and validated arguments.
 * **Tool catalog:** auto-generate a schema catalog from the command registry (`all_commands()`), ensuring the planner cannot invent unknown shapes.
 * **Planner service:** implement a `plan()` helper that builds prompts, invokes the LLM, and parses/validates JSON output defensively.
 * **New `/act` command:** route freeform input through the planner, validate the selected command and args against the existing option models, then dispatch safely. Player input is persisted to transcripts before planning, like `/ooc`.
