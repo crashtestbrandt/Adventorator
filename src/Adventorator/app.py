@@ -384,9 +384,11 @@ async def dev_webhook(application_id: str, token: str, request: Request):
             if pj:
                 if isinstance(pj, bytes):
                     import orjson as _oj  # local import to avoid unused if branch never hit
+
                     payload = _oj.loads(pj)
                 else:  # str
                     import orjson as _oj
+
                     payload = _oj.loads(pj.encode())
         else:
             try:
@@ -395,6 +397,7 @@ async def dev_webhook(application_id: str, token: str, request: Request):
                 raw = await request.body()
                 if raw:
                     import orjson as _oj
+
                     try:
                         payload = _oj.loads(raw)
                     except Exception:

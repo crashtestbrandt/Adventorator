@@ -31,8 +31,7 @@ def _sanitize_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     if not payload:
         return {}
     try:
-        canonical = json.loads(json.dumps(
-            payload, ensure_ascii=False, default=str))
+        canonical = json.loads(json.dumps(payload, ensure_ascii=False, default=str))
     except Exception:
         return {"error": "unserializable"}
     encoded = json.dumps(canonical, ensure_ascii=False).encode("utf-8")
@@ -58,14 +57,12 @@ async def get_or_create_player(
     s: AsyncSession, discord_user_id: int, display_name: str
 ) -> models.Player:
     q = await s.execute(
-        select(models.Player).where(
-            models.Player.discord_user_id == discord_user_id)
+        select(models.Player).where(models.Player.discord_user_id == discord_user_id)
     )
     obj = q.scalar_one_or_none()
     if obj:
         return obj
-    obj = models.Player(discord_user_id=discord_user_id,
-                        display_name=display_name)
+    obj = models.Player(discord_user_id=discord_user_id, display_name=display_name)
     s.add(obj)
     await _flush_retry(s)
     return obj
@@ -165,8 +162,7 @@ async def ensure_scene(s: AsyncSession, campaign_id: int, channel_id: int) -> mo
 async def list_character_names(s: AsyncSession, campaign_id: int) -> list[str]:
     """Return all character names in a campaign."""
     q = await s.execute(
-        select(models.Character.name).where(
-            models.Character.campaign_id == campaign_id)
+        select(models.Character.name).where(models.Character.campaign_id == campaign_id)
     )
     return [row[0] for row in q.all()]
 
@@ -290,8 +286,7 @@ async def get_recent_transcripts(
     Fetches the most recent transcript entries for a given scene, optionally
     filtered by user_id, in chronological order.
     """
-    stmt = select(models.Transcript).where(
-        models.Transcript.scene_id == scene_id)
+    stmt = select(models.Transcript).where(models.Transcript.scene_id == scene_id)
     if user_id is not None:
         stmt = stmt.where(models.Transcript.author_ref == user_id)
     stmt = stmt.order_by(models.Transcript.created_at.desc()).limit(limit)
@@ -393,12 +388,10 @@ async def add_combatant(
 ) -> models.Combatant:
     # Determine next order_idx for stability
     q = await s.execute(
-        select(models.Combatant).where(
-            models.Combatant.encounter_id == encounter_id)
+        select(models.Combatant).where(models.Combatant.encounter_id == encounter_id)
     )
     existing = list(q.scalars().all())
-    next_idx = (max([c.order_idx for c in existing],
-                default=-1) + 1) if existing else 0
+    next_idx = (max([c.order_idx for c in existing], default=-1) + 1) if existing else 0
     cb = models.Combatant(
         encounter_id=encounter_id,
         character_id=character_id,
@@ -425,8 +418,7 @@ async def set_combatant_initiative(s: AsyncSession, *, combatant_id: int, initia
 
 async def list_combatants(s: AsyncSession, *, encounter_id: int) -> list[models.Combatant]:
     q = await s.execute(
-        select(models.Combatant).where(
-            models.Combatant.encounter_id == encounter_id)
+        select(models.Combatant).where(models.Combatant.encounter_id == encounter_id)
     )
     return list(q.scalars().all())
 
@@ -466,8 +458,7 @@ async def create_pending_action(
 ) -> models.PendingAction:
     expires_at = None
     if ttl_seconds and ttl_seconds > 0:
-        expires_at = datetime.now(timezone.utc) + \
-            timedelta(seconds=ttl_seconds)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
     # Compute a normalized dedup hash from the chain JSON
     try:
         normalized = json.dumps(chain, sort_keys=True, separators=(",", ":"))
@@ -582,8 +573,7 @@ async def expire_stale_pending_actions(s: AsyncSession) -> int:
     from datetime import datetime, timezone
 
     # SQLite lacks server-side now(); do expiration in Python on fetched rows
-    stmt = select(models.PendingAction).where(
-        models.PendingAction.status == "pending")
+    stmt = select(models.PendingAction).where(models.PendingAction.status == "pending")
     q = await s.execute(stmt)
     count = 0
     now = datetime.now(timezone.utc)
@@ -707,8 +697,7 @@ def fold_conditions_view(events: list[models.Event]) -> dict[str, dict[str, dict
             prev = slot.get("stacks")
             prev_int = prev if isinstance(prev, int) else 0
             slot["stacks"] = prev_int + 1
-            slot["duration"] = dur_i if dur_i is not None else slot.get(
-                "duration", None)
+            slot["duration"] = dur_i if dur_i is not None else slot.get("duration", None)
         elif et == "condition.removed":
             target = str(ev.payload.get("target"))
             cond = str(ev.payload.get("condition"))

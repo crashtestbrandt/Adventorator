@@ -135,7 +135,11 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+# Host dev: use .env.local; docker: .env.docker (both ignored)
 .env
+.env.*
+!.env.*.example
+
 .envrc
 .venv
 env/

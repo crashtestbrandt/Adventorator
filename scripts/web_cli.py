@@ -8,7 +8,7 @@ capture the final command output and print it to stdout.
 
 Prerequisites:
  1. Docker Compose services must be running (`make compose-up`).
- 2. Your .env file must be configured with DISCORD_APP_ID and a development-only
+ 2. Your .env.local file must be configured with DISCORD_APP_ID and a development-only
     DISCORD_PRIVATE_KEY. Run `scripts/generate_keys.py` to create a keypair.
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ try:
     APP_URL = f"http://127.0.0.1:{APP_PORT}"
 
     if not APP_ID:
-        raise ValueError("DISCORD_APP_ID must be set in your .env file.")
+        raise ValueError("DISCORD_APP_ID must be set in your .env.local (or .env) file.")
     if not settings.discord_private_key:
         raise ValueError(
             "DISCORD_PRIVATE_KEY is required for signing requests.\n"

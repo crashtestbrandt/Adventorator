@@ -334,10 +334,10 @@ sequenceDiagram
 ## Quickstart
 
 ```bash
-cp .env.example .env    # <-- Add secrets
-make dev                # Install Python requirements
-make db-upgrade         # Initialize the database schema
-make run                # Start local dev server on port 18000
+cp .env.local.example .env.local   # <-- Add secrets (host dev)
+make dev                     # Install Python requirements
+make db-upgrade              # Initialize the database schema
+make run                     # Start local dev server on port 18000
 ```
 
 To expose your local server to Discord, run the Cloudflare tunnel in a separate terminal:
@@ -352,13 +352,13 @@ Discord can now reach your dev server using the tunnel URL + `/interactions`.
 
 ## Docker Compose Dev (with Feature Flags)
 
-Spin up Postgres and the app together with docker compose. Configure feature flags in `config.toml` or `.env`.
+Spin up Postgres and the app together with docker compose. Configure feature flags in `config.toml` or `.env.docker` (copied from `.env.docker.example`).
 
 ```bash
-docker compose up -d --build db app
+make compose-dev   # uses .env.docker
 ```
 
-Required env for compose dev:
+Required env for compose dev (see `.env.docker.example`):
 
 ```env
 DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
@@ -415,7 +415,7 @@ See also: `migrations/README` for deeper Alembic usage, driver notes, and troubl
 
 ## Configuration
 
-Behavior is configured via `config.toml`, which can be overridden by environment variables or a `.env` file.
+Behavior is configured via `config.toml`, which can be overridden by environment variables loaded from `.env.local` (host) or `.env.docker` (compose). A legacy `.env` is still honored if `.env.local` is absent.
 
 **Key Toggles:**
 
@@ -511,7 +511,7 @@ The application uses a decorator-based system to discover and register new comma
 3.  **Register it with Discord:**
 
     ```bash
-    # Fill out DISCORD_* variables in .env first
+  # Fill out DISCORD_* variables in .env.local (host) or .env.docker (compose) first
     python scripts/register_commands.py
     ```
 

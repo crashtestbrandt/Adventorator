@@ -25,6 +25,56 @@ Below is (1) a code-level progress review against ARCH-AVA-001 and Epic stories,
 - Implemented: Core schemas, planner Plan integration, predicate gate, execution request adapter, orchestration shim, metrics basics, ActivityLog hook.
 - Pending: MCP adapter scaffold, tiered planning scaffolding & guards, richer metrics (feasible/preview/apply), AskReport production logic, runbook & ops metrics expansion, repairs/alternatives population, payload bounds & per-phase timeouts, guards population tests, MCP parity tests.
 
+**Environment Modes (Host vs Docker) & Env Files**
+- Host Local Mode: Invoked via `make run` / `make dev`. Reads configuration from `config.toml` plus optional `.env.local` (highest precedence) for secrets (`DISCORD_*`, `LLM_*`, overrides). Falls back to legacy `.env` only if `.env.local` absent (kept for backward compatibility; do not reintroduce new values there).
+- Docker Dev Mode: Invoked via `make compose-dev` (or related compose targets). Containers load variables from `.env.docker` (purpose‑built for container context: e.g. `DATABASE__HOST=db`). Host-only secrets that should not be baked into images stay in `.env.local` and are NOT auto-copied—mount or pass through if required.
+- Separation Rationale: Prevent accidental leakage of host credentials into containers and eliminate manual file swapping. Enables concurrent workflows (host web CLI vs containerized service) without editing env files.
+- Practical Guidelines:
+  - Put Discord credentials, generated signing/dev keys, and LLM provider keys in `.env.local`.
+  - Put container networking / service hostnames (`POSTGRES_HOST=db`, any port remaps) in `.env.docker`.
+  - Never commit filled `.env.local` / `.env.docker`; provide examples (`.env.docker.example`).
+  - Scripts (`register_commands.py`, `generate_keys.py`) now prefer `.env.local`; they warn only if both missing.
+- Port Management: `make dev` / `make run` will auto free (or fail fast about) port 18000; compose variant performs its own mapping and can use auto‑selection helpers if added later.
+
+**Dev Webhook Override & Follow-Up Gating**
+- Purpose: Provide deterministic, local visibility of follow-up (secondary) interaction messages without sending them to real Discord webhooks.
+- Activation: Set `DISCORD_WEBHOOK_URL_OVERRIDE` to the app's internal dev sink URL (e.g. `http://127.0.0.1:18000/dev-webhook/webhooks/{APP_ID}/{TOKEN}`). The web CLI detects this pattern and switches to polling mode instead of spawning the legacy sink.
+- Security / Safety Gating: Override is applied ONLY for dev-signed (web_cli) interactions. Real Discord interaction requests (validated via signature + application id / token that are not the dev key) bypass the override so production / guild messages continue to flow to actual Discord webhooks.
+- Endpoints:
+  - POST `/dev-webhook/webhooks/{application_id}/{token}`: Receives and logs follow-up payload (mirrors Discord's semantics for testing).
+  - GET `/dev-webhook/latest/{token}`: Returns last received payload for polling (used by `web_cli` to print follow-up content after initial ACK).
+- Plan Command Guarantee: `/plan` now always emits a follow-up (even cache hits) so the CLI never “hangs” waiting; this was a regression fix.
+- Regression Prevention: Attachment and rich content follow-ups are also gated—only dev interactions can be rerouted ensuring no accidental leakage to dev sink from real users.
+
+**Metrics Gap Matrix (Implemented vs Target)**
+| Category | Implemented Metrics (examples) | Missing / Planned Metrics | Notes |
+|----------|--------------------------------|---------------------------|-------|
+| Planner | `planner.cache.lookup` (hit/miss labels), timing logs (request ms), implicit feasibility via downstream success | `planner.feasible`, `planner.infeasible` | Add explicit feasibility counters for ops visibility |
+| Predicate Gate | `predicate.gate.ok`, `predicate.gate.error`, `predicate.gate.fail_reason.<code>` | (Possibly) `predicate.gate.bypass` when disabled | Fail reasons granular; bypass would aid rollout analysis |
+| Executor Preview | `orchestrator.executor.preview_ms` (timing) | `executor.preview.ok`, `executor.preview.error` | Need success/failure counts (timing alone insufficient) |
+| Executor Apply (future) | None (apply path not integrated) | `executor.apply.ok`, `executor.apply.error`, `executor.apply_ms` | Add with real apply integration |
+| Activity Log | `activity_log.write_failed` (error counter) | `activity_log.write.ok` | Success counter needed for ratios / SLO |
+| Guards / Repairs | None | `plan.guards.populated`, `plan.repairs.suggested` | Emitted when planner or gate populates remediation data |
+| Feasibility Repair | None | `planner.repair.generated` | After introducing repair suggestions |
+| Payload / Size | None | `planner.request.truncated`, `plan.steps.capped` | For bounding / safety instrumentation |
+
+**Guards, Repairs & Roadmap Clarification**
+- Current State: `Plan` model fields `guards`, `repairs`, `alternatives` exist but remain empty lists throughout planner + gate path; no serialization tests validate non-empty cases.
+- Near-Term Steps:
+  1. Introduce simple static guard population (e.g., ability existence check becomes a guard object with condition + remediation hint).
+  2. On predicate failure, synthesize `repairs` (e.g., suggest valid abilities or lower DC range) and return them in follow-up payload for future UI surfacing.
+  3. Add golden serialization tests capturing: empty fields, single guard, multiple guards + repairs.
+  4. Emit metrics counters (`plan.guards.populated`, `plan.repairs.suggested`).
+  5. Extend planner to optionally request tiered alternative steps; store in `alternatives` with ranking metadata.
+- Validation Goal: Ensure downstream (executor, potential MCP adapter) can safely ignore unknown guard types until fully supported (forward compatibility).
+
+**Outcome Summary (Updated)**
+- Local Dev UX: Dual env file pattern implemented; documentation now explicit about precedence and separation, reducing onboarding ambiguity.
+- Reliability: Follow-up override gating verified; prevents accidental hijack of real Discord interactions while preserving deterministic local visibility.
+- Observability: Predicate gate metrics comprehensive; clear, enumerated gaps now captured in matrix to drive next instrumentation sprint.
+- Remaining Gaps: Metrics (feasibility, executor success/failure, activity_log.write.ok), guards/repairs population, AskReport production, MCP adapter scaffold, payload/time bounding, golden serialization tests.
+- Recommended Immediate Next Actions: (1) Implement feasibility + executor preview counters, (2) add `activity_log.write.ok`, (3) scaffold minimal guard objects with serialization test, (4) introduce repair suggestion for common predicate failures.
+
 **Fresh Clone Validation Guide**
 
 1. Prerequisites
@@ -179,7 +229,7 @@ Then query DB (psql or sqlite) to confirm an `activity_log` entry referencing `p
 
 a. Create/Configure Discord Application:
 - Obtain `DISCORD_APP_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_BOT_TOKEN`.
-- In .env (or environment):
+- In `.env.local` (host) or `.env.docker` (compose) or exported environment:
 ```
 DISCORD_APP_ID=...
 DISCORD_PUBLIC_KEY=...

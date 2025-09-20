@@ -202,10 +202,14 @@ class Settings(BaseSettings):
     # --- Ops ---
     metrics_endpoint_enabled: bool = False
 
+    # Prefer .env.local if present for host development; fall back to .env (legacy)
+    import os as _os
+
+    _default_env_file = ".env.local" if _os.path.exists(".env.local") else ".env"
     model_config = SettingsConfigDict(
         env_prefix="",
         case_sensitive=False,
-        env_file=".env",
+        env_file=_default_env_file,
         extra="ignore",  # Safely ignore any extra env vars
     )
 
