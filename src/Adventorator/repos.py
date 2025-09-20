@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import structlog
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -246,9 +246,7 @@ async def link_transcript_activity_log(
         return
     # Suppress autoflush so we don't flush unrelated pending objects while checking parents.
     with s.no_autoflush:
-        q = await s.execute(
-            select(models.Transcript).where(models.Transcript.id == transcript_id)
-        )
+        q = await s.execute(select(models.Transcript).where(models.Transcript.id == transcript_id))
         t = q.scalar_one_or_none()
         # Verify activity log exists before linking to avoid FK violation in environments
         # where the log may have been created in a different uncommitted session.
@@ -529,16 +527,22 @@ async def create_pending_action(
             # Suppress autoflush while verifying parents; we don't want pending_actions
             # flushed implicitly due to these selects.
             with s.no_autoflush:
-                camp_exists = await s.execute(select(models.Campaign.id).where(models.Campaign.id == campaign_id))
-                scene_exists = await s.execute(select(models.Scene.id).where(models.Scene.id == scene_id))
+                camp_exists = await s.execute(
+                    select(models.Campaign.id).where(models.Campaign.id == campaign_id)
+                )
+                scene_exists = await s.execute(
+                    select(models.Scene.id).where(models.Scene.id == scene_id)
+                )
                 act_exists = None
                 if activity_log_id is not None:
                     act_exists = await s.execute(
-                        select(models.ActivityLog.id).where(models.ActivityLog.id == activity_log_id)
+                        select(models.ActivityLog.id).where(
+                            models.ActivityLog.id == activity_log_id
+                        )
                     )
                     if not act_exists.scalar_one_or_none():
-                        # Activity log was not found (possibly created in separate uncommitted session)
-                        # Avoid FK failure by dropping the reference.
+                        # Activity log not found (possibly created in another uncommitted session);
+                        # drop reference to avoid FK failure.
                         pa.activity_log_id = None
                         activity_log_id = None
             structlog.get_logger("pending").debug(
@@ -583,8 +587,12 @@ async def create_pending_action(
             retry_for_fk = True
             # Re-verify parent rows exist before retry
             with s.no_autoflush:
-                camp_exists = await s.execute(select(models.Campaign.id).where(models.Campaign.id == campaign_id))
-                scene_exists = await s.execute(select(models.Scene.id).where(models.Scene.id == scene_id))
+                camp_exists = await s.execute(
+                    select(models.Campaign.id).where(models.Campaign.id == campaign_id)
+                )
+                scene_exists = await s.execute(
+                    select(models.Scene.id).where(models.Scene.id == scene_id)
+                )
             if camp_exists.scalar_one_or_none() and scene_exists.scalar_one_or_none():
                 # Re-add (state cleared after rollback) and retry once
                 s.add(pa)
@@ -707,7 +715,8 @@ async def append_event(
         actor_id=actor_norm,
         type=type,
         payload=payload or {},
-        request_id=request_id or f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp()*1000)}",
+        request_id=request_id
+        or f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}",
     )
     s.add(ev)
     await _flush_retry(s)
@@ -751,7 +760,9 @@ async def confirm_pending_action(
     pa.status = "confirmed"
     if bot_tx_id is not None:
         pa.bot_tx_id = bot_tx_id
-    pa.confirmed_at = datetime.now(timezone.utc)
+    # Optional attribute present in newer migration; guard for older instances
+    if hasattr(pa, "confirmed_at"):
+        pa.confirmed_at = datetime.now(timezone.utc)
     await _flush_retry(s)
     inc_counter("pending.confirmed")
     return pa
@@ -769,7 +780,8 @@ async def cancel_pending_action(
     if pa.status != "pending":
         return pa
     pa.status = "cancelled"
-    pa.cancelled_at = datetime.now(timezone.utc)
+    if hasattr(pa, "cancelled_at"):
+        pa.cancelled_at = datetime.now(timezone.utc)
     await _flush_retry(s)
     inc_counter("pending.cancelled")
     return pa
@@ -792,9 +804,9 @@ async def mark_pending_action_status(
     if normalized not in valid:
         normalized = "error"
     pa.status = normalized
-    if normalized == "confirmed":
+    if normalized == "confirmed" and hasattr(pa, "confirmed_at"):
         pa.confirmed_at = datetime.now(timezone.utc)
-    elif normalized == "cancelled":
+    elif normalized == "cancelled" and hasattr(pa, "cancelled_at"):
         pa.cancelled_at = datetime.now(timezone.utc)
     await _flush_retry(s)
     return pa

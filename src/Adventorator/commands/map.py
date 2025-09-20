@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pydantic import Field
 
+from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.config import load_settings
-from Adventorator.responder import followup_message_with_attachment
-from Adventorator.services.renderer import RenderInput, render_map
-from Adventorator import repos
 from Adventorator.db import session_scope
 from Adventorator.models import EncounterStatus
+from Adventorator.responder import followup_message_with_attachment
+from Adventorator.services.renderer import RenderInput, render_map
 
 
 class MapShowOpts(Option):
@@ -33,24 +33,29 @@ async def map_show(inv: Invocation, opts: MapShowOpts):
         )
         return
 
+    # Prepare variable for both branches
+    rinp: RenderInput | None = None
     # Demo mode: render a sample grid/tokens without DB state
     if getattr(opts, "demo", False):
         from Adventorator.services.renderer import Token
 
-        tokens = [
+        demo_tokens = [
             Token(name="Ari", x=1, y=1, color=(64, 128, 255), active=True),
             Token(name="Bor", x=3, y=2, color=(80, 200, 120), active=False),
             Token(name="Cat", x=2, y=4, color=(220, 120, 120), active=False),
         ]
         rinp = RenderInput(
-            encounter_id=-1, last_event_id=None, width=512, height=384, tokens=tokens
+            encounter_id=-1,
+            last_event_id=None,
+            width=512,
+            height=384,
+            tokens=demo_tokens,
         )
     else:
         # Real encounter rendering
         guild_id = int(inv.guild_id or 0)
         channel_id = int(inv.channel_id or 0)
-        # Defaults before DB
-        rinp: RenderInput | None = None
+    # Defaults before DB remain
         async with session_scope() as s:
             campaign = await repos.get_or_create_campaign(s, guild_id)
             scene = await repos.ensure_scene(s, campaign.id, channel_id)
@@ -58,7 +63,10 @@ async def map_show(inv: Invocation, opts: MapShowOpts):
             # Require an active encounter for non-demo rendering
             if not enc or getattr(enc, "status", None) != EncounterStatus.active:
                 await inv.responder.send(
-                    "⚠️ No active encounter for this scene. Try /map show demo:true or start combat.",
+                    (
+                        "⚠️ No active encounter for this scene. Try /map show demo:true "
+                        "or start combat."
+                    ),
                     ephemeral=True,
                 )
                 return

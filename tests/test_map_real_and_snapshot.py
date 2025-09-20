@@ -1,9 +1,8 @@
-import hashlib
 import pytest
 
+from Adventorator import repos
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import Invocation, find_command
-from Adventorator import repos
 from Adventorator.db import session_scope
 
 
@@ -68,7 +67,8 @@ async def test_renderer_demo_snapshot_deterministic_bytes():
     )
     png1 = render_map(inp)
     png2 = render_map(inp)
-    assert isinstance(png1, (bytes, bytearray)) and len(png1) > 0
+    # bytes|bytearray tuple acceptable; ignore union suggestion for clarity
+    assert isinstance(png1, (bytes, bytearray)) and len(png1) > 0  # noqa: UP038
     assert png1 == png2, "Renderer should be deterministic for identical input and cache hit"
 
 

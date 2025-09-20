@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+
 import structlog
 from pydantic import Field
 
@@ -100,7 +101,8 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
             user_msg,
             str(user_id),
         )
-        player_tx_id = getattr(player_tx, "id", None)
+        # player_tx_id retained for future auditing if needed; not currently used.
+        getattr(player_tx, "id", None)
         scene_id = scene.id
         log_event(
             "planner",
@@ -151,8 +153,7 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
                 out = PlannerOutput.model_validate(cached_payload)  # type: ignore[name-defined]
                 if use_action_validation and out is not None:
                     plan_obj = plan_from_planner_output(out)
-            # If action validation disabled, no further transformation needed; ensure hit metric remains.
-            # Non-action-validation path: rely solely on _cache_get metric.
+            # If action validation disabled, rely on _cache_get metric.
         except Exception:
             # Treat as cache miss by clearing outputs
             plan_obj = None
@@ -341,9 +342,8 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         guidance: str | None = None
         if cmd_name_flat in {"sheet.create"}:
             guidance = (
-                "To create a character, use /sheet create and provide the json option with "
-                'your character sheet JSON. Example: {"name": "Aria", '
-                '"class": "Fighter", "level": 1, ...}'
+                "Create a character: /sheet create json:{...}. Example: {\"name\": \"Aria\", "
+                "\"class\": \"Fighter\", \"level\": 1}"
             )
         elif cmd_name_flat in {"sheet.show"}:
             guidance = (
@@ -351,8 +351,7 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
             )
         elif cmd_name_flat == "check":
             guidance = (
-                "Use /check with at least ability (STR/DEX/...). Optionally include dc. "
-                "Example: ability: DEX dc: 12"
+                "Check: /check ability:DEX dc:12 (dc optional)."
             )
         elif cmd_name_flat == "roll":
             guidance = 'Use /roll with an expr like 1d20 or 2d6+3. Example: expr: "1d20"'
@@ -414,7 +413,9 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
                     preview_lines.append("(Failed predicates present; plan may be infeasible.)")
                 await inv.responder.send("\n".join(preview_lines), ephemeral=True)
             else:
-                await inv.responder.send("(No steps generated; executing directly.)", ephemeral=True)
+                await inv.responder.send(
+                    "(No steps generated; executing directly.)", ephemeral=True
+                )
         except Exception:
             pass
         log_event(

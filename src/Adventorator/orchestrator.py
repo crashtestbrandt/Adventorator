@@ -9,12 +9,12 @@ from typing import Any, TypedDict
 import structlog
 
 from Adventorator import models as _models
+from Adventorator import repos
 from Adventorator.action_validation import (
     ExecutionRequest,
     PlanStep,
     tool_chain_from_execution_request,
 )
-from Adventorator import repos
 from Adventorator.db import session_scope
 from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messages
 from Adventorator.metrics import inc_counter
@@ -258,7 +258,7 @@ def _unknown_actor_present(narration: str, allowed: set[str]) -> str | None:
 
 # Simple 30s prompt cache (keyed by scene and player_msg)
 _CACHE_TTL = 30.0
-_prompt_cache: dict[tuple[int, str], tuple[float, OrchestratorResult]] = {}
+_prompt_cache: dict[tuple[int, str, bool], tuple[float, OrchestratorResult]] = {}
 
 
 async def _facts_from_transcripts(
@@ -318,7 +318,11 @@ async def run_orchestrator(
     feature_activity_log = bool(
         getattr(settings, "features_activity_log", False) if settings is not None else False
     )
-    cache_key = (scene_id, player_msg.strip(), feature_action_validation)
+    cache_key: tuple[int, str, bool] = (
+        scene_id,
+        player_msg.strip(),
+        feature_action_validation,
+    )
     now = time.time()
     execution_request: ExecutionRequest | None = None
     request_id_seed = int(now * 1000)
@@ -432,9 +436,10 @@ async def run_orchestrator(
             narration=out.narration,
         )
         # Provide a clearer message for validation failures
+        why_key = why or ""
         readable = {
             "llm_invalid_or_empty": "No usable preview was produced.",
-        }.get(why, "Preview validation failed. Adjust your phrasing and try again.")
+        }.get(why_key, "Preview validation failed. Adjust your phrasing and try again.")
         return _complete(
             OrchestratorResult(
                 mechanics=readable,
@@ -586,9 +591,9 @@ async def run_orchestrator(
         ctx = {"scene_id": scene_id, "request_id": f"orc-{scene_id}-{request_id_seed}"}
         if actor_id is not None:
             ctx["actor_id"] = actor_id
-        req_for_execution = ExecutionRequest(
-            plan_id=ctx["request_id"], steps=plan_steps, context=ctx
-        )
+        plan_id_raw = ctx.get("request_id")
+        plan_id_str = str(plan_id_raw) if plan_id_raw is not None else ""
+        req_for_execution = ExecutionRequest(plan_id=plan_id_str, steps=plan_steps, context=ctx)
         if feature_action_validation:
             execution_request = req_for_execution
             try:

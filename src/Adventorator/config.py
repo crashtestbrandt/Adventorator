@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 import tomllib
 from pydantic import BaseModel, Field, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict, DotEnvSettingsSource
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
 
 
 def _toml_settings_source() -> dict[str, Any]:

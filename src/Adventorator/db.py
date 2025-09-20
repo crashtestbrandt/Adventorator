@@ -80,8 +80,10 @@ def get_engine() -> AsyncEngine:
             from sqlalchemy.engine import make_url  # local import to avoid unused at module load
 
             url = make_url(DATABASE_URL)
-            backend = "postgres" if DATABASE_URL.startswith("postgresql") else (
-                "sqlite" if DATABASE_URL.startswith("sqlite") else "other"
+            backend = (
+                "postgres"
+                if DATABASE_URL.startswith("postgresql")
+                else ("sqlite" if DATABASE_URL.startswith("sqlite") else "other")
             )
             log.info(
                 "db.connection.config",

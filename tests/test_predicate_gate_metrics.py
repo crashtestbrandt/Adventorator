@@ -1,9 +1,9 @@
 import pytest
 
+from Adventorator.action_validation import plan_registry
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import Invocation, find_command
-from Adventorator.metrics import reset_counters, get_counter
-from Adventorator.action_validation import plan_registry
+from Adventorator.metrics import get_counter, reset_counters
 
 
 class _SpyResponder:
@@ -24,7 +24,7 @@ class _FakeLLM:
 
 @pytest.mark.asyncio
 async def test_predicate_gate_success_metrics():
-    """Planner with action validation + predicate gate success increments ok metric and plan feasible True."""
+    """Success path increments ok metric and plan feasible True."""
     reset_counters()
     plan_registry.reset()
     load_all_commands()
@@ -61,7 +61,7 @@ async def test_predicate_gate_success_metrics():
 
 @pytest.mark.asyncio
 async def test_predicate_gate_failure_metrics_known_ability():
-    """Unknown ability should fail known_ability predicate and increment error + fail_reason counter."""
+    """Unknown ability triggers known_ability failure and counters."""
     reset_counters()
     plan_registry.reset()
     load_all_commands()
@@ -101,7 +101,7 @@ async def test_predicate_gate_failure_metrics_known_ability():
 
 @pytest.mark.asyncio
 async def test_predicate_gate_failure_plan_feasible_false():
-    """Failure path should store plan with feasible False (no steps) and predicate failure recorded."""
+    """Failure stores infeasible plan with predicate failures recorded."""
     reset_counters()
     plan_registry.reset()
     load_all_commands()

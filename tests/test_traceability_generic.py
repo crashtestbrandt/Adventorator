@@ -1,7 +1,4 @@
-import types
-from pathlib import Path
 import scripts.update_action_validation_traceability as trace
-
 
 CORE_DOC = """# EPIC-CORE-001 — Core AI Systems Hardening
 

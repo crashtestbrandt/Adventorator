@@ -14,9 +14,9 @@ from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import all_commands
 from Adventorator.llm import LLMClient
 from Adventorator.llm_utils import extract_first_json
+from Adventorator.metrics import inc_counter, register_reset_plan_cache_callback
 from Adventorator.planner_prompts import SYSTEM_PLANNER
 from Adventorator.planner_schemas import PlannerOutput
-from Adventorator.metrics import inc_counter, register_reset_plan_cache_callback
 
 # --- Allowlist of commands the planner may route to (defense-in-depth) ---
 _ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do", "ooc"}
@@ -42,19 +42,19 @@ _plan_cache: dict[tuple[int, int, str], _CacheEntry | _LegacyCacheEntry] = {}
 
 
 def _normalize_cache_entry(
-    key: tuple[int, str], value: _CacheEntry | _LegacyCacheEntry
+    key: tuple[int, int, str], value: _CacheEntry | _LegacyCacheEntry
 ) -> _CacheEntry:
     if isinstance(value, _CacheEntry):
         return value
-
-    match value:
-        case (timestamp, payload, schema):
-            entry = _CacheEntry(timestamp, payload, schema)
-        case (timestamp, payload):
-            entry = _CacheEntry(timestamp, payload)
-        case _:
-            raise ValueError("Unexpected planner cache entry")
-
+    # legacy tuple forms
+    if len(value) == 3:
+        ts, payload, schema = value  # type: ignore[misc]
+        entry = _CacheEntry(ts, payload, schema)  # type: ignore[arg-type]
+    elif len(value) == 2:  # type: ignore[arg-type]
+        ts, payload = value  # type: ignore[misc]
+        entry = _CacheEntry(ts, payload)  # type: ignore[arg-type]
+    else:  # pragma: no cover - defensive
+        raise ValueError("Unexpected planner cache entry")
     _plan_cache[key] = entry
     return entry
 

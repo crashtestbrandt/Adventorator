@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Dict
-
 from .schemas import Plan
 
-_PLANS: Dict[str, Plan] = {}
+_PLANS: dict[str, Plan] = {}
 
 
 def register_plan(plan: Plan) -> None:

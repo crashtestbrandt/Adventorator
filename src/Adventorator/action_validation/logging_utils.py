@@ -1,11 +1,10 @@
-from __future__ import annotations
+"""Lightweight logging helpers for action validation phases.
 
-"""Shared lightweight logging helpers for action validation phases.
-
-These helpers standardize event naming so that Phase 1 logging requirements
-("initiated" / "completed" / "rejected") are consistent across the planner,
-predicate gate, and orchestrator without duplicating string literals.
+Standardizes event naming: initiated/completed/rejected across planner,
+predicate gate, orchestrator.
 """
+
+from __future__ import annotations
 
 import structlog
 

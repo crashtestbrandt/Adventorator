@@ -10,7 +10,7 @@ simple and avoid changing types in existing consumers.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Callable
+from collections.abc import Callable
 
 # Note: Avoid heavy imports at module import time; import test-only helpers lazily.
 

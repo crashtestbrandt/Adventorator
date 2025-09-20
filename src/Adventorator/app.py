@@ -386,10 +386,10 @@ async def dev_webhook(application_id: str, token: str, request: Request):
                     import orjson as _oj  # local import to avoid unused if branch never hit
 
                     payload = _oj.loads(pj)
-                else:  # str
+                else:  # str branch
                     import orjson as _oj
-
-                    payload = _oj.loads(pj.encode())
+                    pj_str = pj if isinstance(pj, str) else str(pj)
+                    payload = _oj.loads(pj_str.encode())
         else:
             try:
                 payload = await request.json()

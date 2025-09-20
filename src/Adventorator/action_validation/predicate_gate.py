@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from Adventorator import repos
 from Adventorator.db import session_scope
@@ -17,12 +18,12 @@ class PredicateFailure:
 
     code: str
     message: str
-    detail: Mapping[str, Any] = field(default_factory=dict)
+    info: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
-        payload = {"predicate": self.code, "message": self.message}
-        if self.detail:
-            payload["detail"] = dict(self.detail)
+        payload: dict[str, Any] = {"predicate": self.code, "message": self.message}
+        if self.info:
+            payload["detail"] = dict(self.info)
         return payload
 
 
@@ -47,7 +48,7 @@ async def evaluate_predicates(
 ) -> PredicateGateResult:
     """Evaluate deterministic predicates against the planner output."""
 
-    args = dict(output.args or {})
+    args: dict[str, Any] = dict(output.args or {})
     failures: list[PredicateFailure] = []
 
     ability = _extract_ability(args)
@@ -58,7 +59,7 @@ async def evaluate_predicates(
                 PredicateFailure(
                     code="known_ability",
                     message=f"Unknown ability '{ability}'.",
-                    detail={"ability": ability},
+                    info={"ability": ability},
                 )
             )
 
@@ -69,7 +70,7 @@ async def evaluate_predicates(
                 PredicateFailure(
                     code="dc_in_bounds",
                     message="Difficulty class must be between 1 and 40.",
-                    detail={"dc": dc},
+                    info={"dc": dc},
                 )
             )
 
@@ -83,7 +84,7 @@ async def evaluate_predicates(
                 PredicateFailure(
                     code="actor_in_allowed_actors",
                     message=f"Actor '{actor}' is not part of the active scene.",
-                    detail={"actor": actor},
+                    info={"actor": actor},
                 )
             )
         if context.campaign_id:
@@ -93,7 +94,7 @@ async def evaluate_predicates(
                     PredicateFailure(
                         code="exists(actor)",
                         message=f"Actor '{actor}' was not found in this campaign.",
-                        detail={"actor": actor},
+                        info={"actor": actor},
                     )
                 )
 
@@ -105,7 +106,7 @@ async def evaluate_predicates(
                 PredicateFailure(
                     code="exists(target)",
                     message=f"Target '{target}' was not found in this campaign.",
-                    detail={"target": target},
+                    info={"target": target},
                 )
             )
 

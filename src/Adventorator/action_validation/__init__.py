@@ -1,5 +1,6 @@
-"""Action validation public exports."""
+"""Action validation public exports."""  # noqa: N999
 
+from . import registry as plan_registry
 from .metrics import record_plan_steps, record_predicate_gate_outcome
 from .predicate_gate import (
     PredicateContext,
@@ -19,7 +20,6 @@ from .schemas import (
     planner_output_from_plan,
     tool_chain_from_execution_request,
 )
-from . import registry as plan_registry
 
 __all__ = [
     "AskReport",

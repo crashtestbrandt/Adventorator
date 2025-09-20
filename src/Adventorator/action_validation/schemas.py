@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -86,8 +87,10 @@ def _split_command_name(op: str) -> tuple[str, str | None]:
     if "." in op:
         top, _, sub = op.partition(".")
         top = top.strip()
-        sub = sub.strip() or None
-        return top, sub
+        sub = sub.strip()
+        if not sub:
+            sub = None  # type: ignore[assignment]
+        return top, sub  # type: ignore[return-value]
     return op.strip(), None
 
 
@@ -99,15 +102,18 @@ def _stable_plan_id(seed: Iterable[tuple[str, Any]]) -> str:
 def plan_from_planner_output(out: PlannerOutput, *, plan_id: str | None = None) -> Plan:
     op = _normalize_command_name(out.command, out.subcommand)
     step = PlanStep(op=op, args=dict(out.args))
-    if plan_id is None:
-        plan_id = _stable_plan_id(
-            (
-                ("command", out.command),
-                ("subcommand", out.subcommand),
-                ("args", out.args),
-            )
+    computed_id = _stable_plan_id(
+        (
+            ("command", out.command),
+            ("subcommand", out.subcommand),
+            ("args", out.args),
         )
-    return Plan(feasible=True, plan_id=plan_id, steps=[step])
+    )
+    if plan_id is None:
+        plan_id_non_none: str = computed_id
+    else:
+        plan_id_non_none = plan_id
+    return Plan(feasible=True, plan_id=plan_id_non_none, steps=[step])
 
 
 def planner_output_from_plan(plan: Plan) -> PlannerOutput:
