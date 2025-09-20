@@ -46,6 +46,34 @@ Below is (1) a code-level progress review against ARCH-AVA-001 and Epic stories,
 - Plan Command Guarantee: `/plan` now always emits a follow-up (even cache hits) so the CLI never “hangs” waiting; this was a regression fix.
 - Regression Prevention: Attachment and rich content follow-ups are also gated—only dev interactions can be rerouted ensuring no accidental leakage to dev sink from real users.
 
+**Local Plan Preview Quick Setup (TL;DR)**
+1. Ensure app is running (host or compose) on port 18000.
+2. In `.env.local` (host) and/or `.env.docker` (container) set:
+  ```
+  DISCORD_WEBHOOK_URL_OVERRIDE=http://127.0.0.1:18000/dev-webhook
+  ```
+  (No trailing `/webhooks/...` — the application appends `/webhooks/{app_id}/{token}` internally.)
+3. Restart the app so settings reload.
+4. Run:
+  ```bash
+  .venv/bin/python scripts/web_cli.py plan "Scout the hallway quietly"
+  ```
+5. Expect an immediate ACK plus a polled preview block beginning with `🧭 Plan Preview:`.
+
+**Troubleshooting Preview Not Showing**
+| Symptom | Likely Cause | Fix |
+|---------|--------------|-----|
+| CLI prints `(No follow-up content...)` and warning about setting override | Server not started with `DISCORD_WEBHOOK_URL_OVERRIDE` | Add variable, restart app |
+| 404 on POST `/webhooks/{app_id}/{token}` in logs | CLI injected header without `/dev-webhook` prefix (older CLI) | Update CLI (current version skips header when override missing) or set override env |
+| 401 `Invalid Webhook Token` in logs | Server attempted real Discord call with fake token (no override) | Set `DISCORD_WEBHOOK_URL_OVERRIDE` locally |
+| Preview truncated or empty | Planner produced zero steps (edge case) | Verify planner logs; ensure prompt not empty |
+| Multiple rapid polls (spam) | Normal polling loop (0.5s) while waiting for planner LLM | Ignore; preview prints when available |
+
+**Design Notes**
+- We intentionally use a base URL without the `/webhooks/{APP_ID}/{TOKEN}` suffix so the responder can construct standard Discord-style URLs uniformly.
+- The CLI now emits a warning when it assumed an override (based on host config) but the server still returns no dev payload—guiding developers to set the missing env var.
+- Using a true Discord token in local dev is discouraged; rely on the override + fake token path for deterministic testing without external dependencies.
+
 **Metrics Gap Matrix (Implemented vs Target)**
 | Category | Implemented Metrics (examples) | Missing / Planned Metrics | Notes |
 |----------|--------------------------------|---------------------------|-------|
