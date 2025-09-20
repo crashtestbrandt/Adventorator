@@ -55,7 +55,7 @@ async def map_show(inv: Invocation, opts: MapShowOpts):
         # Real encounter rendering
         guild_id = int(inv.guild_id or 0)
         channel_id = int(inv.channel_id or 0)
-    # Defaults before DB remain
+        # Defaults before DB remain
         async with session_scope() as s:
             campaign = await repos.get_or_create_campaign(s, guild_id)
             scene = await repos.ensure_scene(s, campaign.id, channel_id)
