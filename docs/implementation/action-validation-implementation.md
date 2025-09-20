@@ -89,16 +89,18 @@ Goal: Introduce a fast “Predicate Gate” with deterministic checks that do no
 - Rollback
   - Gate behind features.predicate_gate; off → bypass predicates.
 
-Phase 6 — ActivityLog integration (defensible audit of mechanics) *(Story: STORY-AVA-001G)*
-Goal: Record mechanics decisions in a structured ledger as we evolve planning/execution.
+Phase 6 — ActivityLog integration (defensible audit of mechanics) *(Story: STORY-AVA-001G / EPIC-ACTLOG-001 dependency)*
+Goal: Rely on Mechanics ActivityLog Enablement (EPIC-ACTLOG-001) for durable, queryable mechanics records while Action Validation evolves planning/execution.
 
-- Adopt the plan in ActivityLog-plan-overview.md.
-  - When an ExecutionRequest is approved (even if not applied), write a compact ActivityLog row describing mechanics preview (no prompts, no large blobs).
-  - Link transcripts to ActivityLog ids when mechanics drive the bot message.
+- Dependency
+  - AVA requires ACTLOG Stories 001A–001D (flag, schema, initial integrations, transcript linkage) completed before broad rollout.
+  - Feature flag `features.activity_log` provides rollback (disable writes; retain logs/metrics).
+- Behavior
+  - On ExecutionRequest approval, write compact ActivityLog rows (no prompts/large blobs); link transcript entries for mechanics-driven messages.
 - Tests
-  - E2E: /roll, /check produce ActivityLog with stable payloads; counters increment.
+  - E2E: /roll, /check produce stable ActivityLog payloads; counters increment (validated in ACTLOG test matrix).
 - Rollback
-  - Keep writes disabled via feature flag; fall back to logs/metrics only.
+  - Disable flag → no writes; AVA flow continues with observability logs only.
 
 Phase 7 — MCP scaffold (local, in-process servers) *(Story: STORY-AVA-001H)*
 Goal: Establish the boundary and contracts without networking complexity.
