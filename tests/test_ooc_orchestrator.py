@@ -112,6 +112,7 @@ def test_do_visible_post(monkeypatch):
     # The command handler imports session_scope directly from Adventorator.db,
     # so patch the symbol in the handler module as well.
     import Adventorator.commands.do as do_mod
+
     monkeypatch.setattr(do_mod, "session_scope", lambda: _DummyAsyncCM())
     monkeypatch.setattr(
         appmod,

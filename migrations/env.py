@@ -16,14 +16,20 @@ from Adventorator.db import Base
 from dotenv import load_dotenv
 
 
-# Load environment variables from the project root .env before reading DATABASE_URL
+# Load environment variables with precedence: .env then .env.local (override) so local dev values win.
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _ENV_PATH = _ROOT / ".env"
+_ENV_LOCAL_PATH = _ROOT / ".env.local"
+
+# Base .env first (if present)
 if _ENV_PATH.exists():
     load_dotenv(dotenv_path=_ENV_PATH)
 else:
-    # Fall back to default lookup on PATH/CWD if no file at expected location
-    load_dotenv()
+    load_dotenv()  # fallback search
+
+# Local override (if present) to supply DATABASE_URL, etc.
+if _ENV_LOCAL_PATH.exists():
+    load_dotenv(dotenv_path=_ENV_LOCAL_PATH, override=True)
 
 
 config = context.config

@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import orjson
 import structlog
 
+from Adventorator.action_validation.schemas import Plan, plan_from_planner_output
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import all_commands
 from Adventorator.llm import LLMClient
 from Adventorator.llm_utils import extract_first_json
+from Adventorator.metrics import inc_counter, register_reset_plan_cache_callback
 from Adventorator.planner_prompts import SYSTEM_PLANNER
 from Adventorator.planner_schemas import PlannerOutput
 
 # --- Allowlist of commands the planner may route to (defense-in-depth) ---
 _ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do", "ooc"}
+
 
 def _is_allowed(name: str) -> bool:
     return name in _ALLOWED
@@ -24,21 +28,106 @@ def _is_allowed(name: str) -> bool:
 
 # --- Simple in-process cache to suppress duplicate LLM calls for 30s ---
 _CACHE_TTL = 30.0
-_plan_cache: dict[tuple[int, str], tuple[float, dict[str, Any]]] = {}
 
-def _cache_get(scene_id: int, msg: str) -> dict[str, Any] | None:
-    key = (scene_id, msg.strip())
+
+@dataclass(slots=True)
+class _CacheEntry:
+    timestamp: float
+    payload: dict[str, Any]
+    schema: str = "planner_output"
+
+
+_LegacyCacheEntry = tuple[float, dict[str, Any]] | tuple[float, dict[str, Any], str]
+_plan_cache: dict[tuple[int, int, str], _CacheEntry | _LegacyCacheEntry] = {}
+
+
+def _normalize_cache_entry(
+    key: tuple[int, int, str], value: _CacheEntry | _LegacyCacheEntry
+) -> _CacheEntry:
+    if isinstance(value, _CacheEntry):
+        return value
+    # legacy tuple forms
+    if len(value) == 3:
+        ts, payload, schema = value  # type: ignore[misc]
+        entry = _CacheEntry(ts, payload, schema)  # type: ignore[arg-type]
+    elif len(value) == 2:  # type: ignore[arg-type]
+        ts, payload = value  # type: ignore[misc]
+        entry = _CacheEntry(ts, payload)  # type: ignore[arg-type]
+    else:  # pragma: no cover - defensive
+        raise ValueError("Unexpected planner cache entry")
+    _plan_cache[key] = entry
+    return entry
+
+
+def _cache_get(guild_id: int, channel_id: int, msg: str) -> tuple[dict[str, Any], str] | None:
+    """Fetch a cached planner output/plan.
+
+    Key is (guild_id, channel_id, message). Instrumented with detailed events
+    to diagnose miss conditions seen in tests where a hit was expected.
+    """
+    log = structlog.get_logger()
+    key = (guild_id, channel_id, msg.strip())
     now = time.time()
     v = _plan_cache.get(key)
     if not v:
+        inc_counter("planner.cache.miss")
+        log.info(
+            "planner.cache.miss",
+            guild_id=guild_id,
+            channel_id=channel_id,
+            msg_hash=hash(msg.strip()),
+            msg_preview=msg[:60],
+            cache_size=len(_plan_cache),
+        )
         return None
-    ts, payload = v
-    if now - ts <= _CACHE_TTL:
-        return payload
+    entry = _normalize_cache_entry(key, v)
+    age = now - entry.timestamp
+    if age <= _CACHE_TTL:
+        inc_counter("planner.cache.hit")
+        log.info(
+            "planner.cache.hit",
+            guild_id=guild_id,
+            channel_id=channel_id,
+            msg_hash=hash(msg.strip()),
+            age_ms=int(age * 1000),
+            schema=entry.schema,
+        )
+        return entry.payload, entry.schema
+    # Expired
+    inc_counter("planner.cache.expired")
+    log.info(
+        "planner.cache.expired",
+        guild_id=guild_id,
+        channel_id=channel_id,
+        msg_hash=hash(msg.strip()),
+        age_ms=int(age * 1000),
+        ttl_s=_CACHE_TTL,
+    )
+    # Remove stale entry to keep cache tidy
+    try:
+        del _plan_cache[key]
+    except Exception:
+        pass
     return None
 
-def _cache_put(scene_id: int, msg: str, plan_json: dict[str, Any]) -> None:
-    _plan_cache[(scene_id, msg.strip())] = (time.time(), plan_json)
+
+def _cache_put(
+    guild_id: int, channel_id: int, msg: str, plan_json: dict[str, Any], *, schema: str
+) -> None:
+    key = (guild_id, channel_id, msg.strip())
+    _plan_cache[key] = _CacheEntry(time.time(), plan_json, schema)
+    try:
+        log = structlog.get_logger()
+        log.info(
+            "planner.cache.store",
+            guild_id=guild_id,
+            channel_id=channel_id,
+            msg_hash=hash(msg.strip()),
+            schema=schema,
+            cache_size=len(_plan_cache),
+        )
+    except Exception:
+        pass
 
 
 def reset_plan_cache() -> None:
@@ -47,6 +136,9 @@ def reset_plan_cache() -> None:
     This is primarily used by tests to avoid cross-test interference.
     """
     _plan_cache.clear()
+
+
+register_reset_plan_cache_callback(reset_plan_cache)
 
 
 def _catalog() -> list[dict[str, Any]]:
@@ -78,11 +170,11 @@ def build_planner_messages(user_msg: str) -> list[dict[str, Any]]:
     tools_json = orjson.dumps(_catalog()).decode("utf-8")
     # Dynamically enumerate available rules from the rules engine (Dnd5eRuleset)
     from Adventorator.rules.engine import Dnd5eRuleset
+
     ruleset = Dnd5eRuleset()
     # List available rules as method names (excluding dunder and private)
     rule_methods = [
-        m for m in dir(ruleset)
-        if not m.startswith("_") and callable(getattr(ruleset, m))
+        m for m in dir(ruleset) if not m.startswith("_") and callable(getattr(ruleset, m))
     ]
     rules_list = "\n".join(f"- {m}" for m in rule_methods)
     rules_text = f"AVAILABLE RULES:\n{rules_list}\n"
@@ -95,19 +187,39 @@ def build_planner_messages(user_msg: str) -> list[dict[str, Any]]:
     ]
 
 
-async def plan(llm: LLMClient, user_msg: str) -> PlannerOutput | None:
+async def plan(
+    llm: LLMClient, user_msg: str, *, return_plan: bool = False
+) -> Plan | PlannerOutput | None:
     log = structlog.get_logger()
+    started = time.monotonic()
     log.info("planner.request.initiated", user_msg=user_msg)
     msgs = build_planner_messages(user_msg)
     text = await llm.generate_response(msgs)
     data = extract_first_json(text or "")
     if not data or not isinstance(data, dict):
         log.warning("planner.parse.failed", raw_text_preview=(text or "")[:200])
+        log.info(
+            "planner.request.completed",
+            status="parse_failed",
+            duration_ms=int((time.monotonic() - started) * 1000),
+        )
         return None
     try:
         out = PlannerOutput.model_validate(data)
         log.info("planner.parse.valid", plan=out.model_dump())
+        log.info(
+            "planner.request.completed",
+            status="success",
+            duration_ms=int((time.monotonic() - started) * 1000),
+        )
+        if return_plan:
+            return plan_from_planner_output(out)
         return out
     except Exception:
         log.warning("planner.validation.failed", raw_text_preview=(text or "")[:200])
+        log.info(
+            "planner.request.completed",
+            status="validation_failed",
+            duration_ms=int((time.monotonic() - started) * 1000),
+        )
         return None

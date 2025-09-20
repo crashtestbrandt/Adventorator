@@ -10,6 +10,11 @@ import structlog
 
 from Adventorator import models as _models
 from Adventorator import repos
+from Adventorator.action_validation import (
+    ExecutionRequest,
+    PlanStep,
+    tool_chain_from_execution_request,
+)
 from Adventorator.db import session_scope
 from Adventorator.llm_prompts import build_clerk_messages, build_narrator_messages
 from Adventorator.metrics import inc_counter
@@ -34,6 +39,44 @@ class OrchestratorResult:
     rejected: bool = False
     reason: str | None = None
     chain_json: dict | None = None
+    execution_request: ExecutionRequest | None = None
+    activity_log_id: int | None = None
+
+
+def _activity_event_type(steps: list[PlanStep]) -> str:
+    if not steps:
+        return "mechanics.unknown"
+    return f"mechanics.{steps[0].op}"
+
+
+def _activity_summary(steps: list[PlanStep], mechanics: str) -> str:
+    if steps:
+        step = steps[0]
+        op = step.op
+        args = step.args or {}
+        if op == "check":
+            ability = str(args.get("ability") or "").upper() or "Ability"
+            dc = args.get("dc")
+            if dc is not None:
+                return f"{ability} check vs DC {dc}"
+            return f"{ability} check"
+        if op == "attack":
+            attacker = str(args.get("attacker") or "attacker")
+            target = str(args.get("target") or "target")
+            return f"Attack {attacker} -> {target}"
+        if op in {"apply_condition", "remove_condition", "clear_condition"}:
+            condition = str(args.get("condition") or "").strip()
+            target = str(args.get("target") or "").strip()
+            base = op.replace("_", " ")
+            if condition and target:
+                return f"{base} {condition} on {target}"
+            if condition:
+                return f"{base} {condition}".strip()
+            if target:
+                return f"{base} {target}".strip()
+            return base
+    first_line = (mechanics or "").strip().splitlines()[0]
+    return first_line or "mechanics preview"
 
 
 def _format_mechanics_block(result, ability: str, dc: int) -> str:
@@ -215,7 +258,7 @@ def _unknown_actor_present(narration: str, allowed: set[str]) -> str | None:
 
 # Simple 30s prompt cache (keyed by scene and player_msg)
 _CACHE_TTL = 30.0
-_prompt_cache: dict[tuple[int, str], tuple[float, OrchestratorResult]] = {}
+_prompt_cache: dict[tuple[int, str, bool], tuple[float, OrchestratorResult]] = {}
 
 
 async def _facts_from_transcripts(
@@ -269,13 +312,48 @@ async def run_orchestrator(
 
     # Cache check to control duplicate prompts spam
     _orc_start = time.monotonic()
-    cache_key = (scene_id, player_msg.strip())
+    feature_action_validation = bool(
+        getattr(settings, "features_action_validation", False) if settings is not None else False
+    )
+    feature_activity_log = bool(
+        getattr(settings, "features_activity_log", False) if settings is not None else False
+    )
+    cache_key: tuple[int, str, bool] = (
+        scene_id,
+        player_msg.strip(),
+        feature_action_validation,
+    )
     now = time.time()
+    execution_request: ExecutionRequest | None = None
+    request_id_seed = int(now * 1000)
+    log.info(
+        "orchestrator.run.initiated",
+        scene_id=scene_id,
+        has_llm=bool(llm_client),
+        allowed_actor_count=len(allowed_actors) if allowed_actors is not None else None,
+    )
+
+    def _complete(result: OrchestratorResult, status: str) -> OrchestratorResult:
+        duration_ms = int((time.monotonic() - _orc_start) * 1000)
+        try:
+            inc_counter("orchestrator.total_ms", duration_ms)
+        except Exception:
+            pass
+        log.info(
+            "orchestrator.run.completed",
+            scene_id=scene_id,
+            status=status,
+            rejected=result.rejected,
+            reason=result.reason,
+            duration_ms=duration_ms,
+        )
+        return result
+
     if player_msg and cache_key in _prompt_cache:
         ts, cached = _prompt_cache[cache_key]
         if now - ts <= _CACHE_TTL:
             log.info("orchestrator.cache.hit", scene_id=scene_id)
-            return cached
+            return _complete(cached, "cache_hit")
 
     inc_counter("llm.request.enqueued")
     log.info("llm.request.enqueued", scene_id=scene_id)
@@ -322,18 +400,29 @@ async def run_orchestrator(
         enable_attack=bool(getattr(settings, "features_combat", False)),
     )
     if not llm_client:
-        return OrchestratorResult(
-            mechanics="LLM not configured.", narration="", rejected=True, reason="llm_unconfigured"
+        return _complete(
+            OrchestratorResult(
+                mechanics="LLM not configured.",
+                narration="",
+                rejected=True,
+                reason="llm_unconfigured",
+            ),
+            "llm_unconfigured",
         )
     out = await llm_client.generate_json(narrator_msgs)  # type: ignore[attr-defined]
     if not out:
         inc_counter("llm.parse.failed")
         log.warning("llm.parse.failed", scene_id=scene_id)
-        return OrchestratorResult(
-            mechanics="Unable to generate a proposal.",
-            narration="",
-            rejected=True,
-            reason="llm_invalid_or_empty",
+        # Map internal code to user-friendly text
+        friendly = "I couldn't generate a structured preview. Try rephrasing or a simpler action."
+        return _complete(
+            OrchestratorResult(
+                mechanics=friendly,
+                narration="",
+                rejected=True,
+                reason="llm_invalid_or_empty",
+            ),
+            "llm_invalid_or_empty",
         )
     inc_counter("llm.response.received")
     log.info("llm.response.received", scene_id=scene_id)
@@ -346,11 +435,19 @@ async def run_orchestrator(
             proposal=out.proposal.model_dump(),
             narration=out.narration,
         )
-        return OrchestratorResult(
-            mechanics="Proposal rejected: invalid",
-            narration="",
-            rejected=True,
-            reason=why,
+        # Provide a clearer message for validation failures
+        why_key = why or ""
+        readable = {
+            "llm_invalid_or_empty": "No usable preview was produced.",
+        }.get(why_key, "Preview validation failed. Adjust your phrasing and try again.")
+        return _complete(
+            OrchestratorResult(
+                mechanics=readable,
+                narration="",
+                rejected=True,
+                reason=why,
+            ),
+            "defense_rejected",
         )
 
     # 3b) additional defenses: banned verbs and unknown actors
@@ -365,11 +462,14 @@ async def run_orchestrator(
             proposal=out.proposal.model_dump(),
             narration=out.narration,
         )
-        return OrchestratorResult(
-            mechanics="Proposal rejected: unsafe content",
-            narration="",
-            rejected=True,
-            reason="unsafe_verb",
+        return _complete(
+            OrchestratorResult(
+                mechanics="Proposal rejected: unsafe content",
+                narration="",
+                rejected=True,
+                reason="unsafe_verb",
+            ),
+            "defense_rejected",
         )
 
     if allowed_actors:
@@ -384,11 +484,14 @@ async def run_orchestrator(
                 proposal=out.proposal.model_dump(),
                 narration=out.narration,
             )
-            return OrchestratorResult(
-                mechanics="Proposal rejected: unknown actors",
-                narration="",
-                rejected=True,
-                reason="unknown_actor",
+            return _complete(
+                OrchestratorResult(
+                    mechanics="Proposal rejected: unknown actors",
+                    narration="",
+                    rejected=True,
+                    reason="unknown_actor",
+                ),
+                "defense_rejected",
             )
 
     # 4) map proposal -> rules.CheckInput using provided sheet_getter
@@ -402,6 +505,7 @@ async def run_orchestrator(
                 "expertise": False,
                 "prof_bonus": 2,
             }
+
         sheet_info_provider = _default_sheet_info
 
     # Only required for ability checks; use neutral values for other actions
@@ -418,69 +522,106 @@ async def run_orchestrator(
         prof_bonus = 2
 
     # 5) If Executor preview is enabled, use it for mechanics; otherwise, compute locally
-    use_executor = bool(getattr(settings, "features_executor", False)) if (
-        settings is not None
-    ) else False
+    use_executor = (
+        bool(getattr(settings, "features_executor", False)) if (settings is not None) else False
+    )
     mechanics: str
     chain_json: dict | None = None
     preview_failed = False
+    plan_steps: list[PlanStep] = []
+    req_for_execution: ExecutionRequest | None = None
+    if p.action == "ability_check":
+        dc_value = int(p.suggested_dc or 0)
+        step_args = {
+            "ability": p.ability,
+            "score": int(score),
+            "dc": dc_value,
+            "proficient": proficient,
+            "expertise": expertise,
+            "prof_bonus": int(prof_bonus),
+            "seed": rng_seed,
+        }
+        plan_steps.append(PlanStep(op="check", args=step_args))
+    elif p.action == "attack":
+        dmg = p.damage or {}
+        dmg_dice = str(dmg.get("dice", "1d4"))
+        raw_mod = dmg.get("mod", 0)
+        dmg_mod = int(raw_mod if raw_mod is not None else 0)
+        dmg_type = str(dmg.get("type", "")).strip() or None
+        advantage = bool(p.advantage or False)
+        disadvantage = bool(p.disadvantage or False)
+        if advantage and disadvantage:
+            advantage = False
+            disadvantage = False
+        attack_bonus = int(p.attack_bonus or 0)
+        target_ac = int(p.target_ac or 10)
+        if attack_bonus < -5:
+            attack_bonus = -5
+        if attack_bonus > 15:
+            attack_bonus = 15
+        if target_ac < 5:
+            target_ac = 5
+        if target_ac > 30:
+            target_ac = 30
+        if dmg_mod < -5:
+            dmg_mod = -5
+        if dmg_mod > 10:
+            dmg_mod = 10
+        damage_payload: dict[str, Any] = {"dice": dmg_dice, "mod": dmg_mod}
+        if dmg_type:
+            damage_payload["type"] = dmg_type
+        step_args = {
+            "attacker": p.attacker,
+            "target": p.target,
+            "attack_bonus": attack_bonus,
+            "target_ac": target_ac,
+            "damage": damage_payload,
+            "advantage": advantage,
+            "disadvantage": disadvantage,
+            "seed": rng_seed,
+        }
+        plan_steps.append(PlanStep(op="attack", args=step_args))
+    elif p.action in ("apply_condition", "remove_condition", "clear_condition"):
+        step_args = {"target": p.target, "condition": p.condition}
+        if p.action == "apply_condition" and p.duration is not None:
+            step_args["duration"] = int(p.duration)
+        plan_steps.append(PlanStep(op=p.action, args=step_args))
+
+    if plan_steps:
+        ctx = {"scene_id": scene_id, "request_id": f"orc-{scene_id}-{request_id_seed}"}
+        if actor_id is not None:
+            ctx["actor_id"] = actor_id
+        plan_id_raw = ctx.get("request_id")
+        plan_id_str = str(plan_id_raw) if plan_id_raw is not None else ""
+        req_for_execution = ExecutionRequest(plan_id=plan_id_str, steps=plan_steps, context=ctx)
+        if feature_action_validation:
+            execution_request = req_for_execution
+            try:
+                import structlog
+
+                structlog.get_logger().info(
+                    "orchestrator.execution_request.built",
+                    plan_id=req_for_execution.plan_id,
+                    step_count=len(plan_steps),
+                )
+            except Exception:
+                pass
+
     if use_executor and (_executor_mod is not None) and hasattr(_executor_mod, "Executor"):
         try:
             ex = _executor_mod.Executor()
-            # Build chain per action type
-            steps: list[Any] = []
-            if p.action == "ability_check":
-                steps.append(
-                    _executor_mod.ToolStep(
-                        tool="check",
-                        args={
-                            "ability": p.ability,
-                            "score": score,
-                            "dc": p.suggested_dc,
-                            "proficient": proficient,
-                            "expertise": expertise,
-                            "prof_bonus": prof_bonus,
-                            "seed": rng_seed,
-                        },
-                        requires_confirmation=True,
-                    )
-                )
-            elif p.action == "attack":
-                # Combat FF must be on; otherwise short-circuit later to stub
-                steps.append(
-                    _executor_mod.ToolStep(
-                        tool="attack",
-                        args={
-                            "attacker": p.attacker,
-                            "target": p.target,
-                            "attack_bonus": p.attack_bonus,
-                            "target_ac": p.target_ac,
-                            "damage": p.damage,
-                            "advantage": bool(p.advantage or False),
-                            "disadvantage": bool(p.disadvantage or False),
-                            "seed": rng_seed,
-                        },
-                        requires_confirmation=True,
-                    )
-                )
-            elif p.action in ("apply_condition", "remove_condition", "clear_condition"):
-                tool_name = p.action
-                args: dict[str, Any] = {"target": p.target, "condition": p.condition}
-                if tool_name == "apply_condition" and p.duration is not None:
-                    args["duration"] = p.duration
-                steps.append(
-                    _executor_mod.ToolStep(
-                        tool=tool_name,
-                        args=args,
-                        requires_confirmation=True,
-                    )
-                )
-            chain = _executor_mod.ToolCallChain(
-                request_id=f"orc-{scene_id}-{int(now*1000)}",
-                scene_id=scene_id,
-                steps=steps,
-                actor_id=actor_id,
+            chain = (
+                tool_chain_from_execution_request(req_for_execution)
+                if req_for_execution is not None
+                else None
             )
+            if chain is None:
+                chain = _executor_mod.ToolCallChain(
+                    request_id=f"orc-{scene_id}-{request_id_seed}",
+                    scene_id=scene_id,
+                    steps=[],
+                    actor_id=actor_id,
+                )
             _exec_start = time.monotonic()
             prev = await ex.execute_chain(chain, dry_run=True)
             try:
@@ -517,14 +658,14 @@ async def run_orchestrator(
                 proficient=proficient,
                 expertise=expertise,
                 proficiency_bonus=prof_bonus,
-                dc=p.suggested_dc,
+                dc=dc_value,
                 advantage=False,
                 disadvantage=False,
             )
             rng = DiceRNG(seed=rng_seed)
             d20_rolls = [rng.roll("1d20").rolls[0]]
             result = compute_check(check_inp, d20_rolls=d20_rolls)
-            mechanics = _format_mechanics_block(result, ability=p.ability, dc=p.suggested_dc)
+            mechanics = _format_mechanics_block(result, ability=p.ability, dc=dc_value)
         elif p.action == "attack":
             mechanics = (
                 "Combat preview error; see logs."
@@ -539,12 +680,60 @@ async def run_orchestrator(
             )
         else:
             mechanics = "Proposal accepted but preview unavailable."
-    final = OrchestratorResult(mechanics=mechanics, narration=out.narration, chain_json=chain_json)
+    activity_log_id: int | None = None
+    if req_for_execution is not None and feature_action_validation and feature_activity_log:
+        try:
+            async with session_scope() as s:
+                scene_obj = await s.get(_models.Scene, scene_id)
+                campaign_id = getattr(scene_obj, "campaign_id", None)
+                if campaign_id is not None:
+                    actor_ref = None
+                    if actor_id is not None:
+                        actor_ref = str(actor_id)
+                    elif ctx.get("actor_id"):
+                        actor_ref = str(ctx["actor_id"])
+                    payload = {
+                        "plan_id": req_for_execution.plan_id,
+                        "execution_request": req_for_execution.model_dump(),
+                        "mechanics": mechanics,
+                        "narration": out.narration,
+                    }
+                    if preview_failed:
+                        payload["preview_failed"] = True
+                    row = await repos.create_activity_log(
+                        s,
+                        campaign_id=campaign_id,
+                        scene_id=scene_id,
+                        actor_ref=actor_ref,
+                        event_type=_activity_event_type(plan_steps),
+                        summary=_activity_summary(plan_steps, mechanics),
+                        payload=payload,
+                        correlation_id=req_for_execution.plan_id,
+                        request_id=req_for_execution.plan_id,
+                    )
+                    activity_log_id = getattr(row, "id", None)
+                else:
+                    inc_counter("activity_log.failed")
+                    log.warning(
+                        "activity_log.write_failed",
+                        scene_id=scene_id,
+                        reason="scene_missing",
+                    )
+        except Exception:
+            inc_counter("activity_log.failed")
+            log.warning(
+                "activity_log.write_failed",
+                scene_id=scene_id,
+                exc_info=True,
+            )
+    final = OrchestratorResult(
+        mechanics=mechanics,
+        narration=out.narration,
+        chain_json=chain_json,
+        execution_request=execution_request,
+        activity_log_id=activity_log_id,
+    )
     inc_counter("orchestrator.format.sent")
-    try:
-        inc_counter("orchestrator.total_ms", int((time.monotonic() - _orc_start) * 1000))
-    except Exception:
-        pass
     log.info("orchestrator.format.sent", scene_id=scene_id)
     _prompt_cache[cache_key] = (now, final)
-    return final
+    return _complete(final, "success")

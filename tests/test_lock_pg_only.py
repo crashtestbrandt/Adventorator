@@ -11,7 +11,9 @@ from Adventorator.metrics import get_counter, reset_counters
 async def test_pg_advisory_lock_path(monkeypatch):
     # Look for an explicit PG test URL; skip if missing.
     pg_url = os.environ.get("ADVENTORATOR_TEST_PG_URL") or os.environ.get("DATABASE_URL")
-    if not pg_url or not (pg_url.startswith("postgresql://") or pg_url.startswith("postgresql+asyncpg://")):
+    if not pg_url or not (
+        pg_url.startswith("postgresql://") or pg_url.startswith("postgresql+asyncpg://")
+    ):
         pytest.skip("Postgres URL not provided; skipping PG-only advisory lock test")
 
     # Normalize to async driver

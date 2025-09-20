@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # write-lock contention on platforms where concurrent writers are more common.
 if os.environ.get("ADVENTORATOR_TEST_USE_FILE_SQLITE") == "1":
     # File-backed SQLite in the local workspace; enables WAL and better concurrency.
-    test_db_path = os.path.abspath(os.environ.get(
-        "ADVENTORATOR_TEST_DB_PATH", "./adventorator_test.sqlite3"
-    ))
+    test_db_path = os.path.abspath(
+        os.environ.get("ADVENTORATOR_TEST_DB_PATH", "./adventorator_test.sqlite3")
+    )
     os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{test_db_path}"
 else:
     # Use a pure process-local in-memory DB.

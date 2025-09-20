@@ -13,11 +13,9 @@ class ToolSpec:
 
 
 class ToolRegistry(Protocol):
-    def list_tools(self) -> dict[str, ToolSpec]:
-        ...
+    def list_tools(self) -> dict[str, ToolSpec]: ...
 
-    def get(self, name: str) -> ToolSpec | None:
-        ...
+    def get(self, name: str) -> ToolSpec | None: ...
 
 
 class InMemoryToolRegistry:

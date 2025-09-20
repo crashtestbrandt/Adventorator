@@ -58,10 +58,7 @@ def get_engine() -> AsyncEngine:
                 connect_args["uri"] = True
             kwargs.update(connect_args=connect_args)
             # Critical for in-memory DBs: share a single connection so schema persists
-            if (
-                ":memory:" in DATABASE_URL
-                or "file::memory:?cache=shared" in DATABASE_URL
-            ):
+            if ":memory:" in DATABASE_URL or "file::memory:?cache=shared" in DATABASE_URL:
                 kwargs.update(poolclass=StaticPool)
             # Optionally force a single shared connection even for file-backed SQLite
             # to serialize writers during tests and avoid "database is locked".
@@ -78,6 +75,32 @@ def get_engine() -> AsyncEngine:
 
         _engine = create_async_engine(DATABASE_URL, **kwargs)
         _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
+        # Emit a one-time sanitized connection config log (no password)
+        try:  # defensive: never block startup on logging
+            from sqlalchemy.engine import make_url  # local import to avoid unused at module load
+
+            url = make_url(DATABASE_URL)
+            backend = (
+                "postgres"
+                if DATABASE_URL.startswith("postgresql")
+                else ("sqlite" if DATABASE_URL.startswith("sqlite") else "other")
+            )
+            log.info(
+                "db.connection.config",
+                backend=backend,
+                user=url.username or "",
+                host=url.host or "",
+                database=url.database or "",
+                driver=url.drivername,
+            )
+            if backend == "postgres" and (not url.username or not url.password):
+                log.warning(
+                    "db.connection.missing_credentials",
+                    has_user=bool(url.username),
+                    has_password=bool(url.password),
+                )
+        except Exception:
+            pass
     return _engine
 
 

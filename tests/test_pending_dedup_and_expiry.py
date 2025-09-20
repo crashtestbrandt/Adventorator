@@ -23,33 +23,33 @@ async def test_pending_dedup_create_idempotent(db):
         camp = await repos.get_or_create_campaign(s, guild_id=1)
         scene = await repos.ensure_scene(s, camp.id, channel_id=100)
     pa1 = await repos.create_pending_action(
-            s,
-            campaign_id=camp.id,
-            scene_id=scene.id,
-            channel_id=100,
-            user_id="u1",
-            request_id="req-1",
-            chain={"steps": [{"tool": "check", "args": {"dc": 10}}]},
-            mechanics="m",
-            narration="n",
-            player_tx_id=None,
-            bot_tx_id=None,
-            ttl_seconds=300,
-        )
+        s,
+        campaign_id=camp.id,
+        scene_id=scene.id,
+        channel_id=100,
+        user_id="u1",
+        request_id="req-1",
+        chain={"steps": [{"tool": "check", "args": {"dc": 10}}]},
+        mechanics="m",
+        narration="n",
+        player_tx_id=None,
+        bot_tx_id=None,
+        ttl_seconds=300,
+    )
     pa2 = await repos.create_pending_action(
-            s,
-            campaign_id=camp.id,
-            scene_id=scene.id,
-            channel_id=100,
-            user_id="u1",
-            request_id="req-2",
-            chain={"steps": [{"tool": "check", "args": {"dc": 10}}]},
-            mechanics="m",
-            narration="n",
-            player_tx_id=None,
-            bot_tx_id=None,
-            ttl_seconds=300,
-        )
+        s,
+        campaign_id=camp.id,
+        scene_id=scene.id,
+        channel_id=100,
+        user_id="u1",
+        request_id="req-2",
+        chain={"steps": [{"tool": "check", "args": {"dc": 10}}]},
+        mechanics="m",
+        narration="n",
+        player_tx_id=None,
+        bot_tx_id=None,
+        ttl_seconds=300,
+    )
     assert pa1.id == pa2.id, "same chain should dedup"
 
 
@@ -59,19 +59,19 @@ async def test_pending_expire_marks_status(db):
         camp = await repos.get_or_create_campaign(s, guild_id=1)
         scene = await repos.ensure_scene(s, camp.id, channel_id=200)
     await repos.create_pending_action(
-            s,
-            campaign_id=camp.id,
-            scene_id=scene.id,
-            channel_id=200,
-            user_id="u2",
-            request_id="req-exp",
-            chain={"steps": []},
-            mechanics="m",
-            narration="n",
-            player_tx_id=None,
-            bot_tx_id=None,
-            ttl_seconds=0,
-        )
+        s,
+        campaign_id=camp.id,
+        scene_id=scene.id,
+        channel_id=200,
+        user_id="u2",
+        request_id="req-exp",
+        chain={"steps": []},
+        mechanics="m",
+        narration="n",
+        player_tx_id=None,
+        bot_tx_id=None,
+        ttl_seconds=0,
+    )
     count = await repos.expire_stale_pending_actions(s)
     assert isinstance(count, int)
 

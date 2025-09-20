@@ -60,4 +60,3 @@ class DeferResponse(BaseModel):
 
 class PongResponse(BaseModel):
     type: Literal[1]  # PONG for pings (type 1)
-

@@ -1,7 +1,9 @@
-# src/Adventorator/commands/ooc_do.py
+from __future__ import annotations
+
 from typing import Any, cast
 
 from pydantic import Field
+from sqlalchemy.exc import IntegrityError
 
 from Adventorator import repos
 from Adventorator.commanding import Invocation, Option, slash_command
@@ -19,9 +21,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
     settings = inv.settings
     llm = inv.llm_client if (settings and getattr(settings, "features_llm", False)) else None
     if not llm:
-        await inv.responder.send(
-            "❌ The LLM narrator is currently disabled.", ephemeral=True
-        )
+        await inv.responder.send("❌ The LLM narrator is currently disabled.", ephemeral=True)
         return
 
     message = (opts.message or "").strip()
@@ -132,6 +132,7 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                 }
 
             sheet_provider = _provider
+
             # Build a compact character summary for prompts
             def _summary() -> str:
                 parts = [sheet.name]
@@ -178,9 +179,18 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         async with session_scope() as s:
             if player_tx_id is not None:
                 await repos.update_transcript_status(s, player_tx_id, "error")
-        await inv.responder.send(
-            f"🛑 Proposal rejected: {res.reason or 'invalid'}", ephemeral=True
-        )
+                # If an activity log was created during rejection (unlikely), link it
+                if getattr(res, "activity_log_id", None):
+                    try:
+                        await repos.link_transcript_activity_log(
+                            s,
+                            transcript_id=player_tx_id,
+                            activity_log_id=getattr(res, "activity_log_id", None),
+                        )
+                    except IntegrityError:
+                        # Safe to ignore: activity log row not persisted yet; linkage is optional.
+                        pass
+        await inv.responder.send(f"🛑 Proposal rejected: {res.reason or 'invalid'}", ephemeral=True)
         inc_counter("pending.rejected")
         return
 
@@ -213,12 +223,24 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                 narration=res.narration,
                 player_tx_id=player_tx_id,
                 bot_tx_id=None,
+                activity_log_id=res.activity_log_id,
             )
+            if player_tx_id is not None and getattr(res, "activity_log_id", None):
+                try:
+                    await repos.link_transcript_activity_log(
+                        s,
+                        transcript_id=player_tx_id,
+                        activity_log_id=getattr(res, "activity_log_id", None),
+                    )
+                except IntegrityError:
+                    pass
             await inv.responder.send(
                 (
-                    "🧪 Mechanics\n" + res.mechanics +
-                    "\n\n📖 Narration (pending)\n" + res.narration +
-                    f"\n\nConfirm with /confirm, or cancel with /cancel. [id {pa.id}]"
+                    "🧪 Mechanics\n"
+                    + res.mechanics
+                    + "\n\n📖 Narration (pending)\n"
+                    + res.narration
+                    + f"\n\nConfirm with /confirm, or cancel with /cancel. [id {pa.id}]"
                 ),
                 ephemeral=not bool(getattr(settings, "features_llm_visible", False)),
             )
@@ -239,8 +261,15 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
             str(user_id),
             meta={"mechanics": res.mechanics},
             status="pending",
+            activity_log_id=res.activity_log_id,
         )
         bot_tx_id = getattr(bot_tx, "id", None)
+        if player_tx_id is not None and getattr(res, "activity_log_id", None):
+            await repos.link_transcript_activity_log(
+                s,
+                transcript_id=player_tx_id,
+                activity_log_id=getattr(res, "activity_log_id", None),
+            )
 
     # Attempt to send and mark statuses
     try:

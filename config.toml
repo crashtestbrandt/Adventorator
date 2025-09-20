@@ -8,6 +8,10 @@ executor = true
 events = true
 rules = true
 llm_visible = true
+action_validation = true
+predicate_gate = true
+mcp = false
+activity_log = true
 
 # Retrieval-augmented orchestration.
 # Note: provider "none" uses the built-in SQL fallback retriever.
@@ -29,6 +33,9 @@ enabled = true
 timeout_seconds = 20
 
 [combat]
+enabled = true
+
+[map]
 enabled = true
 
 [logging]

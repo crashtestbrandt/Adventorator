@@ -3,6 +3,7 @@
 Welcome! This guide focuses on repo-specific workflows and expectations. For general Git usage, please refer to GitHub’s documentation.
 
 - [Home (README)](./README.md)
+- [AI Development Pipeline Workflow](#ai-development-pipeline-workflow)
 - [Branching and PRs](#branching-and-prs)
 - [Local checks](#local-checks)
 - [Feature flags](#feature-flags)
@@ -10,6 +11,25 @@ Welcome! This guide focuses on repo-specific workflows and expectations. For gen
 - [LLM/planner/orchestrator testing](#llmplannerorchestrator-testing)
 
 ---
+
+## AI Development Pipeline Workflow
+
+Adventorator organizes delivery using the AI-Driven Development (AIDD) pipeline. Review the [alignment plan](./docs/implementation/aidd-plan.md) for a phased view of how governance assets, templates, and automation fit together before starting new work.
+
+### Plan with Templates and DoR/DoD Rituals
+- Create Feature Epics, Stories, and Tasks with the issue templates in [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/). Fill out the Definition of Ready/Done fields and link to the relevant ADRs, prompts, contracts, and evaluation assets so downstream contributors (human or AI) can pick up the work.
+- Keep traceability current in [`docs/implementation/epics/`](./docs/implementation/epics/) and confirm checklist expectations using the [DoR/DoD guide](./docs/implementation/dor-dod-guide.md).
+- Reference architectural decisions in [`docs/adr/`](./docs/adr/) using the [`ADR-TEMPLATE.md`](./docs/adr/ADR-TEMPLATE.md) and keep diagrams or system maps in [`docs/architecture/`](./docs/architecture).
+
+### Manage Prompts, Contracts, and Evaluations
+- Store AI prompt updates in the [`prompts/`](./prompts) registry and follow the [versioning workflow](./prompts/README.md). Pair prompt changes with evaluation fixtures (for example the assets under [`prompts/evals/`](./prompts/evals/)) so quality gates can exercise them.
+- Capture API or schema deltas in [`contracts/`](./contracts) and document compatibility in the [contract workspace README](./contracts/README.md). Link Stories/Tasks to these artifacts for contract-first delivery.
+- When automation requires additional validation (e.g., ADR linting or prompt checks), use the scripts in [`scripts/`](./scripts) such as [`validate_prompts_and_contracts.py`](./scripts/validate_prompts_and_contracts.py).
+
+### Satisfy Quality Gates
+- Pull requests should include the Story/Task references and quality results requested by [`.github/pull_request_template.md`](./.github/pull_request_template.md). Reviewers will block merges when gates are missing.
+- Run the full `make quality-gates` target before requesting review; it chains coverage, mutation, security, artifact validation, and AI evaluation checks defined in the [Makefile](./Makefile). CI enforces the same policies via [`tests.yml`](./.github/workflows/tests.yml) and [`pr-quality-gates.yml`](./.github/workflows/pr-quality-gates.yml).
+- Capture any gate failures or DoR/DoD gaps in the linked issue template so other contributors (including AI assistants) can continue the workflow transparently.
 
 ## Branching and PRs
 

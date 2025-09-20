@@ -8,7 +8,7 @@ capture the final command output and print it to stdout.
 
 Prerequisites:
  1. Docker Compose services must be running (`make compose-up`).
- 2. Your .env file must be configured with DISCORD_APP_ID and a development-only
+ 2. Your .env.local file must be configured with DISCORD_APP_ID and a development-only
     DISCORD_PRIVATE_KEY. Run `scripts/generate_keys.py` to create a keypair.
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ try:
     APP_URL = f"http://127.0.0.1:{APP_PORT}"
 
     if not APP_ID:
-        raise ValueError("DISCORD_APP_ID must be set in your .env file.")
+        raise ValueError("DISCORD_APP_ID must be set in your .env.local (or .env) file.")
     if not settings.discord_private_key:
         raise ValueError(
             "DISCORD_PRIVATE_KEY is required for signing requests.\n"
@@ -158,7 +158,17 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
     manager = None
     server_process = None
     event = None
-    if not NO_SINK:
+    # If an override points back to the app's own /dev-webhook, we do not need a local sink.
+    override_targets_app = False
+    if override_url:
+        try:
+            parsed_ov = urlparse(override_url)
+            # Heuristic: same port as APP_PORT and path starts with /dev-webhook
+            if (parsed_ov.port == APP_PORT) and (parsed_ov.path.startswith("/dev-webhook")):
+                override_targets_app = True
+        except Exception:
+            pass
+    if not NO_SINK and not override_targets_app:
         manager = multiprocessing.Manager()
         event = manager.Event()
         # Use a separate process for the sink server for robust cleanup.
@@ -197,17 +207,21 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
         headers = { "X-Signature-Ed25519": signed.signature.hex(), "X-Signature-Timestamp": timestamp, "Content-Type": "application/json" }
         # Signal to the server that this request should be verified with the dev public key (if configured)
         headers["X-Adventorator-Use-Dev-Key"] = "1"
-        # Per-request webhook base override so app routes follow-ups back to our sink
-        # Priority: explicit --webhook-base > mode default
-        if CLI_WEBHOOK_BASE:
-            headers["X-Adventorator-Webhook-Base"] = CLI_WEBHOOK_BASE
-        else:
-            if NO_SINK:
-                # Use the sidecar service inside the compose network
-                headers["X-Adventorator-Webhook-Base"] = "http://cli-sink:19000"
+        # Per-request webhook base override so app routes follow-ups back to our sink.
+        # If the server itself is already configured (settings.discord_webhook_url_override) to
+        # point at its own /dev-webhook endpoint (override_targets_app True), we intentionally
+        # skip injecting a header. Injecting a plain host:port without the /dev-webhook prefix
+        # caused 404s (server attempted POST /webhooks/... on our app instead of /dev-webhook/... path).
+        if not override_targets_app:
+            if CLI_WEBHOOK_BASE:
+                headers["X-Adventorator-Webhook-Base"] = CLI_WEBHOOK_BASE
             else:
-                # Local sink on host; containers can reach it via host.docker.internal
-                headers["X-Adventorator-Webhook-Base"] = f"http://host.docker.internal:{SINK_PORT}"
+                if NO_SINK:
+                    # Use the sidecar service inside the compose network
+                    headers["X-Adventorator-Webhook-Base"] = "http://cli-sink:19000"
+                else:
+                    # Local sink on host; containers can reach it via host.docker.internal
+                    headers["X-Adventorator-Webhook-Base"] = f"http://host.docker.internal:{SINK_PORT}"
 
         cmd_name_str = f"{command.name}{'.' + command.subcommand if command.subcommand else ''}"
         click.echo(f"-> POST {APP_URL}/interactions (command: {cmd_name_str})")
@@ -226,7 +240,44 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
             if not received:
                 click.echo(click.style(f"\nWarning: Did not receive a follow-up message within {RESPONSE_TIMEOUT_SECONDS} seconds.", fg="yellow"))
         else:
-            click.echo("(Follow-up will be delivered to sink service; check docker logs for cli-sink)")
+            if override_targets_app and not NO_SINK:
+                click.echo("(Follow-up handled directly by app /dev-webhook; polling for content...)")
+                # Poll the dev webhook latest endpoint a few times to surface content inline
+                try:
+                    token = "fake-token"
+                    poll_url = f"{APP_URL}/dev-webhook/latest/{token}"
+                    printed = False
+                    # LLM latency for planning observed ~11-12s; extend window to ~20s
+                    POLL_INTERVAL = 0.5
+                    MAX_POLL_SECONDS = 20.0
+                    attempts = int(MAX_POLL_SECONDS / POLL_INTERVAL)
+                    async with httpx.AsyncClient() as client:
+                        for i in range(attempts):
+                            await asyncio.sleep(POLL_INTERVAL)
+                            r = await client.get(poll_url)
+                            if r.status_code == 200:
+                                js = r.json()
+                                if js.get("status") == "ok" and isinstance(js.get("payload"), dict):
+                                    content = js["payload"].get("content")
+                                    if content:
+                                        click.echo("\n--- Follow-up (polled) ---\n" + content + "\n---------------------------")
+                                        printed = True
+                                        break
+                        if not printed:
+                            click.echo("(No follow-up content retrieved within polling window ~20s; try --no-sink to inspect raw Discord response or increase wait)")
+                            # If we assumed server override (override_targets_app True) but still got nothing,
+                            # likely the server is posting to real Discord (401/404 with fake token) because
+                            # DISCORD_WEBHOOK_URL_OVERRIDE was not set in the container. Provide actionable hint.
+                            if override_targets_app:
+                                click.echo(click.style(
+                                    "[warn] Server did not deliver a dev-webhook payload. Set DISCORD_WEBHOOK_URL_OVERRIDE=\n"
+                                    "       http://127.0.0.1:%d/dev-webhook to capture ephemeral previews locally." % APP_PORT,
+                                    fg="yellow"
+                                ))
+                except Exception:
+                    pass
+            else:
+                click.echo("(Follow-up will be delivered to sink service; check docker logs for cli-sink)")
 
     except httpx.ConnectError:
         click.echo(click.style(f"Connection Error: Is the app running at {APP_URL}?", fg="red", bold=True))

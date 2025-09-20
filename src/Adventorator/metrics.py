@@ -6,9 +6,11 @@ Adds a lightweight histogram helper with fixed or custom buckets. Values are
 exported into flattened counters for the /metrics endpoint to keep payloads
 simple and avoid changing types in existing consumers.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 
 # Note: Avoid heavy imports at module import time; import test-only helpers lazily.
 
@@ -16,10 +18,18 @@ _counters: dict[str, int] = defaultdict(int)
 _histograms: dict[str, dict[str, int]] = {}
 _hist_sums: dict[str, int] = defaultdict(int)
 _hist_counts: dict[str, int] = defaultdict(int)
+_reset_plan_cache_cb: Callable[[], None] | None = None
 
 
 def inc_counter(name: str, value: int = 1) -> None:
     _counters[name] += int(value)
+
+
+def register_reset_plan_cache_callback(callback: Callable[[], None]) -> None:
+    """Register a callback used to clear the planner cache when metrics reset."""
+
+    global _reset_plan_cache_cb
+    _reset_plan_cache_cb = callback
 
 
 def get_counter(name: str) -> int:
@@ -33,12 +43,26 @@ def reset_counters() -> None:
     _hist_counts.clear()
     # Also clear the planner cache to prevent cross-test cache hits when
     # tests expect a clean slate after calling reset_counters().
+    if _reset_plan_cache_cb is not None:
+        try:
+            _reset_plan_cache_cb()
+        except Exception:
+            # If the callback fails in some contexts, ignore silently.
+            pass
     try:
-        from Adventorator.planner import reset_plan_cache  # local import to avoid cycles
+        from Adventorator.action_validation import plan_registry
 
-        reset_plan_cache()
+        plan_registry.reset()
     except Exception:
-        # If planner isn't importable in some contexts, ignore silently.
+        pass
+    # Also clear per-user planner rate limiter (plan command) so prior tests
+    # do not cause inadvertent rate-limit early returns in cache metric tests.
+    try:
+        from Adventorator.commands import plan as _plan_module  # type: ignore
+
+        if hasattr(_plan_module, "_rl") and isinstance(_plan_module._rl, dict):  # noqa: SLF001
+            _plan_module._rl.clear()  # noqa: SLF001
+    except Exception:
         pass
 
 

@@ -43,7 +43,6 @@ async def test_sql_retriever_metrics_error(monkeypatch):
     # Force an exception by monkeypatching execute to raise
     import sqlalchemy as sa
 
-
     r = SqlFallbackRetriever()
 
     # Patch to break SELECT execution

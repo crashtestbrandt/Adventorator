@@ -2,10 +2,8 @@ services:
   db:
     image: postgres:16
     container_name: adventorator-db
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    # Load credentials from the shared env file so they are configurable
+    env_file: .env.docker
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
@@ -18,18 +16,20 @@ services:
 
   app:
     build: .
-    env_file: .env
-    # This environment block overrides variables from the .env file
+    # Default to .env.docker (created from .env.docker.example). Allow override via COMPOSE_ENV_FILE.
+    env_file: .env.docker
+    # This environment block overrides variables from the env file
     # specifically for this container.
     environment:
-      # Tell the app to connect to the 'db' service hostname instead of 'localhost'.
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - LLM_API_URL=${LLM_API_URL:-http://ollama:11434}
+      # Only override values that differ in-container. DATABASE_URL comes from env_file directly
+      # to avoid docker compose variable-substitution warnings during 'compose exec'.
+      LLM_API_URL: ${LLM_API_URL:-http://ollama:11434}
+      # If you need to temporarily point at a different Postgres instance, override DATABASE_URL
+      # here or export it before 'docker compose up'. Keeping it out avoids accidental empty
+      # interpolation when POSTGRES_* are unset.
     depends_on:
       db:
         condition: service_healthy
-      cli-sink:
-        condition: service_started
     ports:
       - "${APP_PORT:-18000}:18000"
     healthcheck:
@@ -37,15 +37,6 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-    restart: unless-stopped
-
-  cli-sink:
-    build: .
-    command: ["python", "scripts/web_cli.py", "--sink-only", "--sink-port", "19000"]
-    environment:
-      - CLI_SINK_PORT=19000
-    expose:
-      - "19000"
     restart: unless-stopped
 
   # ollama:

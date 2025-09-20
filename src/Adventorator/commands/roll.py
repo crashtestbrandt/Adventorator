@@ -12,6 +12,7 @@ class RollOpts(Option):
     advantage: bool = Field(default=False, description="Roll with advantage")
     disadvantage: bool = Field(default=False, description="Roll with disadvantage")
 
+
 @slash_command(
     name="roll",
     description="Roll dice (e.g., 2d6+3).",

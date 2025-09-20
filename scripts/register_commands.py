@@ -64,13 +64,17 @@ import asyncio
 import json
 from prettytable import PrettyTable
 
-# Load environment variables from the project root .env file and ensure src on sys.path
+# Load environment variables from .env.local (preferred) or fallback to legacy .env
 project_root = Path(__file__).parent.parent
-env_path = project_root / ".env"
+env_local = project_root / ".env.local"
+env_legacy = project_root / ".env"
+env_path = env_local if env_local.exists() else env_legacy
 sys.path.insert(0, str(project_root / "src"))
 
 if not env_path.exists():
-    print(f"Error: .env file not found at {env_path}")
+    print(
+        f"Error: neither .env.local nor .env found at project root (looked for {env_local} and {env_legacy})."
+    )
     sys.exit(1)
 load_dotenv(dotenv_path=env_path)
 
@@ -81,7 +85,7 @@ try:
     BOT_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 except KeyError as e:
     print(f"Error: Missing required environment variable: {e}")
-    print(f"Path of .env file: {env_path}")
+    print(f"Path of env file used: {env_path}")
     sys.exit(1)
 
 # Fetch optional environment variables with a default fallback

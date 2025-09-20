@@ -58,3 +58,55 @@ jobs:
           DATABASE_URL: ${{ matrix.db == 'postgres' && 'postgresql+asyncpg://adventorator:adventorator@localhost:5432/adventorator' || 'sqlite+aiosqlite:///./adventorator_test.sqlite3' }}
         run: |
           pytest -q
+
+  quality-gates:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run coverage with threshold
+        env:
+          ENV: dev
+          DISCORD_PUBLIC_KEY: dummy
+          DATABASE_URL: sqlite+aiosqlite:///./adventorator_cov.sqlite3
+          PYTHONPATH: ./src
+        run: |
+          pytest --cov=Adventorator --cov-report=term-missing --cov-fail-under=80
+
+      - name: Run targeted mutation guard
+        env:
+          PYTHONPATH: ./src
+          ENV: dev
+          DISCORD_PUBLIC_KEY: dummy
+          DATABASE_URL: sqlite+aiosqlite:///./adventorator_mut.sqlite3
+        run: |
+          python scripts/check_mutation_guard.py
+
+      - name: Security scan (Bandit)
+        run: |
+          bandit -q -r src -ll
+
+      - name: Validate performance budgets
+        run: |
+          python scripts/check_performance_budgets.py
+
+      - name: Validate prompts and contracts
+        run: |
+          python scripts/validate_prompts_and_contracts.py
+
+      - name: Validate AI evaluation definitions
+        run: |
+          python scripts/run_ai_evals.py

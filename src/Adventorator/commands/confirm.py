@@ -50,8 +50,9 @@ async def confirm(inv: Invocation, opts: ConfirmOpts):
         # Apply chain via executor
         try:
             from Adventorator.executor import Executor, ToolCallChain, ToolStep
+
             steps = []
-            for st in (pa.chain.get("steps") or []):
+            for st in pa.chain.get("steps") or []:
                 steps.append(ToolStep(tool=st.get("tool"), args=st.get("args", {})))
             chain = ToolCallChain(
                 request_id=pa.request_id,
@@ -72,6 +73,7 @@ async def confirm(inv: Invocation, opts: ConfirmOpts):
                 user_id,
                 meta={"mechanics": pa.mechanics},
                 status="complete",
+                activity_log_id=pa.activity_log_id,
             )
             if pa.player_tx_id:
                 await repos.update_transcript_status(s, pa.player_tx_id, "complete")

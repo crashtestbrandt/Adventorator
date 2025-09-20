@@ -45,8 +45,8 @@ async def test_next_turn_wraps_and_round_increments():
         scene = await repos.ensure_scene(s, campaign_id=camp.id, channel_id=222)
         await encounter_service.start_encounter(s, scene_id=scene.id)
         enc = await repos.get_active_or_setup_encounter_for_scene(s, scene_id=scene.id)
-        a = (await repos.add_combatant(s, encounter_id=enc.id, name="A"))
-        b = (await repos.add_combatant(s, encounter_id=enc.id, name="B"))
+        a = await repos.add_combatant(s, encounter_id=enc.id, name="A")
+        b = await repos.add_combatant(s, encounter_id=enc.id, name="B")
         await encounter_service.set_initiative(
             s, encounter_id=enc.id, combatant_id=a.id, initiative=15
         )
@@ -74,8 +74,8 @@ async def test_concurrent_next_turn_single_winner():
         scene = await repos.ensure_scene(s, campaign_id=camp.id, channel_id=333)
         await encounter_service.start_encounter(s, scene_id=scene.id)
         enc = await repos.get_active_or_setup_encounter_for_scene(s, scene_id=scene.id)
-        a = (await repos.add_combatant(s, encounter_id=enc.id, name="A"))
-        b = (await repos.add_combatant(s, encounter_id=enc.id, name="B"))
+        a = await repos.add_combatant(s, encounter_id=enc.id, name="A")
+        b = await repos.add_combatant(s, encounter_id=enc.id, name="B")
         await encounter_service.set_initiative(
             s, encounter_id=enc.id, combatant_id=a.id, initiative=15
         )

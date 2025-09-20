@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 class Responder(Protocol):
     async def send(self, content: str, *, ephemeral: bool = False) -> None: ...
 
+
 @dataclass
 class Invocation:
     name: str
@@ -27,12 +28,15 @@ class Invocation:
     ruleset: Any | None = None  # Injected ruleset object
     # you can add: seed, feature flags, request_id, etc.
 
+
 # --- Option models for compile-time safety & help text ---
 class Option(BaseModel):
     """Base for command options; extend per command."""
+
     # Allow population by either field name or alias so Discord/CLI stay compatible
     # when commands use Field(alias=...).
     model_config = ConfigDict(populate_by_name=True)
+
 
 # --- Command descriptor ---
 @dataclass
@@ -45,8 +49,10 @@ class Command:
     # optional: default permission, dm_permission, etc.
     metadata: dict[str, Any] = field(default_factory=dict)
 
+
 # --- Global registry (populated by decorator) ---
 _REGISTRY: dict[str, Command] = {}
+
 
 def slash_command(
     name: str,
@@ -59,10 +65,13 @@ def slash_command(
         key = name + (f":{subcommand}" if subcommand else "")
         _REGISTRY[key] = Command(name, description, option_model, func, subcommand, metadata)
         return func
+
     return wrap
+
 
 def all_commands() -> dict[str, Command]:
     return dict(_REGISTRY)
+
 
 def find_command(name: str, subcommand: str | None) -> Command | None:
     key = name + (f":{subcommand}" if subcommand else "")

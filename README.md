@@ -13,8 +13,11 @@ A Discord-native Dungeon Master bot that blends deterministic 5e mechanics with 
 - [Retrieval & Safety](#retrieval--safety)
 - [Key Command Flows](#key-command-flows)
 - [Operations](#operations)
+- [AI Development Pipeline Onboarding](#ai-development-pipeline-onboarding)
 - [Repo Structure](#repo-structure)
 - [Contributing](./CONTRIBUTING.md)
+- [Changelog](./CHANGELOG.md)
+ - [Roadmap](./ROADMAP.md)
 
 > Encounters (Phase 10)
 - See docs: [Encounters (dev notes)](./docs/dev/encounters.md)
@@ -152,10 +155,10 @@ File: `Adventorator/planner.py`
 - How it works:
   - Builds a live catalog from the command registry (`command_loader` + `all_commands`), including Pydantic v2 option schemas.
   - Prompts the LLM with TOOLS + minimal rules context, then extracts the first JSON object.
-  - Validates against `PlannerOutput` and enforces an allowlist: `{roll, check, sheet.create, sheet.show, do, ooc}`.
+  - Produces a single-step `Plan` (legacy `PlannerOutput` internally adapted) and enforces an allowlist: `{roll, check, sheet.create, sheet.show, do, ooc}`.
 - Contract (inputs/outputs):
   - Input: `user_msg: str`
-  - Output: `PlannerOutput | None` with `{command: str, args: dict}`
+  - Output: `Plan | None` (Level 1 ⇒ exactly one `PlanStep {op,args}`)
   - Side effects: None (pure function over LLM; in-process 30s cache suppresses repeats)
 - Defenses & failure modes:
   - Rejects non-JSON or invalid JSON (returns `None`).
@@ -237,7 +240,7 @@ sequenceDiagram
   Planner->>LLM: generate_response(TOOLS + user)
   LLM-->>Planner: JSON text
   Planner->>Planner: extract_first_json + validate allowlist
-  Planner-->>App: PlannerOutput (command, args) | None
+  Planner-->>App: Plan (single step) | None
 
   Note over App: If valid, dispatch to target handler via registry
 
@@ -331,10 +334,10 @@ sequenceDiagram
 ## Quickstart
 
 ```bash
-cp .env.example .env    # <-- Add secrets
-make dev                # Install Python requirements
-make db-upgrade         # Initialize the database schema
-make run                # Start local dev server on port 18000
+cp .env.local.example .env.local   # <-- Add secrets (host dev)
+make dev                     # Install Python requirements
+make db-upgrade              # Initialize the database schema
+make run                     # Start local dev server on port 18000
 ```
 
 To expose your local server to Discord, run the Cloudflare tunnel in a separate terminal:
@@ -349,13 +352,13 @@ Discord can now reach your dev server using the tunnel URL + `/interactions`.
 
 ## Docker Compose Dev (with Feature Flags)
 
-Spin up Postgres and the app together with docker compose. Configure feature flags in `config.toml` or `.env`.
+Spin up Postgres and the app together with docker compose. Configure feature flags in `config.toml` or `.env.docker` (copied from `.env.docker.example`).
 
 ```bash
-docker compose up -d --build db app
+make compose-dev   # uses .env.docker
 ```
 
-Required env for compose dev:
+Required env for compose dev (see `.env.docker.example`):
 
 ```env
 DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
@@ -412,7 +415,7 @@ See also: `migrations/README` for deeper Alembic usage, driver notes, and troubl
 
 ## Configuration
 
-Behavior is configured via `config.toml`, which can be overridden by environment variables or a `.env` file.
+Behavior is configured via `config.toml`, which can be overridden by environment variables loaded from `.env.local` (host) or `.env.docker` (compose). A legacy `.env` is still honored if `.env.local` is absent.
 
 **Key Toggles:**
 
@@ -508,7 +511,7 @@ The application uses a decorator-based system to discover and register new comma
 3.  **Register it with Discord:**
 
     ```bash
-    # Fill out DISCORD_* variables in .env first
+  # Fill out DISCORD_* variables in .env.local (host) or .env.docker (compose) first
     python scripts/register_commands.py
     ```
 
@@ -536,6 +539,30 @@ The FastAPI app exposes two operational endpoints:
 
   * `GET /healthz`: A lightweight check that the application can load commands and connect to the database. Returns `{"status":"ok"}` or a 500 error.
   * `GET /metrics`: A JSON dump of internal counters. Disabled by default; enable with `ops.metrics_endpoint_enabled=true`.
+
+## AI Development Pipeline Onboarding
+
+Adventorator now follows the AI-Driven Development (AIDD) pipeline that anchors every change to traceable governance assets and automated quality gates. Start with the [alignment plan](./docs/implementation/aidd-plan.md) for a phased roadmap of how Epics, Stories, Tasks, and CI checks fit together.
+
+### Governance & Architecture
+- Author and catalog architectural decisions in [`docs/adr/`](./docs/adr/); use [`ADR-TEMPLATE.md`](./docs/adr/ADR-TEMPLATE.md) and the directory [`README`](./docs/adr/README.md) to keep decisions immutable and linked to delivery work.
+- Capture C4 and epic-level diagrams in [`docs/architecture/`](./docs/architecture) and tie them back to Feature Epics.
+- Map active initiatives inside [`docs/implementation/epics/`](./docs/implementation/epics/) and keep DoR/DoD expectations in sync using the [pipeline ritual guide](./docs/implementation/dor-dod-guide.md).
+
+### Templates & Traceability
+- GitHub issue templates for Feature Epics, Stories, and Tasks live in [`.github/ISSUE_TEMPLATE/`](./.github/ISSUE_TEMPLATE/); each field enforces Definition of Ready/Done and contract-first planning.
+- Pull requests must follow [`.github/pull_request_template.md`](./.github/pull_request_template.md) so reviewers can verify linked issues, ADRs, and quality gates.
+- Prompts and contracts referenced in issues should point to concrete assets (see below) and note evaluation coverage.
+
+### Prompts, Contracts, and Evaluations
+- Manage AI prompts in the [`prompts/`](./prompts) registry and follow its [versioning guidance](./prompts/README.md).
+- Store API and schema definitions under [`contracts/`](./contracts) with the accompanying [contract workflow notes](./contracts/README.md).
+- Document evaluation harnesses (e.g., prompt smoke tests) in [`prompts/evals/`](./prompts/evals) or adjacent directories so automated checks can discover them.
+
+### Quality Gates for Humans and AI Assistants
+- Run `make quality-gates` locally to exercise coverage, mutation, security, artifact validation, and AI evaluation checks before opening a PR. CI mirrors these gates through [`tests.yml`](./.github/workflows/tests.yml) and [`pr-quality-gates.yml`](./.github/workflows/pr-quality-gates.yml).
+- When updating prompts or contracts, accompany the change with the relevant validation scripts (see [`scripts/validate_prompts_and_contracts.py`](./scripts/validate_prompts_and_contracts.py)) and note results in the PR template.
+- Ensure DoR/DoD checklists remain satisfied throughout delivery; blockers should be captured in the linked issue templates for asynchronous hand-offs between humans and agents.
 
 -----
 
