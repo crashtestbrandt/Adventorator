@@ -34,9 +34,9 @@ async def check_command(inv: Invocation, opts: CheckOpts):
 
     # If score/proficiency flags or prof bonus not provided explicitly,
     # try to default from the active character
-    need_sheet = (
-        score in (None, 0, 10) and not opts.proficient and not opts.expertise
-    ) or (prof_bonus in (None, 0, 2))
+    need_sheet = (score in (None, 0, 10) and not opts.proficient and not opts.expertise) or (
+        prof_bonus in (None, 0, 2)
+    )
     if need_sheet:
         async with session_scope() as s:
             cs = CharacterService()

@@ -103,6 +103,11 @@ def build_table_ava() -> str:
     header = "| Artifact | Link | Notes |\n| --- | --- | --- |"
     return header + "\n" + "\n".join(rows)
 
+# Backward-compatible alias expected by legacy / generic tests for AVA epic.
+# tests/test_traceability_script.py imports build_table() and asserts epic rows.
+def build_table() -> str:  # noqa: D401 - simple alias
+    return build_table_ava()
+
 
 def gh_search_single(code: str) -> dict | None:
     """Return first issue whose title contains the exact code (e.g. STORY-CORE-001A)."""

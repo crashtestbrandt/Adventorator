@@ -26,12 +26,13 @@ from Adventorator.planner_schemas import PlannerOutput
 
 log = structlog.get_logger()
 
-_PLAN_TIMEOUT = 12.0    # seconds (default; overridden by settings if provided)
+_PLAN_TIMEOUT = 12.0  # seconds (default; overridden by settings if provided)
 
 # Simple in-memory per-user rate limiter: max N requests per window
 _RL_MAX = 5
 _RL_WINDOW = 60.0
 _rl: dict[str, list[float]] = {}
+
 
 def _rate_limited(user_id: str) -> bool:
     now = time.time()
@@ -91,7 +92,7 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
     async with session_scope() as s:
         campaign = await repos.get_or_create_campaign(s, guild_id)
         scene = await repos.ensure_scene(s, campaign.id, channel_id)
-        await repos.write_transcript(
+        player_tx = await repos.write_transcript(
             s,
             campaign.id,
             scene.id,
@@ -100,6 +101,7 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
             user_msg,
             str(user_id),
         )
+        player_tx_id = getattr(player_tx, "id", None)
         scene_id = scene.id
         log_event(
             "planner",
@@ -310,8 +312,8 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         if cmd_name_flat in {"sheet.create"}:
             guidance = (
                 "To create a character, use /sheet create and provide the json option with "
-                "your character sheet JSON. Example: {\"name\": \"Aria\", "
-                "\"class\": \"Fighter\", \"level\": 1, ...}"
+                'your character sheet JSON. Example: {"name": "Aria", '
+                '"class": "Fighter", "level": 1, ...}'
             )
         elif cmd_name_flat in {"sheet.show"}:
             guidance = (
@@ -323,13 +325,11 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
                 "Example: ability: DEX dc: 12"
             )
         elif cmd_name_flat == "roll":
-            guidance = (
-                "Use /roll with an expr like 1d20 or 2d6+3. Example: expr: \"1d20\""
-            )
+            guidance = 'Use /roll with an expr like 1d20 or 2d6+3. Example: expr: "1d20"'
         elif cmd_name_flat == "do":
             guidance = (
                 "Use /do with a short action description. Example: message: "
-                "\"I sneak along the wall\""
+                '"I sneak along the wall"'
             )
 
         msg = guidance or "⚠️ Planned arguments were invalid."
@@ -382,3 +382,13 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         ruleset=inv.ruleset,
     )
     await cmd.handler(new_inv, option_obj)
+    # Fallback: Some legacy planned commands may be no-ops (e.g., roll routed internally
+    # without emitting a follow-up). To avoid silent CLI experience, send a minimal
+    # confirmation if nothing has been sent yet. We approximate by emitting only for
+    # simple roll/check actions where plan produced no multi-step execution.
+    try:
+        if cmd_name_flat in {"roll", "check"}:
+            # Provide a lightweight hint to user; actual mechanics will be in logs or downstream
+            await inv.responder.send("✅ Planned action processed.", ephemeral=True)
+    except Exception:
+        pass

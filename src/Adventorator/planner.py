@@ -21,12 +21,15 @@ from Adventorator.metrics import inc_counter, register_reset_plan_cache_callback
 # --- Allowlist of commands the planner may route to (defense-in-depth) ---
 _ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do", "ooc"}
 
+
 def _is_allowed(name: str) -> bool:
     return name in _ALLOWED
 
 
 # --- Simple in-process cache to suppress duplicate LLM calls for 30s ---
 _CACHE_TTL = 30.0
+
+
 @dataclass(slots=True)
 class _CacheEntry:
     timestamp: float
@@ -108,7 +111,9 @@ def _cache_get(guild_id: int, channel_id: int, msg: str) -> tuple[dict[str, Any]
     return None
 
 
-def _cache_put(guild_id: int, channel_id: int, msg: str, plan_json: dict[str, Any], *, schema: str) -> None:
+def _cache_put(
+    guild_id: int, channel_id: int, msg: str, plan_json: dict[str, Any], *, schema: str
+) -> None:
     key = (guild_id, channel_id, msg.strip())
     _plan_cache[key] = _CacheEntry(time.time(), plan_json, schema)
     try:
@@ -165,11 +170,11 @@ def build_planner_messages(user_msg: str) -> list[dict[str, Any]]:
     tools_json = orjson.dumps(_catalog()).decode("utf-8")
     # Dynamically enumerate available rules from the rules engine (Dnd5eRuleset)
     from Adventorator.rules.engine import Dnd5eRuleset
+
     ruleset = Dnd5eRuleset()
     # List available rules as method names (excluding dunder and private)
     rule_methods = [
-        m for m in dir(ruleset)
-        if not m.startswith("_") and callable(getattr(ruleset, m))
+        m for m in dir(ruleset) if not m.startswith("_") and callable(getattr(ruleset, m))
     ]
     rules_list = "\n".join(f"- {m}" for m in rule_methods)
     rules_text = f"AVAILABLE RULES:\n{rules_list}\n"

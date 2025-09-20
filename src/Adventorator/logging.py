@@ -65,11 +65,7 @@ def setup_logging(settings: Settings | None = None) -> None:
         to_file = True if settings is None else getattr(settings, "logging_to_file", True)
         file_lvl_name = level_name if to_file else "NONE"
     if (file_lvl_name or "").upper() != "NONE":
-        path = (
-            settings.logging_file_path
-            if settings is not None
-            else "logs/adventorator.jsonl"
-        )
+        path = settings.logging_file_path if settings is not None else "logs/adventorator.jsonl"
         # Ensure directory exists
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         fh = RotatingFileHandler(

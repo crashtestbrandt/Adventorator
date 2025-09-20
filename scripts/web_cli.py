@@ -158,7 +158,17 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
     manager = None
     server_process = None
     event = None
-    if not NO_SINK:
+    # If an override points back to the app's own /dev-webhook, we do not need a local sink.
+    override_targets_app = False
+    if override_url:
+        try:
+            parsed_ov = urlparse(override_url)
+            # Heuristic: same port as APP_PORT and path starts with /dev-webhook
+            if (parsed_ov.port == APP_PORT) and (parsed_ov.path.startswith("/dev-webhook")):
+                override_targets_app = True
+        except Exception:
+            pass
+    if not NO_SINK and not override_targets_app:
         manager = multiprocessing.Manager()
         event = manager.Event()
         # Use a separate process for the sink server for robust cleanup.
@@ -226,7 +236,31 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
             if not received:
                 click.echo(click.style(f"\nWarning: Did not receive a follow-up message within {RESPONSE_TIMEOUT_SECONDS} seconds.", fg="yellow"))
         else:
-            click.echo("(Follow-up will be delivered to sink service; check docker logs for cli-sink)")
+            if override_targets_app and not NO_SINK:
+                click.echo("(Follow-up handled directly by app /dev-webhook; polling for content...)")
+                # Poll the dev webhook latest endpoint a few times to surface content inline
+                try:
+                    token = "fake-token"
+                    poll_url = f"{APP_URL}/dev-webhook/latest/{token}"
+                    printed = False
+                    async with httpx.AsyncClient() as client:
+                        for i in range(15):  # up to ~7.5s @0.5s intervals
+                            await asyncio.sleep(0.5)
+                            r = await client.get(poll_url)
+                            if r.status_code == 200:
+                                js = r.json()
+                                if js.get("status") == "ok" and isinstance(js.get("payload"), dict):
+                                    content = js["payload"].get("content")
+                                    if content:
+                                        click.echo("\n--- Follow-up (polled) ---\n" + content + "\n---------------------------")
+                                        printed = True
+                                        break
+                    if not printed:
+                        click.echo("(No follow-up content retrieved within polling window)")
+                except Exception:
+                    pass
+            else:
+                click.echo("(Follow-up will be delivered to sink service; check docker logs for cli-sink)")
 
     except httpx.ConnectError:
         click.echo(click.style(f"Connection Error: Is the app running at {APP_URL}?", fg="red", bold=True))

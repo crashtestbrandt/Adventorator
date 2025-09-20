@@ -344,6 +344,7 @@ async def run_orchestrator(
             duration_ms=duration_ms,
         )
         return result
+
     if player_msg and cache_key in _prompt_cache:
         ts, cached = _prompt_cache[cache_key]
         if now - ts <= _CACHE_TTL:
@@ -397,8 +398,11 @@ async def run_orchestrator(
     if not llm_client:
         return _complete(
             OrchestratorResult(
-            mechanics="LLM not configured.", narration="", rejected=True, reason="llm_unconfigured"
-        ),
+                mechanics="LLM not configured.",
+                narration="",
+                rejected=True,
+                reason="llm_unconfigured",
+            ),
             "llm_unconfigured",
         )
     out = await llm_client.generate_json(narrator_msgs)  # type: ignore[attr-defined]
@@ -407,11 +411,11 @@ async def run_orchestrator(
         log.warning("llm.parse.failed", scene_id=scene_id)
         return _complete(
             OrchestratorResult(
-            mechanics="Unable to generate a proposal.",
-            narration="",
-            rejected=True,
-            reason="llm_invalid_or_empty",
-        ),
+                mechanics="Unable to generate a proposal.",
+                narration="",
+                rejected=True,
+                reason="llm_invalid_or_empty",
+            ),
             "llm_invalid_or_empty",
         )
     inc_counter("llm.response.received")
@@ -427,11 +431,11 @@ async def run_orchestrator(
         )
         return _complete(
             OrchestratorResult(
-            mechanics="Proposal rejected: invalid",
-            narration="",
-            rejected=True,
-            reason=why,
-        ),
+                mechanics="Proposal rejected: invalid",
+                narration="",
+                rejected=True,
+                reason=why,
+            ),
             "defense_rejected",
         )
 
@@ -449,11 +453,11 @@ async def run_orchestrator(
         )
         return _complete(
             OrchestratorResult(
-            mechanics="Proposal rejected: unsafe content",
-            narration="",
-            rejected=True,
-            reason="unsafe_verb",
-        ),
+                mechanics="Proposal rejected: unsafe content",
+                narration="",
+                rejected=True,
+                reason="unsafe_verb",
+            ),
             "defense_rejected",
         )
 
@@ -471,11 +475,11 @@ async def run_orchestrator(
             )
             return _complete(
                 OrchestratorResult(
-                mechanics="Proposal rejected: unknown actors",
-                narration="",
-                rejected=True,
-                reason="unknown_actor",
-            ),
+                    mechanics="Proposal rejected: unknown actors",
+                    narration="",
+                    rejected=True,
+                    reason="unknown_actor",
+                ),
                 "defense_rejected",
             )
 
@@ -490,6 +494,7 @@ async def run_orchestrator(
                 "expertise": False,
                 "prof_bonus": 2,
             }
+
         sheet_info_provider = _default_sheet_info
 
     # Only required for ability checks; use neutral values for other actions
@@ -506,9 +511,9 @@ async def run_orchestrator(
         prof_bonus = 2
 
     # 5) If Executor preview is enabled, use it for mechanics; otherwise, compute locally
-    use_executor = bool(getattr(settings, "features_executor", False)) if (
-        settings is not None
-    ) else False
+    use_executor = (
+        bool(getattr(settings, "features_executor", False)) if (settings is not None) else False
+    )
     mechanics: str
     chain_json: dict | None = None
     preview_failed = False
@@ -575,11 +580,14 @@ async def run_orchestrator(
         ctx = {"scene_id": scene_id, "request_id": f"orc-{scene_id}-{request_id_seed}"}
         if actor_id is not None:
             ctx["actor_id"] = actor_id
-        req_for_execution = ExecutionRequest(plan_id=ctx["request_id"], steps=plan_steps, context=ctx)
+        req_for_execution = ExecutionRequest(
+            plan_id=ctx["request_id"], steps=plan_steps, context=ctx
+        )
         if feature_action_validation:
             execution_request = req_for_execution
             try:
                 import structlog
+
                 structlog.get_logger().info(
                     "orchestrator.execution_request.built",
                     plan_id=req_for_execution.plan_id,
@@ -662,11 +670,7 @@ async def run_orchestrator(
         else:
             mechanics = "Proposal accepted but preview unavailable."
     activity_log_id: int | None = None
-    if (
-        req_for_execution is not None
-        and feature_action_validation
-        and feature_activity_log
-    ):
+    if req_for_execution is not None and feature_action_validation and feature_activity_log:
         try:
             async with session_scope() as s:
                 scene_obj = await s.get(_models.Scene, scene_id)

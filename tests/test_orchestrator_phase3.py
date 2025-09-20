@@ -119,4 +119,3 @@ async def test_orchestrator_execution_request_only_with_feature_flag(monkeypatch
     assert res_flagged.execution_request is not None
     assert res_flagged.execution_request.steps
     assert res_flagged.execution_request.steps[0].op == "check"
-

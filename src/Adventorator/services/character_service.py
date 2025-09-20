@@ -4,6 +4,7 @@ This is a light abstraction to keep handlers/orchestrator decoupled from repos.
 We aim to return only what mechanics need: ability scores, proficiency bonus,
 and a couple of identity fields for LLM summaries.
 """
+
 from __future__ import annotations
 
 import time
@@ -76,9 +77,11 @@ class CharacterService:
             char = None
             if player is not None:
                 # Pick the most recently updated character for this player.
-                stmt = select(models.Character).where(
-                    models.Character.player_id == player.id
-                ).order_by(models.Character.updated_at.desc())
+                stmt = (
+                    select(models.Character)
+                    .where(models.Character.player_id == player.id)
+                    .order_by(models.Character.updated_at.desc())
+                )
                 cq = await session.execute(stmt)
                 char = cq.scalars().first()
             if char is None:
@@ -187,9 +190,7 @@ class CharacterService:
 
         return sheet_info
 
-    async def get_sheet_by_name(
-        self, session, *, campaign_id: int, name: str
-    ) -> SheetInfo | None:
+    async def get_sheet_by_name(self, session, *, campaign_id: int, name: str) -> SheetInfo | None:
         """Lookup a character by name in a campaign and return SheetInfo (cached)."""
         try:
             cache_key = (int(campaign_id), (name or "").strip().lower())

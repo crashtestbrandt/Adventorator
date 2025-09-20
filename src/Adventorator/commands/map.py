@@ -13,7 +13,9 @@ from Adventorator.models import EncounterStatus
 
 class MapShowOpts(Option):
     verbose: bool = Field(default=False, description="Include debug info about cache/encounter")
-    demo: bool = Field(default=False, description="Render a demo map without requiring an encounter")
+    demo: bool = Field(
+        default=False, description="Render a demo map without requiring an encounter"
+    )
 
 
 @slash_command(
@@ -40,7 +42,9 @@ async def map_show(inv: Invocation, opts: MapShowOpts):
             Token(name="Bor", x=3, y=2, color=(80, 200, 120), active=False),
             Token(name="Cat", x=2, y=4, color=(220, 120, 120), active=False),
         ]
-        rinp = RenderInput(encounter_id=-1, last_event_id=None, width=512, height=384, tokens=tokens)
+        rinp = RenderInput(
+            encounter_id=-1, last_event_id=None, width=512, height=384, tokens=tokens
+        )
     else:
         # Real encounter rendering
         guild_id = int(inv.guild_id or 0)
@@ -74,10 +78,10 @@ async def map_show(inv: Invocation, opts: MapShowOpts):
                 gx = i % grid_size
                 gy = i // grid_size
                 color = (64, 128, 255) if getattr(cb, "character_id", None) else (220, 120, 120)
-                is_active = (i == active_idx)
+                is_active = i == active_idx
                 tokens.append(
                     Token(
-                        name=str(getattr(cb, "name", f"C{i+1}")),
+                        name=str(getattr(cb, "name", f"C{i + 1}")),
                         x=_clamp(gx, 0, grid_size - 1),
                         y=_clamp(gy, 0, grid_size - 1),
                         color=color,
@@ -111,6 +115,8 @@ async def map_show(inv: Invocation, opts: MapShowOpts):
             ephemeral=False,
             settings=settings,
             webhook_base_url=webhook_base,
+            # Only allow settings-based webhook override (dev sink) for dev CLI requests
+            allow_settings_override=getattr(inv.responder, "dev_request", False),
         )
         sent_as = "attachment"
     else:

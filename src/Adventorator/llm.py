@@ -20,7 +20,7 @@ log = structlog.get_logger()
 class LLMClient:
     """
     An asynchronous client for interacting with LLM APIs.
-    
+
     This client supports two providers, configured via settings:
     1. 'openai': Uses the official `openai` library to connect to any
                  OpenAI-compatible API endpoint (e.g., OpenAI, Together.ai, Groq).
@@ -28,6 +28,7 @@ class LLMClient:
     2. 'ollama': Uses a direct `httpx` client to connect to a local or remote
                  Ollama instance.
     """
+
     def __init__(self, settings: Settings):
         self.provider = settings.llm_api_provider
         self.model_name = settings.llm_model_name
@@ -35,9 +36,7 @@ class LLMClient:
         self._max_chars = settings.llm_max_response_chars
 
         if not settings.llm_api_url:
-            raise ValueError(
-                "LLMClient requires llm_api_url to be set in configuration."
-            )
+            raise ValueError("LLMClient requires llm_api_url to be set in configuration.")
         # The client instance will be one of two types (set below based on provider).
         # Use Any here to keep mypy happy across provider branches.
         self._client: Any
@@ -53,7 +52,7 @@ class LLMClient:
                 self.api_url = f"{base}/api/chat"
             headers = {"Content-Type": "application/json"}
             self._client = httpx.AsyncClient(timeout=60.0, headers=headers)
-        
+
         elif self.provider == "openai":
             # Ensure the API URL is valid for OpenAI-compatible providers.
             # Accept a variety of inputs and normalize them:
@@ -105,6 +104,7 @@ class LLMClient:
             prompt_approx_chars=prompt_chars,
         )
         import time
+
         start = time.perf_counter()
         status = "success"
         try:
@@ -131,7 +131,7 @@ class LLMClient:
 
         except OpenAIError as e:
             status = "api_error"
-            log.error("OpenAI API error", error=str(e), status_code=getattr(e, 'status_code', None))
+            log.error("OpenAI API error", error=str(e), status_code=getattr(e, "status_code", None))
             return "A strange psychic interference prevents a clear response. (LLM API error)"
         except httpx.RequestError as e:
             status = "request_error"
@@ -143,6 +143,7 @@ class LLMClient:
             return "A strange psychic interference prevents a clear response. (LLM response error)"
         finally:
             import math
+
             dur_ms = math.trunc((time.perf_counter() - start) * 1000)
             log.info(
                 "llm.call.completed",
@@ -162,6 +163,7 @@ class LLMClient:
         full_prompt.extend(messages)
 
         import time
+
         start = time.perf_counter()
         status = "success"
         try:
@@ -287,6 +289,7 @@ class LLMClient:
             return None
         finally:
             import math
+
             dur_ms = math.trunc((time.perf_counter() - start) * 1000)
             log.info(
                 "llm.call.completed",

@@ -58,10 +58,7 @@ def get_engine() -> AsyncEngine:
                 connect_args["uri"] = True
             kwargs.update(connect_args=connect_args)
             # Critical for in-memory DBs: share a single connection so schema persists
-            if (
-                ":memory:" in DATABASE_URL
-                or "file::memory:?cache=shared" in DATABASE_URL
-            ):
+            if ":memory:" in DATABASE_URL or "file::memory:?cache=shared" in DATABASE_URL:
                 kwargs.update(poolclass=StaticPool)
             # Optionally force a single shared connection even for file-backed SQLite
             # to serialize writers during tests and avoid "database is locked".

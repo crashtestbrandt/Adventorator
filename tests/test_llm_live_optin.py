@@ -21,9 +21,9 @@ async def test_llm_live_chat_when_configured():
     )
     client = LLMClient(settings)
     try:
-        resp = await client.generate_response([
-            {"role": "user", "content": "Say one short sentence about Jupiter."}
-        ])
+        resp = await client.generate_response(
+            [{"role": "user", "content": "Say one short sentence about Jupiter."}]
+        )
         assert isinstance(resp, str) and len(resp) > 0
     finally:
         await client.close()

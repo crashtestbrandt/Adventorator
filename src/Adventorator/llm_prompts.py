@@ -58,7 +58,7 @@ SYSTEM_PROMPT_NARRATOR_WITH_ATTACK = (
     '"dice": <string like "1d8" or "2d6">, '
     '"mod": <int -5..10> | null, '
     '"type": <string> | null '
-    '} | null,\n'
+    "} | null,\n"
     '    "advantage": <bool> | null,\n'
     '    "disadvantage": <bool> | null,\n'
     '    "condition": <string> | null,\n'

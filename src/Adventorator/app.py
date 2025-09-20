@@ -128,7 +128,9 @@ async def interactions(request: Request):
     # Anything else: immediately DEFER (type 5) to satisfy the 3s budget.
 
     if inter.type == 2 and inter.data is not None and inter.data.name is not None:
-        asyncio.create_task(_dispatch_command(inter))
+        # dev_request True only when the dev public key was used (local CLI),
+        # ensuring settings-based webhook override is ignored for real Discord traffic.
+        asyncio.create_task(_dispatch_command(inter, dev_request=use_dev_pub))
     return respond_deferred()
 
 
@@ -171,7 +173,7 @@ async def request_id_middleware(request: Request, call_next):
         clear_contextvars()
 
 
-async def _dispatch_command(inter: Interaction):
+async def _dispatch_command(inter: Interaction, *, dev_request: bool = False):
     # Safe: _dispatch_command only called when inter.data and name are present
     assert inter.data is not None and inter.data.name is not None
     name = inter.data.name
@@ -179,9 +181,7 @@ async def _dispatch_command(inter: Interaction):
     cmd = find_command(name, sub)
     if cmd is not None:
         options: dict[str, Any] = {}
-        opts: list[dict[str, Any]] = (
-            inter.data.options or [] if inter.data is not None else []
-        )
+        opts: list[dict[str, Any]] = inter.data.options or [] if inter.data is not None else []
         if opts and isinstance(opts[0], dict) and opts[0].get("type") == 1:
             opts = opts[0].get("options", []) or []
         for o in opts:
@@ -196,12 +196,14 @@ async def _dispatch_command(inter: Interaction):
                 token: str,
                 settings: Settings,
                 webhook_base_url: str | None = None,
+                dev_request: bool = False,
             ):
                 self.application_id = application_id
                 self.token = token
                 self.settings = settings
                 # Allows trusted callers (e.g., internal CLI) to request a per-interaction sink
                 self.webhook_base_url = webhook_base_url
+                self.dev_request = dev_request
 
             async def send(self, content: str, *, ephemeral: bool = False) -> None:
                 try:
@@ -212,6 +214,7 @@ async def _dispatch_command(inter: Interaction):
                         ephemeral=ephemeral,
                         settings=self.settings,
                         webhook_base_url=self.webhook_base_url,
+                        allow_settings_override=self.dev_request,
                     )
                 except TypeError:
                     # Test spies may not accept the keyword-only 'settings' parameter
@@ -229,6 +232,7 @@ async def _dispatch_command(inter: Interaction):
         # Allow a trusted caller to provide a one-off webhook base via header
         webhook_base_url = request_header_override()
         from Adventorator.rules.engine import Dnd5eRuleset
+
         inv = Invocation(
             name=name,
             subcommand=sub,
@@ -241,6 +245,7 @@ async def _dispatch_command(inter: Interaction):
                 inter.token,
                 settings,
                 webhook_base_url,
+                dev_request=dev_request,
             ),
             settings=settings,
             llm_client=llm_client,
@@ -258,6 +263,7 @@ async def _dispatch_command(inter: Interaction):
                 f"❌ Invalid options for `{name}`.",
                 ephemeral=True,
                 settings=settings,
+                allow_settings_override=dev_request,
             )
             return
         try:
@@ -352,3 +358,70 @@ async def metrics():
     if not getattr(settings, "metrics_endpoint_enabled", False):
         raise HTTPException(status_code=404, detail="metrics disabled")
     return get_counters()
+
+
+_LAST_DEV_WEBHOOK: dict[str, dict] = {}
+
+
+@app.post("/dev-webhook/webhooks/{application_id}/{token}")
+async def dev_webhook(application_id: str, token: str, request: Request):
+    """Local development sink for follow-up webhook messages.
+
+    This endpoint is only used when running with the environment variable
+    DISCORD_WEBHOOK_URL_OVERRIDE set to a base like
+    http://127.0.0.1:18000/dev-webhook
+
+    The production flow (Discord callbacks) is unaffected because the
+    override is opt-in and the real Discord domain is still the default
+    when the override is not set.
+    """
+    try:
+        ctype = request.headers.get("content-type", "")
+        payload: dict | None = None
+        if ctype.startswith("multipart/form-data"):
+            form = await request.form()
+            pj = form.get("payload_json")
+            if pj:
+                if isinstance(pj, bytes):
+                    import orjson as _oj  # local import to avoid unused if branch never hit
+                    payload = _oj.loads(pj)
+                else:  # str
+                    import orjson as _oj
+                    payload = _oj.loads(pj.encode())
+        else:
+            try:
+                payload = await request.json()
+            except Exception:
+                raw = await request.body()
+                if raw:
+                    import orjson as _oj
+                    try:
+                        payload = _oj.loads(raw)
+                    except Exception:
+                        payload = {"_raw": raw[:200].decode(errors="replace")}
+        content_val = None
+        if isinstance(payload, dict):
+            content_val = payload.get("content")
+        log.info(
+            "dev_webhook.received",
+            application_id=application_id,
+            token_preview=token[:8],
+            content_len=len(content_val or ""),
+        )
+        # Store latest payload per token for local polling by web_cli
+        if isinstance(payload, dict):
+            _LAST_DEV_WEBHOOK[token] = payload
+        # Echo back minimal acknowledgement so callers treat it as success
+        return {"status": "ok", "echo": content_val}
+    except Exception as err:  # Defensive: never crash dev sink
+        log.error("dev_webhook.error", error=str(err))
+        raise HTTPException(status_code=400, detail=f"bad dev webhook payload: {err}") from err
+
+
+@app.get("/dev-webhook/latest/{token}")
+async def dev_webhook_latest(token: str):
+    """Retrieve the most recent dev webhook payload for a token (local only)."""
+    payload = _LAST_DEV_WEBHOOK.get(token)
+    if not payload:
+        return {"status": "empty"}
+    return {"status": "ok", "payload": payload}

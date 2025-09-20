@@ -43,6 +43,7 @@ async def test_add_and_set_initiative_metrics(db):
     scene = await repos.ensure_scene(db, campaign_id=camp.id, channel_id=904)
     enc = await repos.create_encounter(db, scene_id=scene.id)
     from Adventorator.services import encounter_service
+
     mech, evs = await encounter_service.add_combatant(db, encounter_id=enc.id, name="Rogue")
     assert get_counter("encounter.add.ok") == 1
 

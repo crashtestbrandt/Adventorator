@@ -87,7 +87,9 @@ async def test_map_show_non_demo_active_path_text_fallback(db):
         # Add two combatants and mark as active
     await repos.add_combatant(s, encounter_id=enc.id, name="Aria", hp=10)
     await repos.add_combatant(s, encounter_id=enc.id, name="Borin", hp=12)
-    await repos.update_encounter_state(s, encounter_id=enc.id, status="active", round=1, active_idx=0)
+    await repos.update_encounter_state(
+        s, encounter_id=enc.id, status="active", round=1, active_idx=0
+    )
 
     responder = _SpyResponder()
     inv = Invocation(

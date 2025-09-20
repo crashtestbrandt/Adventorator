@@ -6,6 +6,7 @@ Adds a lightweight histogram helper with fixed or custom buckets. Values are
 exported into flattened counters for the /metrics endpoint to keep payloads
 simple and avoid changing types in existing consumers.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict

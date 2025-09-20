@@ -201,9 +201,7 @@ class PendingAction(Base):
     campaign_id: Mapped[int] = mapped_column(
         ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
     )
-    scene_id: Mapped[int] = mapped_column(
-        ForeignKey("scenes.id", ondelete="CASCADE"), index=True
-    )
+    scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
     channel_id: Mapped[int] = mapped_column(BigInteger, index=True)
     user_id: Mapped[str] = mapped_column(String(64), index=True)
     # Correlates a planner/orchestrator request end-to-end
@@ -253,9 +251,7 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    scene_id: Mapped[int] = mapped_column(
-        ForeignKey("scenes.id", ondelete="CASCADE"), index=True
-    )
+    scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
     actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     type: Mapped[str] = mapped_column(String(64), index=True)
     payload: Mapped[dict] = mapped_column(JSON)

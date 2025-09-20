@@ -40,8 +40,8 @@ async def test_pending_repos_create_and_fetch(db):
         assert pa.id > 0
         got = await repos.get_latest_pending_for_user(s, scene_id=scene.id, user_id="u1")
         assert got is not None and got.id == pa.id
-    # Expire should mark as expired after TTL passes.
-    # We won't sleep here; just call to ensure it doesn't crash.
+        # Expire should mark as expired after TTL passes.
+        # We won't sleep here; just call to ensure it doesn't crash.
         count = await repos.expire_stale_pending_actions(s)
         assert isinstance(count, int)
 

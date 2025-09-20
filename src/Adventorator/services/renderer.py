@@ -86,7 +86,11 @@ def render_map(inp: RenderInput) -> bytes:
             draw.ellipse(bbox, fill=color, outline=(0, 0, 0))
             if t.active:
                 # Highlight ring for active token
-                draw.ellipse([(cx - r - 3, cy - r - 3), (cx + r + 3, cy + r + 3)], outline=(255, 215, 0), width=2)
+                draw.ellipse(
+                    [(cx - r - 3, cy - r - 3), (cx + r + 3, cy + r + 3)],
+                    outline=(255, 215, 0),
+                    width=2,
+                )
 
         # Encode PNG
         import io as _io
@@ -108,6 +112,4 @@ def render_map(inp: RenderInput) -> bytes:
 def _tiny_png() -> bytes:
     """Return a valid, minimal PNG (1x1 transparent)."""
     # Precomputed 1x1 transparent PNG bytes
-    return (
-        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0cIDATx\x9cc``\x00\x00\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
-    )
+    return b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0cIDATx\x9cc``\x00\x00\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"

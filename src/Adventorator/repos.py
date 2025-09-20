@@ -31,7 +31,8 @@ def _sanitize_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     if not payload:
         return {}
     try:
-        canonical = json.loads(json.dumps(payload, ensure_ascii=False, default=str))
+        canonical = json.loads(json.dumps(
+            payload, ensure_ascii=False, default=str))
     except Exception:
         return {"error": "unserializable"}
     encoded = json.dumps(canonical, ensure_ascii=False).encode("utf-8")
@@ -57,12 +58,14 @@ async def get_or_create_player(
     s: AsyncSession, discord_user_id: int, display_name: str
 ) -> models.Player:
     q = await s.execute(
-        select(models.Player).where(models.Player.discord_user_id == discord_user_id)
+        select(models.Player).where(
+            models.Player.discord_user_id == discord_user_id)
     )
     obj = q.scalar_one_or_none()
     if obj:
         return obj
-    obj = models.Player(discord_user_id=discord_user_id, display_name=display_name)
+    obj = models.Player(discord_user_id=discord_user_id,
+                        display_name=display_name)
     s.add(obj)
     await _flush_retry(s)
     return obj
@@ -162,7 +165,8 @@ async def ensure_scene(s: AsyncSession, campaign_id: int, channel_id: int) -> mo
 async def list_character_names(s: AsyncSession, campaign_id: int) -> list[str]:
     """Return all character names in a campaign."""
     q = await s.execute(
-        select(models.Character.name).where(models.Character.campaign_id == campaign_id)
+        select(models.Character.name).where(
+            models.Character.campaign_id == campaign_id)
     )
     return [row[0] for row in q.all()]
 
@@ -233,6 +237,23 @@ async def update_transcript_status(s: AsyncSession, transcript_id: int, status: 
         await _flush_retry(s)
 
 
+async def link_transcript_activity_log(
+    s: AsyncSession, *, transcript_id: int, activity_log_id: int | None
+) -> None:
+    """Set activity_log_id for an existing transcript if not already set.
+
+    Idempotent: only updates when different. Safe to call after creating
+    an ActivityLog if initial transcript write did not include linkage.
+    """
+    if activity_log_id is None:
+        return
+    q = await s.execute(select(models.Transcript).where(models.Transcript.id == transcript_id))
+    t = q.scalar_one_or_none()
+    if t and getattr(t, "activity_log_id", None) != activity_log_id:
+        t.activity_log_id = activity_log_id
+        await _flush_retry(s)
+
+
 async def update_transcript_meta(
     s: AsyncSession, transcript_id: int, meta: dict | None = None
 ) -> None:
@@ -257,7 +278,7 @@ async def _flush_retry(s: AsyncSession, attempts: int = 5, delay: float = 0.2) -
             if "database is locked" in msg or "database is busy" in msg:
                 if i == attempts - 1:
                     raise
-                await asyncio.sleep(delay * (2 ** i))
+                await asyncio.sleep(delay * (2**i))
                 continue
             raise
 
@@ -269,7 +290,8 @@ async def get_recent_transcripts(
     Fetches the most recent transcript entries for a given scene, optionally
     filtered by user_id, in chronological order.
     """
-    stmt = select(models.Transcript).where(models.Transcript.scene_id == scene_id)
+    stmt = select(models.Transcript).where(
+        models.Transcript.scene_id == scene_id)
     if user_id is not None:
         stmt = stmt.where(models.Transcript.author_ref == user_id)
     stmt = stmt.order_by(models.Transcript.created_at.desc()).limit(limit)
@@ -315,9 +337,7 @@ async def create_encounter(s: AsyncSession, *, scene_id: int) -> models.Encounte
 
 
 async def get_encounter_by_id(s: AsyncSession, *, encounter_id: int) -> models.Encounter | None:
-    q = await s.execute(
-        select(models.Encounter).where(models.Encounter.id == encounter_id)
-    )
+    q = await s.execute(select(models.Encounter).where(models.Encounter.id == encounter_id))
     return q.scalar_one_or_none()
 
 
@@ -373,10 +393,12 @@ async def add_combatant(
 ) -> models.Combatant:
     # Determine next order_idx for stability
     q = await s.execute(
-        select(models.Combatant).where(models.Combatant.encounter_id == encounter_id)
+        select(models.Combatant).where(
+            models.Combatant.encounter_id == encounter_id)
     )
     existing = list(q.scalars().all())
-    next_idx = (max([c.order_idx for c in existing], default=-1) + 1) if existing else 0
+    next_idx = (max([c.order_idx for c in existing],
+                default=-1) + 1) if existing else 0
     cb = models.Combatant(
         encounter_id=encounter_id,
         character_id=character_id,
@@ -392,9 +414,7 @@ async def add_combatant(
     return cb
 
 
-async def set_combatant_initiative(
-    s: AsyncSession, *, combatant_id: int, initiative: int
-) -> None:
+async def set_combatant_initiative(s: AsyncSession, *, combatant_id: int, initiative: int) -> None:
     q = await s.execute(select(models.Combatant).where(models.Combatant.id == combatant_id))
     cb = q.scalar_one_or_none()
     if not cb:
@@ -403,11 +423,10 @@ async def set_combatant_initiative(
     await _flush_retry(s)
 
 
-async def list_combatants(
-    s: AsyncSession, *, encounter_id: int
-) -> list[models.Combatant]:
+async def list_combatants(s: AsyncSession, *, encounter_id: int) -> list[models.Combatant]:
     q = await s.execute(
-        select(models.Combatant).where(models.Combatant.encounter_id == encounter_id)
+        select(models.Combatant).where(
+            models.Combatant.encounter_id == encounter_id)
     )
     return list(q.scalars().all())
 
@@ -447,7 +466,8 @@ async def create_pending_action(
 ) -> models.PendingAction:
     expires_at = None
     if ttl_seconds and ttl_seconds > 0:
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+        expires_at = datetime.now(timezone.utc) + \
+            timedelta(seconds=ttl_seconds)
     # Compute a normalized dedup hash from the chain JSON
     try:
         normalized = json.dumps(chain, sort_keys=True, separators=(",", ":"))
@@ -540,12 +560,8 @@ async def get_latest_pending_for_user(
     return pa
 
 
-async def mark_pending_action_status(
-    s: AsyncSession, pending_id: int, status: str
-) -> None:
-    q = await s.execute(
-        select(models.PendingAction).where(models.PendingAction.id == pending_id)
-    )
+async def mark_pending_action_status(s: AsyncSession, pending_id: int, status: str) -> None:
+    q = await s.execute(select(models.PendingAction).where(models.PendingAction.id == pending_id))
     pa = q.scalar_one_or_none()
     if pa:
         pa.status = status
@@ -564,10 +580,10 @@ async def expire_stale_pending_actions(s: AsyncSession) -> int:
     This is a best-effort helper; a periodic task/CLI can call it.
     """
     from datetime import datetime, timezone
+
     # SQLite lacks server-side now(); do expiration in Python on fetched rows
     stmt = select(models.PendingAction).where(
-        models.PendingAction.status == "pending"
-    )
+        models.PendingAction.status == "pending")
     q = await s.execute(stmt)
     count = 0
     now = datetime.now(timezone.utc)
@@ -691,7 +707,8 @@ def fold_conditions_view(events: list[models.Event]) -> dict[str, dict[str, dict
             prev = slot.get("stacks")
             prev_int = prev if isinstance(prev, int) else 0
             slot["stacks"] = prev_int + 1
-            slot["duration"] = dur_i if dur_i is not None else slot.get("duration", None)
+            slot["duration"] = dur_i if dur_i is not None else slot.get(
+                "duration", None)
         elif et == "condition.removed":
             target = str(ev.payload.get("target"))
             cond = str(ev.payload.get("condition"))

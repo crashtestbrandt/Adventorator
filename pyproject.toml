@@ -17,6 +17,8 @@ select = ["E","F","I","UP","N","B"]
 [tool.pytest.ini_options]
 addopts = "-q --cov=Adventorator --cov-report=term-missing"
 testpaths = ["tests"]
-pythonpath = ["src"]
+# Include both source tree and repository root so test imports like
+# `import scripts.update_action_validation_traceability` succeed.
+pythonpath = ["src", "."]
 asyncio_mode = "auto"
 

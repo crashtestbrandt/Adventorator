@@ -86,6 +86,7 @@ def _toml_settings_source() -> dict[str, Any]:
     console_val = log_cfg.get("console", None)
     file_val = log_cfg.get("to_file", None)
     overall = out["logging_level"]
+
     def _norm_level(v, default):
         if isinstance(v, str):
             return v.upper()
@@ -118,7 +119,7 @@ def _toml_settings_source() -> dict[str, Any]:
     # enabled = true
     # provider = "none" # future: pgvector|qdrant
     # top_k = 4
-    retrieval_cfg = (t.get("features", {}).get("retrieval", {}) or {})
+    retrieval_cfg = t.get("features", {}).get("retrieval", {}) or {}
     if retrieval_cfg:
         out["retrieval"] = {
             "enabled": bool(retrieval_cfg.get("enabled", False)),
@@ -205,7 +206,7 @@ class Settings(BaseSettings):
         env_prefix="",
         case_sensitive=False,
         env_file=".env",
-        extra="ignore", # Safely ignore any extra env vars
+        extra="ignore",  # Safely ignore any extra env vars
     )
 
     @classmethod
@@ -234,4 +235,3 @@ class Settings(BaseSettings):
 
 def load_settings() -> Settings:
     return Settings()
-

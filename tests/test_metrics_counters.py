@@ -12,6 +12,7 @@ class _FakeLLM:
     async def generate_json(self, msgs, system_prompt=None):
         return self._out
 
+
 @pytest.mark.asyncio
 async def test_metrics_happy_flow(monkeypatch):
     # Arrange: valid output

@@ -122,6 +122,7 @@ class Executor:
         # attack: to-hit vs AC and damage on hit (crit on natural 20)
         def attack_handler(args: dict[str, Any], dry_run: bool) -> dict[str, Any]:
             from Adventorator.rules.engine import Dnd5eRuleset
+
             # Required fields
             attacker = str(args.get("attacker", ""))
             target = str(args.get("target", ""))
@@ -263,9 +264,7 @@ class Executor:
             mech = f"Heal {amount} HP on {target}"
             return {
                 "mechanics": mech,
-                "events": [
-                    {"type": "heal", "payload": {"target": target, "amount": amount}}
-                ],
+                "events": [{"type": "heal", "payload": {"target": target, "amount": amount}}],
             }
 
         self.registry.register(
@@ -532,9 +531,9 @@ class Executor:
     async def apply_chain(self, chain: ToolCallChain) -> Preview:
         """Phase 8+: Apply a chain. For now, identical to preview (no mutation).
 
-    Phase 9 scaffolding: if features.events is enabled, append events:
-    - Prefer any handler-provided predicted_events (domain-specific).
-    - Otherwise append a generic executor.<tool> event with mechanics text.
+        Phase 9 scaffolding: if features.events is enabled, append events:
+        - Prefer any handler-provided predicted_events (domain-specific).
+        - Otherwise append a generic executor.<tool> event with mechanics text.
         """
         start = time.monotonic()
         # Preview first for consistent mechanics strings

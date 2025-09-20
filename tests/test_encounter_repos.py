@@ -17,9 +17,11 @@ async def test_encounter_repos_ordering_and_initiative():
         b = await repos.add_combatant(s, encounter_id=enc.id, name="Bob")
         c = await repos.add_combatant(s, encounter_id=enc.id, name="Cora")
 
-        assert [
-            x.order_idx for x in await repos.list_combatants(s, encounter_id=enc.id)
-        ] == [0, 1, 2]
+        assert [x.order_idx for x in await repos.list_combatants(s, encounter_id=enc.id)] == [
+            0,
+            1,
+            2,
+        ]
 
         # Set initiatives with a tie between Bob and Cora, ensuring stable tiebreak by order_idx
         await repos.set_combatant_initiative(s, combatant_id=a.id, initiative=15)

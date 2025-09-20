@@ -11,6 +11,14 @@ dev:
 run:
 	. .venv/bin/activate && UVICORN_LOG_LEVEL=info uvicorn --app-dir src Adventorator.app:app --reload --host 0.0.0.0 --port 18000
 
+# Kill any process already bound to 18000 (macOS/Linux). Ignores errors if none.
+kill-port:
+	@PID=$$(lsof -ti tcp:18000 || true); \
+	if [ -n "$$PID" ]; then echo "Killing process on :18000 (PID $$PID)"; kill $$PID || true; sleep 1; fi
+
+# Convenience target: free port then run server
+run-dev: kill-port run
+
 tunnel:
 	cloudflared tunnel --url http://127.0.0.1:18000
 

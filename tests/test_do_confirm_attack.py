@@ -96,9 +96,9 @@ async def test_do_then_confirm_attack_writes_events(monkeypatch, db):
         name="confirm",
         subcommand=None,
         options={},
-    user_id="1",
-    channel_id="1",
-    guild_id="1",
+        user_id="1",
+        channel_id="1",
+        guild_id="1",
         responder=_SpyResponder(),
         settings=settings,
     )

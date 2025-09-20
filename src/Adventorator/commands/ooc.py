@@ -26,9 +26,7 @@ async def ooc_command(inv: Invocation, opts: OocOpts):
     settings = inv.settings
     llm = inv.llm_client if (settings and getattr(settings, "features_llm", False)) else None
     if not llm:
-        await inv.responder.send(
-            "❌ The LLM narrator is currently disabled.", ephemeral=True
-        )
+        await inv.responder.send("❌ The LLM narrator is currently disabled.", ephemeral=True)
         return
 
     message = (opts.message or "").strip()
@@ -67,9 +65,7 @@ async def ooc_command(inv: Invocation, opts: OocOpts):
         clerk_msgs = build_clerk_messages(
             txs,
             player_msg=message,
-            max_tokens=(
-                getattr(settings, "llm_max_prompt_tokens", None) if settings else None
-            ),
+            max_tokens=(getattr(settings, "llm_max_prompt_tokens", None) if settings else None),
         )
 
     # Convert clerk messages to facts (exclude system, keep content)
@@ -84,9 +80,7 @@ async def ooc_command(inv: Invocation, opts: OocOpts):
     ooc_msgs = build_ooc_narration_messages(
         facts,
         player_msg=message,
-        max_tokens=(
-            getattr(settings, "llm_max_prompt_tokens", None) if settings else None
-        ),
+        max_tokens=(getattr(settings, "llm_max_prompt_tokens", None) if settings else None),
     )
     narration = await llm.generate_response(ooc_msgs)
     if narration is None:
@@ -132,4 +126,3 @@ async def ooc_command(inv: Invocation, opts: OocOpts):
             if bot_tx_id is not None:
                 await repos.update_transcript_status(s, bot_tx_id, "error")
         await inv.responder.send("⚠️ Failed to deliver narration.", ephemeral=True)
-
