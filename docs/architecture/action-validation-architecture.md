@@ -168,7 +168,7 @@ class ExecutionResult:
 
 * **Ontology Management.** Store and version `AffordanceTags` alongside planner prompts and contracts.
 * **Configuration Management.** Externalise feature toggles (`features.action_validation`, `features.predicate_gate`, `features.mcp`) and planner/orchestrator timeouts.
-* **Observability.** Standardise structured logs, counters (`planner.feasible`, `predicate.gate.fail_reason`, `executor.preview/apply`), and ActivityLog records (Phase 6).
+* **Observability.** Standardise structured logs, counters (`planner.feasible`, `predicate.gate.fail_reason`, `executor.preview/apply`), and ActivityLog records (Phase 6). Detailed mechanics ledger rollout tracked in [EPIC-ACTLOG-001](../implementation/epics/activitylog-mechanics-ledger.md).
 
 ## Traceability and Roadmap Alignment
 

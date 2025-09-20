@@ -138,24 +138,17 @@
   - Predicate documentation added to architecture or dev notes.
   - Tests demonstrate deterministic results.
 
-### STORY-AVA-001G — ActivityLog mechanics capture
-*Epic linkage:* Adds auditable ledger entries for mechanics decisions.
+### STORY-AVA-001G — ActivityLog integration dependency
+*Epic linkage:* Depends on Mechanics ActivityLog Enablement (EPIC-ACTLOG-001) for auditable mechanics from Phase 6 onward.
 
-- **Summary.** Record ExecutionRequest approvals in ActivityLog entries and link transcripts for traceability.
-- **Acceptance criteria.**
-  - ActivityLog entries created when ExecutionRequest approved, even if not applied.
-  - Transcript records reference ActivityLog IDs for mechanics-driven narration.
-  - E2E tests confirm /roll and /check create consistent ActivityLog payloads.
-- **Tasks.**
-  - [x] `TASK-AVA-LOG-20` — Write ActivityLog integration capturing ExecutionRequest details per plan.
-  - [x] `TASK-AVA-LINK-21` — Link transcript records to ActivityLog IDs for mechanics responses.
-  - [x] `TASK-AVA-E2E-22` — Implement E2E tests verifying ActivityLog payload stability and counters.
-- **DoR.**
-  - ActivityLog schema/ownership confirmed with data team.
-  - Privacy review scheduled for stored payloads.
-- **DoD.**
-  - Observability docs describe ActivityLog metrics and alerting.
-  - E2E fixtures stored with deterministic expectations.
+- **Summary.** Action Validation requires ActivityLog stories (ACTLOG 001A–001D minimum) to supply durable, queryable mechanics records (ExecutionRequest approvals, /roll, /check) and transcript linkage. Detailed milestones, tasks, and defenses live in EPIC-ACTLOG-001.
+- **Acceptance criteria (delegated).**
+  - ActivityLog epic Stories 001A–001D completed (flag, schema, initial integrations, transcript linkage).
+  - Feature flag `features.activity_log` remains a rollback lever; AVA tests pass with flag on/off.
+  - Cross-epic traceability updated when ActivityLog issue numbers created.
+- **Tasks (tracked in ACTLOG epic).** Former local tasks migrated and reissued with ACTLOG prefixes.
+- **DoR.** ActivityLog epic has approved taxonomy, migration, and privacy review.
+- **DoD.** AVA E2E tests observe stable ActivityLog payloads; observability docs link to ActivityLog metrics section.
 
 ### STORY-AVA-001H — MCP adapter scaffold
 *Epic linkage:* Prepares executor tooling for eventual external MCP services.
@@ -225,7 +218,7 @@
 | Story 001D | [#128](https://github.com/crashtestbrandt/Adventorator/issues/128) | Orchestrator ExecutionRequest shim. Tasks: #145-#147 |
 | Story 001E | [#129](https://github.com/crashtestbrandt/Adventorator/issues/129) | Executor adapter interoperability. Tasks: #148-#150 |
 | Story 001F | [#130](https://github.com/crashtestbrandt/Adventorator/issues/130) | Predicate Gate v0. Tasks: #151-#153 |
-| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | ActivityLog mechanics capture. Tasks: #154-#156 |
+| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | ActivityLog integration dependency (see EPIC-ACTLOG-001). |
 | Story 001H | [#132](https://github.com/crashtestbrandt/Adventorator/issues/132) | MCP adapter scaffold. Tasks: #157-#159 |
 | Story 001I | [#133](https://github.com/crashtestbrandt/Adventorator/issues/133) | Tiered planning scaffolding. Tasks: #160-#162 |
 | Story 001J | [#134](https://github.com/crashtestbrandt/Adventorator/issues/134) | Operational hardening & rollout. Tasks: #163-#165 |
