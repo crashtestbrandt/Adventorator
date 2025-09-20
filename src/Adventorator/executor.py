@@ -9,6 +9,15 @@ import structlog
 from Adventorator import repos
 from Adventorator.config import load_settings
 from Adventorator.db import session_scope
+from Adventorator.mcp import (
+    ApplyDamageRequest,
+    ComputeCheckRequest,
+    MCPClient,
+    MCPRegistry,
+    RollAttackRequest,
+)
+from Adventorator.mcp.inprocess.rules import InProcessRulesAdapter
+from Adventorator.mcp.inprocess.simulation import InProcessSimulationAdapter
 from Adventorator.metrics import inc_counter, observe_histogram
 from Adventorator.rules.checks import CheckInput, compute_check
 from Adventorator.rules.dice import DiceRNG
@@ -52,7 +61,17 @@ class Preview:
 class Executor:
     def __init__(self) -> None:
         self.registry = InMemoryToolRegistry()
+        self._mcp_registry = MCPRegistry()
+        self._mcp_registry.register_rules(InProcessRulesAdapter())
+        self._mcp_registry.register_simulation(InProcessSimulationAdapter())
+        self._mcp_client = MCPClient(self._mcp_registry)
         self._register_builtin_tools()
+
+    def _mcp_enabled(self) -> bool:
+        try:
+            return bool(load_settings().features_mcp)
+        except Exception:
+            return False
 
     def _register_builtin_tools(self) -> None:
         # roll: just echo dice mechanics using DiceRNG
@@ -79,21 +98,27 @@ class Executor:
             prof = bool(args.get("proficient", False))
             expertise = bool(args.get("expertise", False))
             prof_bonus = int(args.get("prof_bonus", 2))
-            rng = DiceRNG(seed=args.get("seed"))
-            d20 = [rng.roll("1d20").rolls[0]]
-            r = compute_check(
-                CheckInput(
-                    ability=ability,
-                    score=score,
-                    proficient=prof,
-                    expertise=expertise,
-                    proficiency_bonus=prof_bonus,
-                    dc=dc,
-                    advantage=False,
-                    disadvantage=False,
-                ),
-                d20_rolls=d20,
+            check_input = CheckInput(
+                ability=ability,
+                score=score,
+                proficient=prof,
+                expertise=expertise,
+                proficiency_bonus=prof_bonus,
+                dc=dc,
+                advantage=False,
+                disadvantage=False,
             )
+            if self._mcp_enabled():
+                r = self._mcp_client.compute_check(
+                    ComputeCheckRequest(
+                        check=check_input,
+                        seed=args.get("seed"),
+                    )
+                ).result
+            else:
+                rng = DiceRNG(seed=args.get("seed"))
+                d20 = [rng.roll("1d20").rolls[0]]
+                r = compute_check(check_input, d20_rolls=d20)
             if len(r.d20) == 3:
                 d20_str = f"d20: {r.d20[0]}/{r.d20[1]} -> {r.pick}"
             else:
@@ -156,17 +181,44 @@ class Executor:
             if dmg_mod > 10:
                 dmg_mod = 10
 
-            rules = Dnd5eRuleset(seed=seed)
-            roll = rules.make_attack_roll(
-                attack_bonus,
-                advantage=advantage,
-                disadvantage=disadvantage,
-            )
-            total = roll.total
-            d20 = int(getattr(roll, "d20_roll", total - attack_bonus))
-            is_crit = bool(getattr(roll, "is_critical_hit", False))
-            is_fumble = bool(getattr(roll, "is_critical_miss", False))
-            hit = (total >= target_ac) and not is_fumble
+            if self._mcp_enabled():
+                roll_res = self._mcp_client.roll_attack(
+                    RollAttackRequest(
+                        attack_bonus=attack_bonus,
+                        target_ac=target_ac,
+                        damage_dice=dmg_dice,
+                        damage_modifier=dmg_mod,
+                        advantage=advantage,
+                        disadvantage=disadvantage,
+                        seed=seed,
+                    )
+                )
+                total = roll_res.total
+                d20 = roll_res.d20
+                is_crit = roll_res.is_critical
+                is_fumble = roll_res.is_fumble
+                hit = roll_res.hit
+                dmg_total = roll_res.damage_total if roll_res.damage_total is not None else 0
+            else:
+                rules = Dnd5eRuleset(seed=seed)
+                roll = rules.make_attack_roll(
+                    attack_bonus,
+                    advantage=advantage,
+                    disadvantage=disadvantage,
+                )
+                total = roll.total
+                d20 = int(getattr(roll, "d20_roll", total - attack_bonus))
+                is_crit = bool(getattr(roll, "is_critical_hit", False))
+                is_fumble = bool(getattr(roll, "is_critical_miss", False))
+                hit = (total >= target_ac) and not is_fumble
+                if hit:
+                    try:
+                        dmg_roll = rules.roll_damage(dmg_dice, dmg_mod, is_critical=is_crit)
+                        dmg_total = int(getattr(dmg_roll, "total", 0))
+                    except Exception:
+                        dmg_total = 0
+                else:
+                    dmg_total = 0
 
             # Mechanics text
             lines: list[str] = []
@@ -176,12 +228,6 @@ class Executor:
 
             events: list[dict[str, Any]] = []
             if hit:
-                # Roll damage; on crit, double the dice (mod not doubled)
-                try:
-                    dmg_roll = rules.roll_damage(dmg_dice, dmg_mod, is_critical=is_crit)
-                    dmg_total = int(getattr(dmg_roll, "total", 0))
-                except Exception:
-                    dmg_total = 0
                 lines.append(f"damage: {dmg_dice}{f'+{dmg_mod}' if dmg_mod else ''} = {dmg_total}")
                 payload: dict[str, Any] = {"target": target, "amount": dmg_total}
                 if attacker:
@@ -235,6 +281,24 @@ class Executor:
             target = str(args.get("target", ""))
             amount = int(args.get("amount", 0))
             mech = f"Apply {amount} damage to {target}"
+            if self._mcp_enabled():
+                current_hp = args.get("current_hp")
+                temp_hp = args.get("temp_hp")
+                try:
+                    cur_hp_int = int(current_hp) if current_hp is not None else None
+                except Exception:
+                    cur_hp_int = None
+                try:
+                    temp_hp_int = int(temp_hp) if temp_hp is not None else None
+                except Exception:
+                    temp_hp_int = None
+                self._mcp_client.apply_damage(
+                    ApplyDamageRequest(
+                        amount=amount,
+                        current_hp=cur_hp_int,
+                        temp_hp=temp_hp_int,
+                    )
+                )
             return {
                 "mechanics": mech,
                 "events": [

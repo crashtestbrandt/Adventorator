@@ -12,7 +12,7 @@ Below is (1) a code-level progress review against ARCH-AVA-001 and Epic stories,
 - Orchestrator ExecutionRequest Shim (Phase 4): ExecutionRequest built conditionally (`feature_action_validation`) with PlanStep derivation for check/attack/condition actions. Tests: test_orchestrator_phase3.py, test_orchestrator_attack.py, test_action_validation_executor_phase4.py validate presence and tool chain round trip.
 - Executor Interop Adapter: Conversion helpers `execution_request_from_tool_chain` and `tool_chain_from_execution_request` implemented and tested (test_action_validation_schemas.py, test_action_validation_executor_phase4.py). Adapter used in orchestrator when previewing with executor flag.
 - ActivityLog (Phase 6 dependency): Orchestrator writes ActivityLog entries when `features_activity_log` and `features_action_validation` enabled (see lines ~664–713 in orchestrator.py). Counters for failures exist. Full ActivityLog epic cross-links not reviewed here but integration hook is present.
-- MCP Adapters (Phase 7 future): No MCP modules yet. Only flag `features_mcp` exists; search shows no adapter scaffolding → STORY-AVA-001H tasks outstanding.
+- MCP Adapters (Phase 7): In-process adapters live under `src/Adventorator/mcp/` with contracts in `contracts/mcp/`. `Executor` routes checks, attacks, and damage through the MCP client when `features_mcp` is enabled; parity tests cover legacy vs MCP paths (`tests/test_mcp_executor_parity.py`).
 - Tiered Planning (Phase 8/9 future): Only single-step logic; no tier selection scaffolding or guards population logic yet → STORY-AVA-001I tasks outstanding.
 - Operational Hardening: Planner timeout (`planner_timeout_seconds`) present. No explicit payload size bounding or executor-specific timeout/payload controls yet → parts of `TASK-AVA-TIMEOUT-29` pending. Rollout runbook & extended metrics not visible in repo → `TASK-AVA-RUNBOOK-31` pending; expanded metrics taxonomy (`TASK-AVA-METRIC-30`) partially incomplete (missing feasibility & executor apply counters).
 - Observability Gaps: 
@@ -100,7 +100,7 @@ Below is (1) a code-level progress review against ARCH-AVA-001 and Epic stories,
 - Local Dev UX: Dual env file pattern implemented; documentation now explicit about precedence and separation, reducing onboarding ambiguity.
 - Reliability: Follow-up override gating verified; prevents accidental hijack of real Discord interactions while preserving deterministic local visibility.
 - Observability: Predicate gate metrics comprehensive; clear, enumerated gaps now captured in matrix to drive next instrumentation sprint.
-- Remaining Gaps: Metrics (feasibility, executor success/failure, activity_log.write.ok), guards/repairs population, AskReport production, MCP adapter scaffold, payload/time bounding, golden serialization tests.
+- Remaining Gaps: Metrics (feasibility, executor success/failure, activity_log.write.ok), guards/repairs population, AskReport production, payload/time bounding, golden serialization tests.
 - Recommended Immediate Next Actions: (1) Implement feasibility + executor preview counters, (2) add `activity_log.write.ok`, (3) scaffold minimal guard objects with serialization test, (4) introduce repair suggestion for common predicate failures.
 
 **Fresh Clone Validation Guide**

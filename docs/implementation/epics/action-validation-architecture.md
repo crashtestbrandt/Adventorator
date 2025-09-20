@@ -160,15 +160,15 @@
   - Executor uses MCP adapters internally without network I/O when flag enabled.
   - Unit tests compare MCP adapter results with direct rules calls.
 - **Tasks.**
-  - [ ] `TASK-AVA-MCP-23` — Specify MCP interface modules and placeholder implementations. *(Not started; only `features.mcp` flag stub exists.)*
-  - [ ] `TASK-AVA-EXEC-24` — Update executor tool handlers to call MCP adapters when flag enabled.
-  - [ ] `TASK-AVA-TEST-25` — Add tests confirming MCP adapters produce identical results to direct calls.
+  - [x] `TASK-AVA-MCP-23` — Specify MCP interface modules and placeholder implementations. In-process adapters live under `src/Adventorator/mcp/` with contracts versioned in `contracts/mcp/`.
+  - [x] `TASK-AVA-EXEC-24` — Update executor tool handlers to call MCP adapters when flag enabled. `Executor` now resolves checks, attacks, and damage via `MCPClient` when `features.mcp` is true.
+  - [x] `TASK-AVA-TEST-25` — Add tests confirming MCP adapters produce identical results to direct calls (`tests/test_mcp_executor_parity.py`).
 - **DoR.**
   - MCP contract reviewed with systems architecture stakeholders.
   - Test comparison cases enumerated.
 - **DoD.**
   - MCP adapter documentation added to architecture doc.
-  - Tests run in CI covering adapter parity.
+  - Tests run in CI covering adapter parity (`tests/test_mcp_executor_parity.py`).
 
 ### STORY-AVA-001I — Tiered planning scaffolding
 *Epic linkage:* Lays groundwork for multi-step planning while keeping Level 1 behavior.

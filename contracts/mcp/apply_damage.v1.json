@@ -1,0 +1,36 @@
+{
+  "openapi": "3.1.0",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "rules.apply_damage.v1",
+  "description": "Contract for applying damage to a hit point pool via MCP adapters.",
+  "type": "object",
+  "properties": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "amount": {"type": "integer"},
+        "current_hp": {"type": ["integer", "null"], "description": "HP prior to damage."},
+        "temp_hp": {
+          "type": ["integer", "null"],
+          "description": "Temporary HP available before applying damage."
+        }
+      },
+      "required": ["amount"]
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "remaining_hp": {
+          "type": ["integer", "null"],
+          "description": "HP remaining after damage is applied."
+        },
+        "remaining_temp_hp": {
+          "type": ["integer", "null"],
+          "description": "Temporary HP remaining after damage is applied."
+        }
+      },
+      "required": ["remaining_hp", "remaining_temp_hp"]
+    }
+  },
+  "required": ["request", "response"]
+}

@@ -4,13 +4,13 @@
 ADR-0004 — MCP adapter architecture for Action Validation executor integration
 
 ## Status
-Proposed — 2025-02-14 (Owner: Action Validation Working Group)
+Accepted — 2025-02-14 (Owner: Action Validation Working Group)
 
 ## Context
 Phase 7 of [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implementation/epics/action-validation-architecture.md) requires STORY-AVA-001H to introduce Multi-Component Protocol (MCP) adapters so the executor can route deterministic tool calls through a swap-friendly interface. Today the executor directly invokes rules and simulation helpers, bypassing the MCP contracts documented in [ARCH-AVA-001 — Action Validation Architecture](../architecture/action-validation-architecture.md). Only the `features.mcp` flag exists; no adapter modules, contracts, or tests enforce parity with the existing tool chain behavior. We must define the in-process MCP architecture now to unblock adapter scaffolding while keeping forward compatibility for future out-of-process MCP servers.
 
 ## Decision
-- Introduce a dedicated MCP client layer inside the executor that mediates all tool execution when `features.mcp` is enabled. The client wraps each `ExecutionRequest` step, resolves the correct MCP adapter, and handles retry/metrics concerns before delegating to the underlying server shim.
+- Introduce a dedicated MCP client layer inside the executor that mediates all tool execution when `features.mcp` is enabled. The client wraps each `ExecutionRequest` step, resolves the correct MCP adapter, and handles retry/metrics concerns before delegating to the underlying server shim. (Implemented in `src/Adventorator/mcp/client.py`.)
 - Define adapter interfaces under `src/Adventorator/mcp/`:
   - `interfaces.py` specifies synchronous/async call signatures for deterministic rule operations (`apply_damage`, `roll_attack`, `compute_check`) and simulation hooks (placeholder `raycast`).
   - `registry.py` maps tool identifiers to adapter implementations and guards unknown tools with explicit feature-flagged errors.
