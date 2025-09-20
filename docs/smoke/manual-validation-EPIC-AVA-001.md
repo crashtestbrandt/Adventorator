@@ -1,4 +1,7 @@
+# Manual Validation Runbook for [EPIC-AVA-001 (Action Validation Architecture)](../implementation/action-validation-implementation.md)
+
 **Overview**
+
 Below is (1) a code-level progress review against ARCH-AVA-001 and Epic stories, then (2) a detailed from-scratch validation guide (fresh clone → configure → run → smoke tests via web CLI and Discord). Gaps and next actions are clearly flagged.
 
 **Progress Review (Architecture → Implementation)**
