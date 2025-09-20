@@ -409,9 +409,11 @@ async def run_orchestrator(
     if not out:
         inc_counter("llm.parse.failed")
         log.warning("llm.parse.failed", scene_id=scene_id)
+        # Map internal code to user-friendly text
+        friendly = "I couldn't generate a structured preview. Try rephrasing or a simpler action."
         return _complete(
             OrchestratorResult(
-                mechanics="Unable to generate a proposal.",
+                mechanics=friendly,
                 narration="",
                 rejected=True,
                 reason="llm_invalid_or_empty",
@@ -429,9 +431,13 @@ async def run_orchestrator(
             proposal=out.proposal.model_dump(),
             narration=out.narration,
         )
+        # Provide a clearer message for validation failures
+        readable = {
+            "llm_invalid_or_empty": "No usable preview was produced.",
+        }.get(why, "Preview validation failed. Adjust your phrasing and try again.")
         return _complete(
             OrchestratorResult(
-                mechanics="Proposal rejected: invalid",
+                mechanics=readable,
                 narration="",
                 rejected=True,
                 reason=why,

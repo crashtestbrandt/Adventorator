@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-
 import structlog
 from pydantic import Field
 
@@ -218,6 +217,11 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
 
     if not out:
         inc_counter("planner.parse_failed")
+        inc_counter("planner.decision.rejected")
+        from Adventorator.action_validation.metrics import record_planner_failure
+
+        record_planner_failure("parse")
+        log_event("planner", "failed", reason="parse")
         await inv.responder.send("⚠️ I couldn't figure out a valid command.", ephemeral=True)
         return
 
@@ -228,6 +232,9 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
     if not _is_allowed(cmd_name_flat):
         inc_counter("planner.decision.rejected")
         inc_counter("planner.allowlist.rejected")
+        from Adventorator.action_validation.metrics import record_planner_failure
+
+        record_planner_failure("allowlist")
         log_rejection(
             "planner",
             reason="allowlist",
@@ -260,6 +267,13 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
             )
         log_event("predicate_gate", "initiated", cmd=cmd_name_flat, scene_id=scene_id)
         gate_result = await evaluate_predicates(out, context=ctx)
+        log_event(
+            "predicate_gate",
+            "evaluated",
+            cmd=cmd_name_flat,
+            ok=gate_result.ok,
+            failure_count=len(getattr(gate_result, "failed", []) or []),
+        )
         record_predicate_gate_outcome(ok=gate_result.ok)
         if not gate_result.ok:
             plan_obj = plan_from_planner_output(out)
@@ -271,6 +285,16 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
                 }
             )
             plan_registry.register_plan(plan_obj)
+            try:
+                log_event(
+                    "planner",
+                    "plan_created",
+                    plan_id=plan_obj.plan_id,
+                    feasible=plan_obj.feasible,
+                    step_count=len(plan_obj.steps),
+                )
+            except Exception:
+                pass
             log_rejection(
                 "predicate_gate",
                 reason="failed",
@@ -297,6 +321,9 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
                 failure_count=len(gate_result.failed),
             )
             inc_counter("planner.decision.rejected")
+            from Adventorator.action_validation.metrics import record_planner_failure
+
+            record_planner_failure("predicate")
             reason = gate_result.failed[0].message if gate_result.failed else "Action not feasible."
             await inv.responder.send(f"🛑 {reason}", ephemeral=True)
             return
@@ -307,6 +334,9 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         option_obj = cmd.option_model.model_validate(out.args)  # type: ignore[attr-defined]
     except Exception as e:
         inc_counter("planner.decision.rejected")
+        from Adventorator.action_validation.metrics import record_planner_failure
+
+        record_planner_failure("arg_validation")
         log_rejection("planner", reason="arg_validation", cmd=cmd_name_flat, error=str(e))
         guidance: str | None = None
         if cmd_name_flat in {"sheet.create"}:
@@ -350,8 +380,43 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         if plan_obj is None:
             plan_obj = plan_from_planner_output(out)
         plan_registry.register_plan(plan_obj)
+        try:
+            log_event(
+                "planner",
+                "plan_created",
+                plan_id=plan_obj.plan_id,
+                feasible=plan_obj.feasible,
+                step_count=len(plan_obj.steps),
+            )
+        except Exception:
+            pass
         record_plan_steps(plan_obj)
         log_event("planner", "plan_built", plan_id=plan_obj.plan_id, feasible=plan_obj.feasible)
+        # Rich preview: show steps before executing handler with synthesized descriptions
+        try:
+            if plan_obj.steps:
+                preview_lines = ["🧭 Plan Preview:"]
+                for i, step in enumerate(plan_obj.steps, 1):
+                    desc = getattr(step, "description", None) or getattr(step, "action", None)
+                    if not desc:
+                        try:
+                            arg_snippet = " ".join(
+                                f"{k}={v}" for k, v in list(getattr(step, "args", {}).items())[:3]
+                            )
+                        except Exception:
+                            arg_snippet = ""
+                        if arg_snippet:
+                            desc = f"{step.op} {arg_snippet}".strip()
+                        else:
+                            desc = step.op
+                    preview_lines.append(f"{i}. {str(desc)[:160]}")
+                if getattr(plan_obj, "failed_predicates", None):
+                    preview_lines.append("(Failed predicates present; plan may be infeasible.)")
+                await inv.responder.send("\n".join(preview_lines), ephemeral=True)
+            else:
+                await inv.responder.send("(No steps generated; executing directly.)", ephemeral=True)
+        except Exception:
+            pass
         log_event(
             "planner",
             "completed",
@@ -381,7 +446,10 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         llm_client=inv.llm_client,
         ruleset=inv.ruleset,
     )
+    # Activity log style events around executor phases
+    log_event("executor", "preview_invoke", cmd=cmd_name_flat)
     await cmd.handler(new_inv, option_obj)
+    log_event("executor", "applied", cmd=cmd_name_flat)
     # Fallback: Some legacy planned commands may be no-ops (e.g., roll routed internally
     # without emitting a follow-up). To avoid silent CLI experience, send a minimal
     # confirmation if nothing has been sent yet. We approximate by emitting only for

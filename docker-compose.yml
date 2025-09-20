@@ -2,10 +2,8 @@ services:
   db:
     image: postgres:16
     container_name: adventorator-db
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+    # Load credentials from the shared env file so they are configurable
+    env_file: .env.docker
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
@@ -23,9 +21,12 @@ services:
     # This environment block overrides variables from the env file
     # specifically for this container.
     environment:
-      # Tell the app to connect to the 'db' service hostname instead of 'localhost'.
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - LLM_API_URL=${LLM_API_URL:-http://ollama:11434}
+      # Only override values that differ in-container. DATABASE_URL comes from env_file directly
+      # to avoid docker compose variable-substitution warnings during 'compose exec'.
+      LLM_API_URL: ${LLM_API_URL:-http://ollama:11434}
+      # If you need to temporarily point at a different Postgres instance, override DATABASE_URL
+      # here or export it before 'docker compose up'. Keeping it out avoids accidental empty
+      # interpolation when POSTGRES_* are unset.
     depends_on:
       db:
         condition: service_healthy
