@@ -22,6 +22,11 @@ TRACE_HEADER = "## Traceability Log"
 STORY_KEY_PATTERN = re.compile(r"STORY-AVA-(001[A-J])")
 TASK_KEY_PATTERN = re.compile(r"TASK-AVA-[A-Z]+-\d+")
 
+# Generic patterns
+GENERIC_STORY_HEADING = re.compile(r"^### (STORY-[A-Z]+-\d{3}[A-Z])\b.*", re.MULTILINE)
+GENERIC_TASK_ID = re.compile(r"`(TASK-[A-Z]+-[A-Z0-9]+-\d+)`")
+GENERIC_EPIC_ID = re.compile(r"^# (EPIC-[A-Z]+-\d{3})\b")
+
 def gh_issues_search(query: str) -> list[dict]:
     out = subprocess.check_output([
         "gh","search","issues",query,
@@ -80,7 +85,7 @@ def gh_issue(number: int) -> dict:
     out = subprocess.check_output(["gh", "issue", "view", str(number), "--json", "number,title,state"], text=True)
     return json.loads(out)
 
-def build_table() -> str:
+def build_table_ava() -> str:
     rows = []
     epic = gh_issue(124)
     rows.append(f"| Epic Issue | [#124](https://github.com/{REPO}/issues/124) | {epic['title'].replace('[Epic] ','')}. |")
@@ -96,6 +101,76 @@ def build_table() -> str:
             tasks_segment = "(no tasks)"
         rows.append(f"| Story {story_key} | [#{story_issue}]({story_issue_url}) | {story_title}. Tasks: {tasks_segment} |")
     header = "| Artifact | Link | Notes |\n| --- | --- | --- |"
+    return header + "\n" + "\n".join(rows)
+
+
+def gh_search_single(code: str) -> dict | None:
+    """Return first issue whose title contains the exact code (e.g. STORY-CORE-001A)."""
+    try:
+        issues = gh_issues_search(code)
+    except subprocess.CalledProcessError:
+        return None
+    for issue in issues:
+        if code in issue.get("title", ""):
+            return issue
+    return None
+
+
+def parse_epic_doc(epic_doc: Path) -> dict:
+    text = epic_doc.read_text()
+    epic_match = GENERIC_EPIC_ID.search(text)
+    epic_code = epic_match.group(1) if epic_match else None
+    stories: list[dict] = []
+    # Find story headings and slice sections
+    story_iter = list(GENERIC_STORY_HEADING.finditer(text))
+    for idx, m in enumerate(story_iter):
+        story_code = m.group(1)
+        start = m.end()
+        end = story_iter[idx + 1].start() if idx + 1 < len(story_iter) else len(text)
+        block = text[start:end]
+        task_ids = [t for t in GENERIC_TASK_ID.findall(block)]
+        stories.append({"code": story_code, "tasks": task_ids})
+    return {"epic_code": epic_code, "stories": stories}
+
+
+def build_table_generic(epic_doc: Path) -> str:
+    parsed = parse_epic_doc(epic_doc)
+    epic_code = parsed.get("epic_code")
+    rows: list[str] = []
+    header = "| Artifact | Link | Notes |\n| --- | --- | --- |"
+    # Epic issue lookup
+    if epic_code:
+        epic_issue = gh_search_single(epic_code)
+        if epic_issue:
+            rows.append(f"| Epic Issue | [#{epic_issue['number']}](https://github.com/{REPO}/issues/{epic_issue['number']}) | {epic_issue['title'].replace('[Epic] ', '')}. |")
+        else:
+            rows.append("| Epic Issue | _Pending_ | Create via Feature Epic template and link here. |")
+    else:
+        rows.append("| Epic Issue | _Pending_ | Epic code not detected in doc header. |")
+    for story in parsed["stories"]:
+        story_code_full = story["code"]  # e.g. STORY-CORE-001A
+        # Display trailing numeric+letter (001A) like AVA table for consistency
+        short_key = story_code_full[-4:]
+        story_issue = gh_search_single(story_code_full)
+        if story_issue:
+            # collect task issue numbers
+            task_issue_numbers: list[int] = []
+            for task_id in story["tasks"]:
+                ti = gh_search_single(task_id)
+                if ti:
+                    task_issue_numbers.append(ti["number"])
+            task_issue_numbers.sort()
+            if task_issue_numbers:
+                if len(task_issue_numbers) >= 2 and max(task_issue_numbers) - min(task_issue_numbers) + 1 == len(task_issue_numbers):
+                    tasks_segment = f"#{min(task_issue_numbers)}-#{max(task_issue_numbers)}"
+                else:
+                    tasks_segment = ", ".join(f"#{n}" for n in task_issue_numbers)
+            else:
+                tasks_segment = "(no tasks)"
+            story_title = story_issue['title'].replace('[Story] ', '')
+            rows.append(f"| Story {short_key} | [#{story_issue['number']}](https://github.com/{REPO}/issues/{story_issue['number']}) | {story_title}. Tasks: {tasks_segment} |")
+        else:
+            rows.append(f"| Story {short_key} | _Pending_ | Create Story issue referencing this doc. |")
     return header + "\n" + "\n".join(rows)
 
 def update_file(epic_doc: Path, table: str) -> None:
@@ -120,7 +195,10 @@ def main():
         epic_paths = [Path(args.epic)]
     exit_code = 0
     for epic_doc in epic_paths:
-        table = build_table()  # currently only AVA-aware; future: parse epic_doc name for filtering
+        if epic_doc == DEFAULT_EPIC:
+            table = build_table_ava()
+        else:
+            table = build_table_generic(epic_doc)
         if args.verify:
             current = epic_doc.read_text()
             if table in current:
