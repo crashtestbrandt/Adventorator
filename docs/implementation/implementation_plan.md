@@ -1,6 +1,10 @@
-# Implementation Plan — Phase Descriptions
+# (Deprecated) Implementation Plan — Phase Descriptions
 
-This document aggregates the “Phase N” issues from GitHub with their full descriptions for easy reference. Each section links back to the original issue.
+> NOTE: This file is retained as a historical snapshot generated from GitHub issues. The authoritative forward-looking roadmap now lives at `ROOT/ROADMAP.md`.
+>
+> Active epics and their current statuses: see `docs/implementation/epics/` and the roadmap. Update statuses in the roadmap (not here) when work advances.
+
+This document aggregates the previously defined “Phase N” issues from GitHub with their full descriptions for historical reference. Each section links back to the original issue.
 
 ## Phase 0 — Project skeleton & safety rails (no gameplay) ([#15](https://github.com/crashtestbrandt/Adventorator/issues/15)) — status: closed
 
