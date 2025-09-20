@@ -3,13 +3,13 @@ name: Traceability Check
 on:
   pull_request:
     paths:
-      - 'docs/implementation/epics/action-validation-architecture.md'
+      - 'docs/implementation/epics/EPIC-AVA-001-action-validation-architecture.md'
       - 'scripts/update_action_validation_traceability.py'
   push:
     branches:
       - main
     paths:
-      - 'docs/implementation/epics/action-validation-architecture.md'
+      - 'docs/implementation/epics/EPIC-AVA-001-action-validation-architecture.md'
       - 'scripts/update_action_validation_traceability.py'
 
 jobs:
