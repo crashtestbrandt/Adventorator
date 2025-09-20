@@ -48,6 +48,39 @@ This playbook documents budgets, metrics, and rollout/rollback guidance required
 - **Traces.** Add span `encounter.advance` attached to executor apply flows.
 - **Dashboards.** Grafana panels: "Encounter load", "Turn conflicts", "Round duration". Attach mock screenshot or JSON export to STORY-ENC-002B.
 
+## Feature Flag Dependencies
+
+| Flag | Depends On | Provides | Notes |
+| ---- | ---------- | -------- | ----- |
+| `features.action_validation` | `features.planner` (logical), optional `features.predicate_gate` | Wraps legacy planner/orchestrator/executor with Plan & ExecutionRequest | Safe disable reverts to legacy flow |
+| `features.predicate_gate` | `features.planner` | Deterministic feasibility | When off, `Plan.feasible` always True (legacy path) |
+| `features.mcp` | `features.action_validation` | MCP adapter routing | Off → direct rules path |
+| `features.activity_log` | (none) | Mechanics ledger entries | Independent; enriches observability |
+| `features.executor_confirm` | `features.executor` | Confirmation safety layer | Enforced for mutating apply |
+| `features.combat` | `features.executor` (indirect for apply paths) | Encounter turn engine | Disable pauses encounters gracefully |
+| `features.retrieval.enabled` | (none) | Retrieval augmentation | Provider sub-flag selects backend |
+| `features.retrieval.provider` | `features.retrieval.enabled` | Backend selection | Changing may shift latency |
+
+## Normalized Metric Namespace
+
+| Domain | Legacy Metric (if any) | Normalized Name | Type | Key Labels |
+| ------ | --------------------- | --------------- | ---- | ---------- |
+| Planner | `planner.request.initiated` | `planner.request.count` | counter | outcome=`ok|error` |
+| Planner | `planner.catalog.drift` | `planner.catalog.drift` | gauge | n/a |
+| Predicate Gate | (n/a) | `predicate.gate.result` | counter | result=`ok|fail`, reason (bounded) |
+| Orchestrator | `orchestrator.request.total` | `orchestrator.request.count` | counter | outcome=`accepted|rejected` |
+| Orchestrator | `llm.defense.rejected` | (merged into above) | (removed) | Use outcome+reason labels |
+| Executor | `executor.preview.duration_ms` | `executor.preview.seconds` | histogram | status=`ok|error` |
+| Executor | `executor.apply.duration_ms` | `executor.apply.seconds` | histogram | status=`ok|error` |
+| Executor | `executor.toolchain.validation` | `executor.toolchain.validation` | counter | result=`passed|failed` |
+| Executor | `locks.wait_ms` | `executor.lock.wait.seconds` | histogram | resource=`encounter|combatant|global` |
+| ExecutionRequest | (n/a) | `executor.execution_request.steps.count` | histogram | n/a |
+| ActivityLog | (n/a) | `activity_log.entry.count` | counter | type=`mechanics` |
+| Encounter | `encounter.turn.advance` | `encounter.turn.advance.count` | counter | result=`success|conflict` |
+| Encounter | `encounter.round.duration_ms` | `encounter.round.duration.seconds` | histogram | n/a |
+
+Adopt normalized names in new code; migrate legacy names opportunistically with dual-publish if dashboards depend on them.
+
 ## Feature Flag Runbooks
 
 | Flag | Purpose | Rollout Stages | Rollback |

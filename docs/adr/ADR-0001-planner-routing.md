@@ -31,3 +31,26 @@ The `/plan` command delegates free-form player intent to the AI planner. The pla
 - [EPIC-CORE-001 — Core AI Systems Hardening](../implementation/epics/core-ai-systems.md)
 - [`core-systems-context.puml`](../architecture/core-systems-context.puml)
 - Planner module: [`src/Adventorator/planner.py`](../../src/Adventorator/planner.py)
+
+## Post-AVA Evolution (2025-09)
+The Action Validation architecture (ARCH-AVA-001) supersedes the bare `PlannerOutput {command,args}` shape with a richer, versioned `Plan` contract:
+
+| Legacy Concept | Current Equivalent | Notes |
+| -------------- | ------------------ | ----- |
+| `PlannerOutput.command` | `Plan.steps[0].op` | Level 1 planning restricts to a single step. |
+| `PlannerOutput.args` | `Plan.steps[0].args` | Preserves argument schema; validated against command registry. |
+| (none) | `Plan.feasible` / `failed_predicates` | Introduced via Predicate Gate (flag: `features.predicate_gate`). |
+| (none) | `Plan.rationale`, `repairs`, `alternatives` | Adds explainability & remediation hints. |
+| (none) | `PlanStep.guards` | Placeholder for future tiered planning (HTN/GOAP). |
+
+Implications:
+- Catalog drift validation now serves both slash command schema and `PlanStep` argument validation; this ADR remains authoritative for catalog governance while deferring execution semantics to ARCH-AVA-001.
+- Stories SHOULD reference the `Plan` abstraction; new usages of `PlannerOutput` are discouraged and will be linted.
+- Feature flag alignment: enabling `features.action_validation` transparently wraps the legacy planner output into a single-step `Plan` while preserving existing downstream behavior.
+
+Migration Guidance:
+1. Replace internal references to `PlannerOutput` with `Plan` (Level 1 assumption: exactly one `PlanStep`).
+2. Surface predicate failures through the `Plan` rather than ad-hoc rejection messages.
+3. When adding new commands, update the catalog and ensure `PlanStep` serialization tests cover argument defaults.
+
+This section deprecates the term `PlannerOutput` except when referring to historical context in this ADR.

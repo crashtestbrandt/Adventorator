@@ -155,6 +155,13 @@ class ExecutionResult:
     events: list[dict]
     state_delta: dict
     narration_cues: list[str]
+
+### Legacy Contract Evolution
+
+- Replaces legacy `PlannerOutput` (ADR-0001) with single-step `Plan` (Level 1) while preserving command catalog validation.
+- Introduces `ExecutionRequest` as intermediary replacing direct ToolChain handoff described in ADR-0003.
+- Ensures event ledger + ActivityLog entries reference `plan_id` for replay integrity.
+- See amended sections in ADR-0001 (Post-AVA Evolution) and ADR-0003 (Integration with Action Validation) for migration specifics.
 ```
 
 ## Operational Considerations

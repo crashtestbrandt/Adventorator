@@ -18,15 +18,16 @@
 
 **Definition of Done.**
 - Combat mechanics covered by integration tests recorded in Story issues.
-- Observability dashboards updated per story acceptance criteria.
-- Feature flag lifecycle documented with rollout + rollback commands.
+- Observability dashboards updated per story acceptance criteria (metric names per normalized namespace in Observability & Feature Flag Playbook).
+- Feature flag lifecycle documented with rollout + rollback commands (reuse central runbook template; do not duplicate logic here).
+- Turn transition events reference `ExecutionRequest.plan_id` and ActivityLog IDs when Action Validation is enabled.
 
 ## Stories
 
-### STORY-ENC-002A — Initiative and turn validation
+### STORY-ENC-002A — Initiative and turn validation (ExecutionRequest integration)
 *Epic linkage:* Ensures deterministic transitions during setup and combat.
 
-- **Summary.** Harden initiative ordering, active combatant selection, and concurrency controls.
+- **Summary.** Harden initiative ordering, active combatant selection, and concurrency controls; annotate emitted events with `plan_id` and ActivityLog linkage when available.
 - **Acceptance criteria.**
   - Database constraints prevent duplicate initiative rows per combatant.
   - Concurrency tests show idempotent turn advance operations.
@@ -42,10 +43,10 @@
   - Tests capture before/after snapshots in `tests/integration/`.
   - Event ledger docs show emitted events for each transition.
 
-### STORY-ENC-002B — Encounter observability and alerts
+### STORY-ENC-002B — Encounter observability and alerts (normalized metrics)
 *Epic linkage:* Connects combat operations to metrics and dashboards.
 
-- **Summary.** Define metrics, logs, and traces for encounter flows with budgets and alerts.
+- **Summary.** Define metrics, logs, and traces for encounter flows with budgets and alerts using normalized metric names (e.g., `encounter.turn.advance.count`, `encounter.round.duration.seconds`). Avoid redefining shared metrics.
 - **Acceptance criteria.**
   - Metrics taxonomy recorded in [Observability & Feature Flags](../observability-and-flags.md#encounter-observability-budget).
   - Grafana dashboard mock linked in Story issue; alert thresholds defined.
@@ -61,10 +62,10 @@
   - Dashboard PRD attached to Story issue.
   - Logging fields reviewed for PII and compliance.
 
-### STORY-ENC-002C — Feature flag graduation plan
+### STORY-ENC-002C — Feature flag graduation plan (central runbook reuse)
 *Epic linkage:* Drives safe rollout of encounter capabilities.
 
-- **Summary.** Create a staged rollout plan for the `combat` feature flag with kill-switch automation.
+- **Summary.** Create a staged rollout plan for the `combat` feature flag with kill-switch automation referencing central flag dependency matrix and runbook template.
 - **Acceptance criteria.**
   - Runbook defines percentage cohorts and monitoring requirements.
   - Automation script toggles flag across environments via configuration store.

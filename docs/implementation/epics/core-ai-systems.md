@@ -12,10 +12,10 @@
 - [ADR-0003 — Executor preview/apply contract](../../adr/ADR-0003-executor-preview-apply.md)
 - [Core systems C4 context](../../architecture/core-systems-context.md)
 
-**Definition of Ready.** Stories entering sprint planning must satisfy the cross-team DoR in [AIDD DoR/DoD Rituals](../dor-dod-guide.md) plus:
-- Planner, orchestrator, and executor contract changes enumerated with semantic version impacts.
-- Updated prompts checked into `prompts/` with version tags.
-- Rollback plan for the affected feature flags.
+**Definition of Ready.** Stories must meet cross-team DoR plus:
+- Contract deltas enumerated with version impacts (catalog governance lives in ADR-0001; do not restate mechanics here).
+- Updated prompts committed with version tags referencing catalog version.
+- Rollback plan for affected feature flags.
 
 **Definition of Done.** Beyond the repo-wide DoD, this epic requires:
 - Contract tests for planner output, orchestrator defenses, and executor tool schemas run in CI.
@@ -24,10 +24,10 @@
 
 ## Stories
 
-### STORY-CORE-001A — Planner command catalog health
+### STORY-CORE-001A — Planner command catalog health (superseded semantics)
 *Epic linkage:* Keeps `/plan` outputs aligned with available commands.
 
-- **Summary.** Add validation ensuring the planner catalog mirrors slash commands, with automated prompts to guard drift.
+- **Summary.** Ensure ongoing alignment with catalog (validation framework now standardized by Action Validation `Plan` abstraction; focus this story on maintenance and evaluation harness quality, not re-implementing feasibility predicates).
 - **Acceptance criteria.**
   - Catalog refresh job detects new commands within CI runs.
   - Planner prompt references current command metadata; snapshot stored under `prompts/planner/`.
@@ -44,10 +44,10 @@
   - Prompt registry tag incremented and referenced from Story issue.
   - Observability docs updated with planner metrics guardrails.
 
-### STORY-CORE-001B — Orchestrator defense coverage
+### STORY-CORE-001B — Orchestrator defense coverage (align with Predicate Gate)
 *Epic linkage:* Ensures AI narration is constrained by deterministic rules.
 
-- **Summary.** Extend orchestrator defenses for actor validation and banned verbs, and document rejection analytics.
+- **Summary.** Extend orchestrator defenses (policy layer) while avoiding duplication of deterministic feasibility handled by Predicate Gate (see STORY-AVA-001F).
 - **Acceptance criteria.**
   - Defense matrix recorded in [ADR-0002](../../adr/ADR-0002-orchestrator-defenses.md) stays current.
   - Automated tests cover each rejection path and feed dashboards.
@@ -64,10 +64,10 @@
   - Security review signs off on logged fields.
   - Story PR references validated ADR and contracts.
 
-### STORY-CORE-001C — Executor deterministic replay
+### STORY-CORE-001C — Executor deterministic replay (ExecutionRequest aware)
 *Epic linkage:* Maintains integrity of preview/apply lifecycle.
 
-- **Summary.** Capture executor tool chains as immutable events and surface replay tooling.
+- **Summary.** Capture executor tool chains (now emitted via `ExecutionRequest`) as immutable events and surface replay tooling.
 - **Acceptance criteria.**
   - Events ledger records tool chains with versioned schema.
   - Replay CLI can regenerate previews for auditing.
