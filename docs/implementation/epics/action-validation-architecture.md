@@ -211,16 +211,7 @@
 
 | Artifact | Link | Notes |
 | --- | --- | --- |
-| Epic Issue | [#124](https://github.com/crashtestbrandt/Adventorator/issues/124) | Action Validation Pipeline Enablement. |
-| Story 001A | [#125](https://github.com/crashtestbrandt/Adventorator/issues/125) | Contracts & feature flags. Tasks: #135-#138 |
-| Story 001B | [#126](https://github.com/crashtestbrandt/Adventorator/issues/126) | Logging & metrics. Tasks: #139-#141 |
-| Story 001C | [#127](https://github.com/crashtestbrandt/Adventorator/issues/127) | Planner Plan contract. Tasks: #142-#144 |
-| Story 001D | [#128](https://github.com/crashtestbrandt/Adventorator/issues/128) | Orchestrator ExecutionRequest shim. Tasks: #145-#147 |
-| Story 001E | [#129](https://github.com/crashtestbrandt/Adventorator/issues/129) | Executor adapter interoperability. Tasks: #148-#150 |
-| Story 001F | [#130](https://github.com/crashtestbrandt/Adventorator/issues/130) | Predicate Gate v0. Tasks: #151-#153 |
-| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | ActivityLog integration dependency (see EPIC-ACTLOG-001). |
-| Story 001H | [#132](https://github.com/crashtestbrandt/Adventorator/issues/132) | MCP adapter scaffold. Tasks: #157-#159 |
-| Story 001I | [#133](https://github.com/crashtestbrandt/Adventorator/issues/133) | Tiered planning scaffolding. Tasks: #160-#162 |
-| Story 001J | [#134](https://github.com/crashtestbrandt/Adventorator/issues/134) | Operational hardening & rollout. Tasks: #163-#165 |
+| Epic Issue | [#124](https://github.com/crashtestbrandt/Adventorator/issues/124) | EPIC-AVA-001 Action Validation Pipeline Enablement. |
+| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | STORY-AVA-001G ActivityLog mechanics capture. Tasks: #154 |
 
 Update the table as GitHub issues are created to preserve AIDD traceability.
