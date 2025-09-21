@@ -1,4 +1,4 @@
-from Adventorator.ask.contracts import AffordanceTag, AskReport, IntentFrame
+from Adventorator.schemas import AffordanceTag, AskReport, IntentFrame
 
 
 def test_ask_report_round_trip_minimal():
