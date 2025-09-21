@@ -2,7 +2,7 @@
 
 Status: Proposed (MVP scope locked)  
 Last Updated: 2025-09-21  
-Related Architecture: [ARCH-AVA-001](../architecture/ARCH-CDA-001-campaign-data-architecture.md) (Action Validation Pipeline)  
+Related Architecture: [ARCH-AVA-001](../architecture/ARCH-AVA-001-action-validation-architecture.md) (Action Validation Pipeline)  
 Supersedes / Extends: Implicit legacy “flat tables as state” model (no prior ADR)  
 Primary Audience: Engine / Rules / Persistence / AI pipeline contributors  
 
@@ -10,7 +10,7 @@ Primary Audience: Engine / Rules / Persistence / AI pipeline contributors
 
 ## 1. Executive Summary
 
-This document defines the deterministic, auditable foundation for campaign world state powering the `/ask → /plan → /do` action‑validation pipeline ([ARCH-AVA-001](../architecture/ARCH-CDA-001-campaign-data-architecture.md)).  
+This document defines the deterministic, auditable foundation for campaign world state powering the `/ask → /plan → /do` action‑validation pipeline ([ARCH-AVA-001](../architecture/ARCH-AVA-001-action-validation-architecture.md)).  
 Core shift: move from “current DB rows = mutable truth” to a triad:
 
 1. Immutable Campaign Package (seed provenance).
