@@ -1,0 +1,15 @@
+{
+  "feasible": true,
+  "plan_id": "DYNAMIC",  
+  "steps": [
+    {
+      "op": "roll.d20",
+      "args": {},
+      "guards": []
+    }
+  ],
+  "failed_predicates": [],
+  "repairs": [],
+  "alternatives": [],
+  "rationale": ""
+}

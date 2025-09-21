@@ -19,6 +19,7 @@ import inspect
 import json
 import multiprocessing
 import time
+from collections import deque
 from enum import Enum
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
@@ -86,10 +87,12 @@ except Exception:
 # --- CLI flags (pre-parse) ---
 SINK_ONLY = False
 NO_SINK = False
+RAW_PLAN = False  # When true, attempt to print last resolved Plan JSON (if any)
+JSON_ONLY = False  # When true, print only the final plan JSON (no banners)
 CLI_WEBHOOK_BASE = os.getenv("CLI_WEBHOOK_BASE")  # e.g., http://cli-sink:19000
 
 def _preparse_args(argv: list[str]) -> list[str]:
-    global SINK_ONLY, NO_SINK, CLI_WEBHOOK_BASE, SINK_PORT
+    global SINK_ONLY, NO_SINK, CLI_WEBHOOK_BASE, SINK_PORT, RAW_PLAN, JSON_ONLY
     remaining: list[str] = []
     it = iter(argv)
     for a in it:
@@ -98,6 +101,13 @@ def _preparse_args(argv: list[str]) -> list[str]:
             continue
         if a == "--no-sink":
             NO_SINK = True
+            continue
+        if a == "--raw":
+            RAW_PLAN = True
+            continue
+        if a == "--json-only":
+            RAW_PLAN = True  # ensure snapshot logic runs
+            JSON_ONLY = True
             continue
         if a == "--webhook-base":
             try:
@@ -152,6 +162,50 @@ def run_sink_server(event):
     uvicorn.run(sink_app, host=SINK_HOST, port=SINK_PORT, log_level="warning")
 
 
+_recent_plan_events: deque[dict[str, Any]] = deque(maxlen=5)
+
+
+def _maybe_capture_plan_from_log(payload: dict[str, Any]):
+    # Capture events that look like plan_created or plan_built with embedded plan
+    evt = payload.get("event")
+    if evt in {"planner.plan_created", "planner.plan_built"}:
+        _recent_plan_events.append(payload)
+
+
+async def _fetch_latest_plan_json() -> dict[str, Any] | None:
+    """Attempt to fetch a latest plan artifact via dev webhook (best-effort).
+
+    This is a heuristic: we poll the dev-webhook latest endpoint which may
+    sometimes include preview text only. If structured plan JSON printing is
+    required, tests remain the source of truth. We fall back to any captured
+    log events stored locally if available.
+    """
+    try:
+        # Prefer captured log events in current process if any
+        if _recent_plan_events:
+            return list(_recent_plan_events)[-1]
+        # Fallback: scan the tail of the structured log file for a snapshot event
+        log_path = Path("logs/adventorator.jsonl")
+        if log_path.exists():
+            # Read last ~200 lines (bounded) to look for snapshot
+            with log_path.open("r", encoding="utf-8") as fh:
+                lines = fh.readlines()[-200:]
+            for line in reversed(lines):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    js = json.loads(line)
+                except Exception:
+                    continue
+                evt = js.get("event") or js.get("log_event") or js.get("event_name")
+                if evt == "planner.plan_snapshot":
+                    return js
+    except Exception:
+        pass
+    return None
+
+
 async def _send_interaction(command: Command, options: dict[str, Any]):
     """Optionally starts a local sink, sends the interaction, and waits for the response."""
     # Decide whether to run local sink
@@ -194,6 +248,9 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
             return
 
     try:
+        if RAW_PLAN:
+            # Signal raw mode to server (used to bypass planner cache)
+            os.environ["WEB_CLI_RAW_MODE"] = "1"
         if command.subcommand:
             data_payload = { "id": "1", "name": command.name, "type": 1, "options": [{"name": command.subcommand, "type": 1, "options": [{"name": k, "value": v} for k, v in options.items()]}] }
         else:
@@ -224,24 +281,29 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
                     headers["X-Adventorator-Webhook-Base"] = f"http://host.docker.internal:{SINK_PORT}"
 
         cmd_name_str = f"{command.name}{'.' + command.subcommand if command.subcommand else ''}"
-        click.echo(f"-> POST {APP_URL}/interactions (command: {cmd_name_str})")
+        if not JSON_ONLY:
+            click.echo(f"-> POST {APP_URL}/interactions (command: {cmd_name_str})")
         
         async with httpx.AsyncClient() as client:
             response = await client.post(f"{APP_URL}/interactions", content=body, headers=headers)
         
         if response.status_code >= 400:
-            click.echo(click.style(f"<- HTTP {response.status_code} Error: {response.text}", fg="red"))
+            if not JSON_ONLY:
+                click.echo(click.style(f"<- HTTP {response.status_code} Error: {response.text}", fg="red"))
             return
-        click.echo(f"<- HTTP {response.status_code} {response.json()}")
+        if not JSON_ONLY:
+            click.echo(f"<- HTTP {response.status_code} {response.json()}")
 
         # Wait for the webhook to be received by the local sink, with a timeout.
         if event is not None:
             received = event.wait(timeout=RESPONSE_TIMEOUT_SECONDS)
             if not received:
-                click.echo(click.style(f"\nWarning: Did not receive a follow-up message within {RESPONSE_TIMEOUT_SECONDS} seconds.", fg="yellow"))
+                if not JSON_ONLY:
+                    click.echo(click.style(f"\nWarning: Did not receive a follow-up message within {RESPONSE_TIMEOUT_SECONDS} seconds.", fg="yellow"))
         else:
             if override_targets_app and not NO_SINK:
-                click.echo("(Follow-up handled directly by app /dev-webhook; polling for content...)")
+                if not JSON_ONLY:
+                    click.echo("(Follow-up handled directly by app /dev-webhook; polling for content...)")
                 # Poll the dev webhook latest endpoint a few times to surface content inline
                 try:
                     token = "fake-token"
@@ -260,16 +322,19 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
                                 if js.get("status") == "ok" and isinstance(js.get("payload"), dict):
                                     content = js["payload"].get("content")
                                     if content:
-                                        click.echo("\n--- Follow-up (polled) ---\n" + content + "\n---------------------------")
+                                        if not JSON_ONLY:
+                                            click.echo("\n--- Follow-up (polled) ---\n" + content + "\n---------------------------")
                                         printed = True
                                         break
                         if not printed:
-                            click.echo("(No follow-up content retrieved within polling window ~20s; try --no-sink to inspect raw Discord response or increase wait)")
+                            if not JSON_ONLY:
+                                click.echo("(No follow-up content retrieved within polling window ~20s; try --no-sink to inspect raw Discord response or increase wait)")
                             # If we assumed server override (override_targets_app True) but still got nothing,
                             # likely the server is posting to real Discord (401/404 with fake token) because
                             # DISCORD_WEBHOOK_URL_OVERRIDE was not set in the container. Provide actionable hint.
                             if override_targets_app:
-                                click.echo(click.style(
+                                if not JSON_ONLY:
+                                    click.echo(click.style(
                                     "[warn] Server did not deliver a dev-webhook payload. Set DISCORD_WEBHOOK_URL_OVERRIDE=\n"
                                     "       http://127.0.0.1:%d/dev-webhook to capture ephemeral previews locally." % APP_PORT,
                                     fg="yellow"
@@ -277,8 +342,31 @@ async def _send_interaction(command: Command, options: dict[str, Any]):
                 except Exception:
                     pass
             else:
-                click.echo("(Follow-up will be delivered to sink service; check docker logs for cli-sink)")
+                if not JSON_ONLY:
+                    click.echo("(Follow-up will be delivered to sink service; check docker logs for cli-sink)")
 
+        # Raw plan output (best-effort) after follow-up
+        if RAW_PLAN:
+            try:
+                plan_payload = await _fetch_latest_plan_json()
+                if plan_payload:
+                    if JSON_ONLY:
+                        # Emit only the plan JSON (not wrapper metadata) if possible
+                        only = plan_payload.get("plan") if isinstance(plan_payload, dict) else None
+                        if only:
+                            # Ensure stable ordering for diffs
+                            click.echo(json.dumps(only, indent=2, sort_keys=True))
+                        else:
+                            click.echo(json.dumps(plan_payload, indent=2, sort_keys=True))
+                    else:
+                        click.echo("\n--- Raw Plan Payload (heuristic) ---")
+                        click.echo(json.dumps(plan_payload, indent=2, sort_keys=True))
+                        click.echo("--------------------------------------")
+                else:
+                    if not JSON_ONLY:
+                        click.echo("(No plan payload captured; enable action_validation & predicate_gate.)")
+            except Exception:
+                pass
     except httpx.ConnectError:
         click.echo(click.style(f"Connection Error: Is the app running at {APP_URL}?", fg="red", bold=True))
     finally:

@@ -83,14 +83,52 @@ Authoritative sources of truth:
 4. Introduce GM remediation tools atop event ledger (rewind primitives). 
 
 ## 10. Future / Intent (Exploratory — 🧭)
-These are directional concepts not yet scheduled:
-- Adaptive difficulty calibration via rolling success distributions.
-- LLM disambiguation / multi-option interactive planning UX.
-- Per-guild policy configuration (narrative verbosity, safety filters, house rules packages).
-- Multi-system ruleset plugin architecture (5e SRD → other OGL systems).
-- Real-time streaming narration (incremental token flush with early mechanics block). 
-- Map layering & fog-of-war variants.
-- Formal evaluation harness for planner/executor regression scoring.
+These are directional concepts not yet scheduled
+
+### Campaign Data Pipeline
+
+### Character Sheet Pipeline
+
+### Godot Rules Engine
+
+### Discord Activity for Encounters
+
+### 5E SRD Implementation
+
+### Full MCP Adoption
+
+### Full OpenAI API Adoption
+
+### Per-Guild Policy Configuration
+
+### RP Conversation Stack
+
+### Multi-system ruleset plugin architecture (5e SRD → other OGL systems).
+
+### Enhanced Logging Solution
+
+### Real-time streaming narration (incremental token flush with early mechanics block)
+
+### Formal evaluation harness for planner/executor regression scoring.
+
+### Speech-to-Text / Text-to-Speech
+
+### Python Rules Engine
+
+### Encounter Map Rendering (Pillow)
+
+### Contextualizing Campaign/Party/"Whisper"/Individual Scenes/Threads
+
+### Exports
+
+* Campaign State
+* Character Sheet
+
+### Campaign Extraction/Creation Pipeline
+
+### Party NPC Tools
+
+### Admin Tools
 
 ## 11. Traceability & How to Update
 When a planned item begins execution:

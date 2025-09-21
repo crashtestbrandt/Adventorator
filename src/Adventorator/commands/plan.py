@@ -130,7 +130,10 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
     plan_obj: Plan | None = None
     out: PlannerOutput | None = None
 
-    cached = _cache_get(guild_id, channel_id, user_msg)
+    import os
+
+    bypass_cache = bool(os.getenv("FEATURES_PLANNING_TIERS")) or bool(os.getenv("WEB_CLI_RAW_MODE"))
+    cached = None if bypass_cache else _cache_get(guild_id, channel_id, user_msg)
     if cached is None:
         log_event(
             "planner",
@@ -213,6 +216,20 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
                     out.model_dump(),  # type: ignore[arg-type]
                     schema="planner_output",
                 )
+    except Exception:
+        pass
+
+    # Fallback snapshot emission for raw CLI capture (duplicate with planner.plan but safer here if return_plan path skipped)
+    try:  # pragma: no cover - instrumentation only
+        if plan_obj is not None:
+            import structlog
+
+            structlog.get_logger().info(
+                "planner.plan_snapshot",
+                step_count=len(getattr(plan_obj, "steps", []) or []),
+                plan=plan_obj.model_dump(),
+                source="command_handler_fallback",
+            )
     except Exception:
         pass
 

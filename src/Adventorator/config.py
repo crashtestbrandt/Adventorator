@@ -25,6 +25,7 @@ def _toml_settings_source() -> dict[str, Any]:
         "features_predicate_gate": t.get("features", {}).get("predicate_gate", False),
         "features_mcp": t.get("features", {}).get("mcp", False),
         "features_activity_log": t.get("features", {}).get("activity_log", False),
+        "features_planning_tiers": t.get("features", {}).get("planning_tiers", False),
         # Map rendering (Phase 12) — prefer [map].enabled with legacy fallback
         "features_map": bool(
             (t.get("map", {}) or {}).get(
@@ -128,6 +129,7 @@ def _toml_settings_source() -> dict[str, Any]:
     # Planner
     planner_cfg = t.get("planner", {}) or {}
     out["planner_timeout_seconds"] = int(planner_cfg.get("timeout_seconds", 12))
+    out["planner_max_level"] = int(planner_cfg.get("max_level", 1))
 
     # Retrieval (Phase 6)
     # Example TOML:
@@ -175,6 +177,7 @@ class Settings(BaseSettings):
     features_predicate_gate: bool = False
     features_mcp: bool = False
     features_activity_log: bool = False
+    features_planning_tiers: bool = False
     features_map: bool = False
     features_events: bool = False
     features_executor: bool = False
@@ -182,6 +185,7 @@ class Settings(BaseSettings):
     response_timeout_seconds: int = 3
     app_port: int = 18000
     planner_timeout_seconds: int = 12
+    planner_max_level: int = 1
 
     # --- ImprobabilityDrive and /ask feature flags ---
     features_improbability_drive: bool = False
