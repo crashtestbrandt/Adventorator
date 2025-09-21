@@ -324,10 +324,10 @@ _PG_REPLAY_TRIGGER = "events_replay_ordinal_enforce"
 event.listen(
     Event.__table__,
     "after_create",
-    # Static DDL (no user input); Bandit B608 false positive acceptable. # nosec B608
+    # Static DDL (no user input). Removed f-string to avoid Bandit B608.
     DDL(
-        f"""
-CREATE FUNCTION {_PG_REPLAY_FN}() RETURNS TRIGGER AS $$
+        """
+CREATE FUNCTION events_enforce_replay_ordinal() RETURNS TRIGGER AS $$
 DECLARE expected INTEGER;
 BEGIN
     SELECT COALESCE(MAX(replay_ordinal), -1) + 1 INTO expected
