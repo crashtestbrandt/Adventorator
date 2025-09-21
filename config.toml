@@ -13,6 +13,18 @@ predicate_gate = true
 mcp = false
 activity_log = true
 
+# --- ImprobabilityDrive /ask feature flags ---
+# Two supported forms:
+# 1) Simple boolean toggle (no sub-flags):
+# ask = false
+#
+# 2) Table with 'enabled' and optional sub-flags to stage rollout:
+# [features.ask]
+# enabled = false           # master toggle
+# nlu_rule_based = true     # deterministic NLU baseline (defaults true when enabled)
+# kb_lookup = false         # knowledge base / ontology lookup
+# planner_handoff = false   # pass intent to planner for tool selection
+
 # Retrieval-augmented orchestration.
 # Note: provider "none" uses the built-in SQL fallback retriever.
 [features.retrieval]
@@ -47,6 +59,13 @@ to_file = "DEBUG"         # per-handler: set to "NONE" to disable file writes
 file_path = "logs/adventorator.jsonl"
 max_bytes = 5000000
 backup_count = 5
+
+# Note: Settings precedence (highest to lowest):
+# - In-code overrides (init)
+# - OS environment variables (e.g., set FEATURES_MCP=true)
+# - .env/.env.local files
+# - This config.toml
+# - File secrets
 
 [ops]
 metrics_endpoint_enabled = true
