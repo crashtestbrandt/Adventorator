@@ -1,5 +1,7 @@
 # ARCH-AVA-001 — Action Validation Architecture
 
+<!-- Moved from action-validation-architecture.md; filename updated for consistency with ARCH-* naming convention. -->
+
 **Status:** Active — Phases 0–6 implemented/in progress; remaining phases (7–9) planned behind feature flags  \
 **Last Updated:** 2025-09-19  \
 **Primary Epic:** [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implementation/epics/EPIC-AVA-001-action-validation-architecture.md)  \
@@ -98,8 +100,8 @@ The Action Validation architecture introduces a modular, state-machine-driven pi
 
 ### Dual-Paradigm Validation
 
-* **Predicates (Mechanical Possibility):** Deterministic checks (`exists`, `reachable`, `dc_in_bounds`) answered via repos/rules modules, ensuring “can this happen?”.
-* **Semantic Tags (Narrative Plausibility):** Metadata describing magical, narrative, or contextual affordances to explore “does this make sense here?”.
+* **Predicates (Mechanical Possibility):** Deterministic checks (`exists`, `reachable`, `dc_in_bounds`) answered via repos/rules modules, ensuring "can this happen?".
+* **Semantic Tags (Narrative Plausibility):** Metadata describing magical, narrative, or contextual affordances to explore "does this make sense here?".
 
 ### Tiered Planning Strategy
 
@@ -168,7 +170,7 @@ class ExecutionResult:
 
 * **Ontology Management.** Store and version `AffordanceTags` alongside planner prompts and contracts.
 * **Configuration Management.** Externalise feature toggles (`features.action_validation`, `features.predicate_gate`, `features.mcp`) and planner/orchestrator timeouts.
-* **Observability.** Standardise structured logs, counters (`planner.feasible`, `predicate.gate.fail_reason`, `executor.preview/apply`), and ActivityLog records (Phase 6). Detailed mechanics ledger rollout tracked in [EPIC-ACTLOG-001](../implementation/epics/activitylog-mechanics-ledger.md).
+* **Observability.** Standardise structured logs, counters (`planner.feasible`, `predicate.gate.fail_reason`, `executor.preview/apply`), and ActivityLog records (Phase 6). Detailed mechanics ledger rollout tracked in [EPIC-ACTLOG-001](../implementation/epics/EPIC-ACTLOG-001-activitylog-mechanics-ledger.md).
 
 ## Traceability and Roadmap Alignment
 

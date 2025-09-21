@@ -226,7 +226,7 @@ If all boxes checked, manual validation for STORY-AVA-001I passes.
 
 ---
 ## 11. Updating Epic Task Status
-After validation, update `STORY-AVA-001I` tasks in `docs/implementation/epics/action-validation-architecture.md` from `[ ]` to `[x]` for:
+After validation, update `STORY-AVA-001I` tasks in `docs/implementation/epics/EPIC-AVA-001-action-validation-architecture.md` from `[ ]` to `[x]` for:
 - `TASK-AVA-TIER-26`
 - `TASK-AVA-GUARD-27`
 - `TASK-AVA-TEST-28`

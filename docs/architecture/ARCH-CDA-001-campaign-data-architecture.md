@@ -2,7 +2,7 @@
 
 Status: Proposed (MVP scope locked)  
 Last Updated: 2025-09-21  
-Related Architecture: ARCH-AVA-001 (Action Validation Pipeline)  
+Related Architecture: [ARCH-AVA-001](../architecture/ARCH-CDA-001-campaign-data-architecture.md) (Action Validation Pipeline)  
 Supersedes / Extends: Implicit legacy “flat tables as state” model (no prior ADR)  
 Primary Audience: Engine / Rules / Persistence / AI pipeline contributors  
 
@@ -10,7 +10,7 @@ Primary Audience: Engine / Rules / Persistence / AI pipeline contributors
 
 ## 1. Executive Summary
 
-This document defines the deterministic, auditable foundation for campaign world state powering the `/ask → /plan → /do` action‑validation pipeline (ARCH-AVA-001).  
+This document defines the deterministic, auditable foundation for campaign world state powering the `/ask → /plan → /do` action‑validation pipeline ([ARCH-AVA-001](../architecture/ARCH-CDA-001-campaign-data-architecture.md)).  
 Core shift: move from “current DB rows = mutable truth” to a triad:
 
 1. Immutable Campaign Package (seed provenance).
@@ -523,6 +523,115 @@ Excluded (documented for future):
 | [ADR-0010](../adr/ADR-0010-snapshot-fork-lineage.md) | Snapshot & Fork Lineage |
 | [ADR-0011](../adr/ADR-0011-package-import-provenance.md) | Package Import Provenance |
 | [ADR-0012](../adr/ADR-0012-event-versioning-migration-protocol.md) | Event Versioning & Migration Protocol |
+
+---
+
+## 24. Epic Decomposition
+
+Epic proposals (concise):
+
+1. [EPIC-CDA-CORE-001](../implementation/epics/EPIC-CDA-CORE-001-deterministic-event-substrate.md) Deterministic Event Substrate  
+Scope: Canonical JSON encoder, envelope fields, hash chain, idempotency key.  
+ADRs: 0006, 0007.  
+Deps: None (foundation).  
+Acceptance focus: Golden serialization vectors; hash continuity test; rejection of floats/NaN.  
+Enablers: Required by all downstream epics (Executor, Migration, Snapshots).
+
+2. [EPIC-CDA-IMPORT-002](../implementation/epics/EPIC-CDA-IMPORT-002-package-import-and-provenance.md) Package Import & Provenance  
+Scope: Manifest parsing, lexicographic deterministic ingest, synthetic seed events, ImportLog, provenance fields.  
+ADRs: 0011 (+ 0006 for seed events).  
+Deps: Core-001.  
+Acceptance focus: Replay after import yields stable state_digest; collision (stable_id,file_hash) failure test; provenance fields present in events.
+
+3. EPIC-CDA-RNG-003 Deterministic RNG Streams  
+Scope: HKDF seed derivation, stream naming, roll recording in payload, lint to forbid ambient randomness.  
+ADRs: 0008.  
+Deps: Core-001 (envelope), partly usable before Import-002 completes.  
+Acceptance focus: Same (plan_id,replay_ordinal,stream) ⇒ identical sequence; negative test for nondeterministic usage (lint/e2e).
+
+4. EPIC-CDA-CAP-004 Capability & Approval Enforcement  
+Scope: roles / capabilities / role_capabilities / assignments tables; approval CHECK; executor gate wiring.  
+ADRs: 0009.  
+Deps: Core-001 (events), Import-002 (optional seeding of baseline roles).  
+Acceptance focus: Unauthorized event blocked; approval-required event rejected without approved_by; health check validates baseline grants.
+
+5. EPIC-CDA-EXEC-005 Executor Concurrency & Apply Path  
+Scope: Optimistic concurrency (`expected_last_event_id`), conflict object schema, idempotent replays, RNG integration, capability gate invocation.  
+ADRs: 0006, 0008, 0009.  
+Deps: Core-001, RNG-003, CAP-004.  
+Acceptance focus: Conflict test returns stable payload; retry storm collapses to one event_id; roll capture present.
+
+6. EPIC-CDA-SNAP-006 Logical Snapshots & Forking  
+Scope: Snapshot creation, restore verification, fork lineage, state_digest computation, optional ED25519 signing scaffold.  
+ADRs: 0010 (fork), 0006 (hash chain).  
+Deps: Executor path (events must exist), Import-002.  
+Acceptance focus: Snapshot → restore → identical state_digest; fork digest equivalence test; signature verification (if enabled).
+
+7. EPIC-CDA-MIG-007 Event Versioning & Migration Framework  
+Scope: Registry, pure migrator chain, `migrator_applied_from` recording, golden corpus fixtures.  
+ADRs: 0012, 0006 (envelope immutability).  
+Deps: Core-001, Executor stable.  
+Acceptance focus: Round-trip migration idempotency; downgrade absence (immutability); mixed-history replay parity.
+
+8. EPIC-CDA-OBS-008 Observability & Replay Verification  
+Scope: Nightly replay job, metrics (`events.applied`, `replay.verify.ok/fail`, SLO latency histograms), hash_mismatch alert, structured log fields.  
+ADRs: 0006 (hash chain canonical signals).  
+Deps: Snapshots (for baseline), Executor.  
+Acceptance focus: Induced mismatch triggers alert; metrics surfaced; runbook snippet for incident classification.
+
+9. EPIC-CDA-RET-009 Retrieval / Knowledge Base Index  
+Scope: ContentChunk audience enforcement, optional embeddings (flag), provenance invalidation rules, integration with `/ask` (ImprobabilityDrive) and `/plan`.  
+ADRs: (Indirectly uses provenance: 0011).  
+Deps: Import-002 (chunks), IPD / AVA epics for consumer flows.  
+Acceptance focus: Player vs GM audience isolation test; stale index invalidation on manifest change; feature flag rollback (disable embeddings).
+
+10. EPIC-CDA-SEC-010 Integrity & Signing Hardening  
+Scope: Mandatory snapshot signing, package signature validation pipeline, transparency log stub.  
+ADRs: 0010 (snapshot), 0011 (package provenance).  
+Deps: Snapshots, Import.  
+Acceptance focus: Tampered snapshot detection; unsigned package rejection; audit log of verification steps.
+
+11. EPIC-CDA-COMP-011 Compaction & Physical Snapshots (Deferred)  
+Scope: Physical snapshot format, compaction meta-events, retention policy.  
+ADRs: Future (to be authored).  
+Deps: Snapshots, Migration framework.  
+Acceptance focus: Replay from physical snapshot == logical baseline; compaction preserves hash chain invariants.
+
+12. EPIC-CDA-MERGE-012 Branch Merge & Belief State (Deferred)  
+Scope: Out-of-scope MVP (documented), future fork merge semantics, belief persistence store.  
+ADRs: New future ADR(s).  
+Deps: Snapshots, Forking, Migration.  
+Acceptance focus: Prototype merge conflict classification; belief store deterministic projection tests.
+
+13. EPIC-CDA-ONT-013 Ontology & Affordance Governance Integration  
+Scope: Affordance validation table (affordance,ruleset_version) → allowed_event_types; alignment with future planner semantics & ImprobabilityDrive tags.  
+ADRs: Leverages 0011 (ontology provenance); may require new ADR.  
+Deps: Import, Retrieval (ontology exposure), AVA and IPD data contracts.  
+Acceptance focus: Attempt disallowed event_type → predicate failure; ontology version bump invalidates stale affordances cache.
+
+Cross-epic dependency highlights:
+- Foundational chain: CORE-001 → IMPORT-002 → EXEC-005 → SNAP-006 → MIG-007 → OBS-008.
+- RNG (RNG-003) and CAP-004 integrate early to reduce retrofit risk.
+- Retrieval (RET-009) gates planner/improbability enhancements but is orthogonal to hash chain.
+- Deferred epics (COMP-011, MERGE-012) explicitly isolated to avoid blocking MVP acceptance criteria in Section 18 of the architecture.
+- Ontology (ONT-013) bridges CDA and AVA/IPD, enabling richer predicate gating later without altering ledger invariants.
+
+Feature flag strategy (concise):
+- executor / action_validation flags already present (reuse for gating event emission path changes).
+- New flags: `features.retrieval.enabled`, `features.snapshots.signing`, `features.event_migrations` (write-enable switch), `features.compaction` (future), `features.rng.strict` (enforce lint fail vs warn).
+
+Minimal acceptance test alignment (mapping to architecture Section 20):
+- CORE-001: Genesis hash, Unicode normalization, Hash chain continuity.
+- EXEC-005: Idempotent retry storm, Conflict apply.
+- RNG-003: RNG determinism.
+- SNAP-006: Fork equivalence.
+- IMPORT-002 + RET-009: Audience isolation (with content chunks).
+- OBS-008: Replay determinism nightly job.
+
+Traceability integration:
+- Each epic file added under epics following existing template.
+- ADR references embedded per epic (avoid duplicating full rationale).
+- Update roadmap (ROADMAP.md) section “Current Focus & Near-Term” to list active CDA epics once created.
 
 ---
 

@@ -7,7 +7,7 @@ ADR-0004 — MCP adapter architecture for Action Validation executor integration
 Accepted — 2025-02-14 (Owner: Action Validation Working Group)
 
 ## Context
-Phase 7 of [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implementation/epics/EPIC-AVA-001-action-validation-architecture.md) requires STORY-AVA-001H to introduce Multi-Component Protocol (MCP) adapters so the executor can route deterministic tool calls through a swap-friendly interface. Today the executor directly invokes rules and simulation helpers, bypassing the MCP contracts documented in [ARCH-AVA-001 — Action Validation Architecture](../architecture/action-validation-architecture.md). Only the `features.mcp` flag exists; no adapter modules, contracts, or tests enforce parity with the existing tool chain behavior. We must define the in-process MCP architecture now to unblock adapter scaffolding while keeping forward compatibility for future out-of-process MCP servers.
+Phase 7 of [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implementation/epics/EPIC-AVA-001-action-validation-architecture.md) requires STORY-AVA-001H to introduce Multi-Component Protocol (MCP) adapters so the executor can route deterministic tool calls through a swap-friendly interface. Today the executor directly invokes rules and simulation helpers, bypassing the MCP contracts documented in [ARCH-AVA-001 — Action Validation Architecture](../architecture/ARCH-AVA-001-action-validation-architecture.md). Only the `features.mcp` flag exists; no adapter modules, contracts, or tests enforce parity with the existing tool chain behavior. We must define the in-process MCP architecture now to unblock adapter scaffolding while keeping forward compatibility for future out-of-process MCP servers.
 
 ## Decision
 - Introduce a dedicated MCP client layer inside the executor that mediates all tool execution when `features.mcp` is enabled. The client wraps each `ExecutionRequest` step, resolves the correct MCP adapter, and handles retry/metrics concerns before delegating to the underlying server shim. (Implemented in `src/Adventorator/mcp/client.py`.)
@@ -44,7 +44,7 @@ Phase 7 of [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implement
 
 ## References
 - [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implementation/epics/EPIC-AVA-001-action-validation-architecture.md)
-- [ARCH-AVA-001 — Action Validation Architecture](../architecture/action-validation-architecture.md)
+- [ARCH-AVA-001 — Action Validation Architecture](../architecture/ARCH-AVA-001-action-validation-architecture.md)
 - [STORY-AVA-001H — MCP adapter scaffold](../implementation/epics/EPIC-AVA-001-action-validation-architecture.md#story-ava-001h--mcp-adapter-scaffold)
 - [Manual validation runbook for EPIC-AVA-001](../smoke/manual-validation-EPIC-AVA-001.md)
 - [`docs/implementation/action-validation-implementation.md` — Phase 7 MCP scaffold requirements](../implementation/action-validation-implementation.md#phase-7--mcp-scaffold-local-in-process-servers)

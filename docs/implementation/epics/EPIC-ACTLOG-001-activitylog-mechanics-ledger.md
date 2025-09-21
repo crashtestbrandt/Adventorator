@@ -1,3 +1,4 @@
+<!-- Renamed from activitylog-mechanics-ledger.md to EPIC-ACTLOG-001-activitylog-mechanics-ledger.md for consistency with EPIC-* naming. -->
 # EPIC-ACTLOG-001 — Mechanics ActivityLog Enablement
 
 **Objective.** Establish a structured, auditable ActivityLog for mechanics (dice rolls, checks, orchestrator-approved actions) with phased rollout, defensive guarantees, and minimal latency impact.
@@ -145,3 +146,4 @@ Event owners: Mechanics guild (primary) with Action Validation working group as 
 | Story 001H | (pending issue) | Staged rollout & latency. |
 
 Update with GitHub issue numbers upon creation.
+
