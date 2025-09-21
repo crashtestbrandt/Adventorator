@@ -34,6 +34,18 @@ async def test_replay_ordinal_trigger_enforces_dense_sequence(db):
     await db.flush()
 
     payload = {"kind": "demo"}
+    genesis_envelope_hash = event_envelope.compute_envelope_hash(
+        campaign_id=genesis.campaign_id,
+        scene_id=genesis.scene_id,
+        replay_ordinal=genesis.replay_ordinal,
+        event_type=genesis.type,
+        event_schema_version=genesis.event_schema_version,
+        world_time=genesis.world_time,
+        wall_time_utc=genesis.wall_time_utc,
+        prev_event_hash=genesis.prev_event_hash,
+        payload_hash=genesis.payload_hash,
+        idempotency_key=genesis.idempotency_key,
+    )
     gap_event = models.Event(
         campaign_id=campaign.id,
         scene_id=scene.id,
@@ -41,7 +53,7 @@ async def test_replay_ordinal_trigger_enforces_dense_sequence(db):
         type="test.event",
         event_schema_version=event_envelope.GENESIS_SCHEMA_VERSION,
         world_time=genesis.replay_ordinal + 2,
-        prev_event_hash=genesis.payload_hash,
+        prev_event_hash=genesis_envelope_hash,
         payload_hash=event_envelope.compute_payload_hash(payload),
         idempotency_key=event_envelope.compute_idempotency_key(
             campaign_id=campaign.id,

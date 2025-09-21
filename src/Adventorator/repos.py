@@ -698,13 +698,12 @@ async def append_event(
     payload: dict[str, Any] | None,
     request_id: str | None = None,
 ) -> models.Event:
-    # Global lock to avoid overlapping flush() on a shared AsyncSession in highly
-    # concurrent append scenarios (test_event_concurrency_race). This preserves
-    # deterministic ordinal sequencing while allowing callers to fire tasks.
-    # Narrow scope: only guards the flush critical section.
-    global _EVENT_APPEND_LOCK
-    if "_EVENT_APPEND_LOCK" not in globals():  # lazy init to avoid import cycles
-        _EVENT_APPEND_LOCK = asyncio.Lock()  # type: ignore
+    # Per-campaign lock map to increase parallelism across campaigns while
+    # retaining deterministic intra-campaign ordering. Lazy init to avoid
+    # import cycles and unnecessary lock creation.
+    global _EVENT_APPEND_LOCKS
+    if "_EVENT_APPEND_LOCKS" not in globals():  # type: ignore
+        _EVENT_APPEND_LOCKS = {}  # type: ignore[var-annotated]
     # Normalize actor id (character name when numeric id maps to character)
     scene = await s.get(models.Scene, scene_id)
     if scene is None:
@@ -718,7 +717,12 @@ async def append_event(
     if actor_norm is None and actor_id is not None:
         actor_norm = str(actor_id)
     payload_dict = payload or {}
-    async with _EVENT_APPEND_LOCK:  # type: ignore
+    # Acquire campaign-specific lock (created on demand)
+    lock = _EVENT_APPEND_LOCKS.get(campaign_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _EVENT_APPEND_LOCKS[campaign_id] = lock
+    async with lock:  # type: ignore
         # Determine ordinal & linkage inside lock to prevent race producing gaps
         last_event = await s.execute(
             select(models.Event)
@@ -732,7 +736,19 @@ async def append_event(
             prev_hash = event_envelope.GENESIS_PREV_EVENT_HASH
         else:
             replay_ordinal = last_event_row.replay_ordinal + 1
-            prev_hash = bytes(last_event_row.payload_hash)
+            # Derive full envelope hash of the prior event to strengthen chain linkage.
+            prev_hash = event_envelope.compute_envelope_hash(
+                campaign_id=last_event_row.campaign_id,
+                scene_id=last_event_row.scene_id,
+                replay_ordinal=last_event_row.replay_ordinal,
+                event_type=last_event_row.type,
+                event_schema_version=last_event_row.event_schema_version,
+                world_time=last_event_row.world_time,
+                wall_time_utc=last_event_row.wall_time_utc,
+                prev_event_hash=last_event_row.prev_event_hash,
+                payload_hash=last_event_row.payload_hash,
+                idempotency_key=last_event_row.idempotency_key,
+            )
         execution_request_id = request_id or (
             f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
         )

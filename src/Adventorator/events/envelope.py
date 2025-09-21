@@ -49,6 +49,51 @@ def compute_payload_hash(payload: Mapping[str, Any] | None) -> bytes:
     return hashlib.sha256(canonical_json_bytes(payload)).digest()
 
 
+def compute_envelope_hash(
+    *,
+    campaign_id: int,
+    scene_id: int | None,
+    replay_ordinal: int,
+    event_type: str,
+    event_schema_version: int,
+    world_time: int,
+    wall_time_utc: datetime,
+    prev_event_hash: bytes,
+    payload_hash: bytes,
+    idempotency_key: bytes,
+) -> bytes:
+    """Hash the full immutable envelope fields.
+
+    This binds the chain to the entire prior envelope instead of only the
+    payload hash. The canonical ordering below must remain stable.
+    NOTE: Not yet persisted; integration occurs in STORY-CDA-CORE-001A step 2.
+    """
+
+    # Compose a canonical, delimiter-robust binary representation.
+    # Use length-prefix framing to avoid ambiguity.
+    parts: list[bytes] = []
+
+    def add(label: str, value_bytes: bytes):
+        # label|len|value for forward compatibility / debugging
+        parts.append(label.encode("utf-8"))
+        parts.append(len(value_bytes).to_bytes(4, "big", signed=False))
+        parts.append(value_bytes)
+
+    add("campaign_id", str(campaign_id).encode("utf-8"))
+    add("scene_id", ("" if scene_id is None else str(scene_id)).encode("utf-8"))
+    add("replay_ordinal", str(replay_ordinal).encode("utf-8"))
+    add("event_type", event_type.encode("utf-8"))
+    add("schema_version", str(event_schema_version).encode("utf-8"))
+    add("world_time", str(world_time).encode("utf-8"))
+    # Use ISO format with 'Z' for UTC determinism
+    add("wall_time_utc", wall_time_utc.replace(tzinfo=timezone.utc).isoformat().encode("utf-8"))
+    add("prev_event_hash", prev_event_hash)
+    add("payload_hash", payload_hash)
+    add("idempotency_key", idempotency_key)
+
+    return hashlib.sha256(b"".join(parts)).digest()
+
+
 def compute_idempotency_key(
     *,
     campaign_id: int,
@@ -65,15 +110,21 @@ def compute_idempotency_key(
     already persist so the uniqueness constraint is enforceable today.
     """
 
-    material_parts: list[bytes] = [
-        str(campaign_id).encode("utf-8"),
-        event_type.encode("utf-8"),
-        (execution_request_id or "").encode("utf-8"),
-        (plan_id or "").encode("utf-8"),
-        str(replay_ordinal).encode("utf-8"),
-        canonical_json_bytes(payload),
+    # Length-prefixed binary framing to avoid delimiter collision ambiguity.
+    components: list[tuple[str, bytes]] = [
+        ("campaign_id", str(campaign_id).encode("utf-8")),
+        ("event_type", event_type.encode("utf-8")),
+        ("execution_request_id", (execution_request_id or "").encode("utf-8")),
+        ("plan_id", (plan_id or "").encode("utf-8")),
+        ("replay_ordinal", str(replay_ordinal).encode("utf-8")),
+        ("payload", canonical_json_bytes(payload)),
     ]
-    digest = hashlib.sha256(b"|".join(material_parts)).digest()
+    framed: list[bytes] = []
+    for label, value in components:
+        framed.append(label.encode("utf-8"))
+        framed.append(len(value).to_bytes(4, "big", signed=False))
+        framed.append(value)
+    digest = hashlib.sha256(b"".join(framed)).digest()
     return digest[:16]
 
 
@@ -120,4 +171,5 @@ __all__ = [
     "canonical_json_bytes",
     "compute_idempotency_key",
     "compute_payload_hash",
+    "compute_envelope_hash",
 ]
