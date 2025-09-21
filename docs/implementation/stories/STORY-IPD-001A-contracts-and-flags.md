@@ -64,5 +64,6 @@ Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and Affordanc
 - TOML mapping in `_toml_settings_source()`:
 	- `[features]` keys: `improbability_drive`, `ask`
 	- `[features.ask]` keys: `nlu_rule_based`, `kb_lookup`, `planner_handoff`
-- Contracts module: `src/Adventorator/ask/contracts.py`
+- Contracts module (runtime models): `src/Adventorator/schemas.py` (AskReport, IntentFrame, AffordanceTag)
+- Contract registry (artifact): `contracts/ask/v1/` JSON schema, validated by `scripts/validate_prompts_and_contracts.py`
 - Tests: `tests/ask/` with golden round-trip fixtures

@@ -81,6 +81,22 @@ def _toml_settings_source() -> dict[str, Any]:
         "logging_backup_count": t.get("logging", {}).get("backup_count", 5),
     }
 
+    # ImprobabilityDrive (/ask) feature flags — defaults preserve current behavior
+    features_cfg = t.get("features", {}) or {}
+    out["features_improbability_drive"] = bool(features_cfg.get("improbability_drive", False))
+    # Support either a boolean or a table with 'enabled' for [features.ask]
+    _ask_val = features_cfg.get("ask", False)
+    if isinstance(_ask_val, dict):
+        out["features_ask"] = bool((_ask_val or {}).get("enabled", False))
+        ask_cfg = _ask_val or {}
+    else:
+        out["features_ask"] = bool(_ask_val)
+        ask_cfg = {}
+    # Optional nested sub-flags under [features.ask]
+    out["features_ask_nlu_rule_based"] = bool(ask_cfg.get("nlu_rule_based", True))
+    out["features_ask_kb_lookup"] = bool(ask_cfg.get("kb_lookup", False))
+    out["features_ask_planner_handoff"] = bool(ask_cfg.get("planner_handoff", False))
+
     log_cfg = t.get("logging", {}) or {}
     # Derive per-handler levels if provided as strings; otherwise fallback from booleans
     console_val = log_cfg.get("console", None)
@@ -167,6 +183,14 @@ class Settings(BaseSettings):
     app_port: int = 18000
     planner_timeout_seconds: int = 12
 
+    # --- ImprobabilityDrive and /ask feature flags ---
+    features_improbability_drive: bool = False
+    features_ask: bool = False
+    # Sub-flags to stage rollout; rule-based NLU defaults on when parent is enabled
+    features_ask_nlu_rule_based: bool = True
+    features_ask_kb_lookup: bool = False
+    features_ask_planner_handoff: bool = False
+
     # --- Retrieval (Phase 6) ---
     class RetrievalConfig(BaseModel):
         enabled: bool = False
@@ -237,14 +261,14 @@ class Settings(BaseSettings):
 
         # Precedence (highest to lowest):
         # 1) init_settings (explicit overrides in code/tests)
-        # 2) dynamic_dotenv_settings (project-local developer overrides)
-        # 3) env_settings (OS env)
+        # 2) env_settings (OS env) — should override .env to support test monkeypatching
+        # 3) dynamic_dotenv_settings (project-local developer overrides)
         # 4) TOML (repo config.toml) — project defaults
         # 5) file_secret_settings
         return (
             init_settings,
-            dynamic_dotenv_settings,
             env_settings,
+            dynamic_dotenv_settings,
             _toml_settings_source,
             file_secret_settings,
         )

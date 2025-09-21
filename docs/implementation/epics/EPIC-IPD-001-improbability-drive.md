@@ -209,7 +209,8 @@ planner_handoff = false
 
 Module placement:
 
-- Contracts (Pydantic): `src/Adventorator/ask/contracts.py` (separate from SQLAlchemy `models.py`).
+- Contracts (Pydantic models for app use): `src/Adventorator/schemas.py` (AskReport, IntentFrame, AffordanceTag).
+- Contract artifacts (registry): `contracts/ask/v1/` (JSON schema or OpenAPI component), validated by `scripts/validate_prompts_and_contracts.py`.
 - Tests and fixtures: `tests/ask/` with golden round-trip fixtures.
 *Epic linkage:* Safe staged enablement of /ask and tagging.
 
