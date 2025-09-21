@@ -10,7 +10,7 @@ purpose: Generate an e2e runbook a dev can follow to smoke/regression test a cha
 
 Produce an end-to-end validation runbook a developer can use to manually validate completed functionality and no regression for <!-- AIDD item -->. Capture the runbook in a new .md file in `./docs/smoke/`.
 
-The runbook should assume a fresh clone of the repo, and should provide steps for standing up locally as well as with Docker, and testing with ./scripts/web_cli.py as well as Discord.
+The runbook should assume a fresh clone of the repo, and should provide steps for standing up locally as well as with Docker, testing with ./scripts/web_cli.py as well as Discord, testing with SQLite3 as well as Postgres.
 
 Requirements:
 1. Title format: `Validation Runbook — <AIDD item short name>`.

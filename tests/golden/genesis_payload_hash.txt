@@ -1,0 +1,4 @@
+# Golden canonical payload hash for genesis event (STORY-CDA-CORE-001A)
+# Format: hex(SHA-256('{}' canonical JSON))
+# Changing this value indicates a backward-incompatible change to the canonical encoder for 001A.
+44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a

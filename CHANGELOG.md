@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- STORY-CDA-CORE-001A: Deterministic event envelope substrate (migration `cda001a0001_event_envelope_upgrade`) introducing `events` table with replay-ordinal sequencing, deterministic payload/idempotency hashing, dual-dialect triggers (SQLite & Postgres), and uniqueness constraints on `(campaign_id,replay_ordinal)` & `(campaign_id,idempotency_key)`.
+- Event append observability: structured log `events.appended` (fields: campaign_id, scene_id, event_id, replay_ordinal, type, request_id, payload_hash prefix, idempotency key prefix) and counter `events.applied` alongside existing `events.append.ok` (HR-003/HR-004).
+- Genesis payload hash golden fixture `tests/golden/genesis_payload_hash.txt` with guard test `tests/test_genesis_hash_golden.py` to lock canonical encoding for `{}` (HR-010).
+- Negative idempotency uniqueness test `tests/test_event_idempotency_unique_constraint.py` (HR-001).
 - Metrics: `planner.allowlist.rejected` emitted when planner selects a command outside the allowlist.
 - Predicate gate metrics: `predicate.gate.ok`, `predicate.gate.error`, and per‑failure `predicate.gate.fail_reason.<code>` for each failing predicate (e.g. `predicate.gate.fail_reason.dc_out_of_bounds`).
 - Planner cache metrics: `planner.cache.miss`, `planner.cache.hit`, `planner.cache.expired`, `planner.cache.store`.
@@ -11,6 +15,7 @@
 - Early cache write for planner outputs (both raw planner output and normalized Plan) so identical follow‑ups within TTL avoid a second LLM call even if later validation rejects.
 
 ### Changed
+- Feature flag posture: `[features].events` default switched to `false` in `config.toml` pending completion of remaining hardening items & rollback playbook validation (HR-002).
 - Planner cache key refactored from scene-based to `(guild_id, channel_id, message)` to reduce coupling to scene lifecycle and enable reuse across scene context resets.
 - `reset_counters()` now also clears the planner rate limiter internal state to prevent cross‑test interference causing false cache miss / hit metric assertions.
 - Predicate gate now sets `Plan.feasible = False` and clears steps on failure while attaching structured failure metadata under `failed_predicates`.

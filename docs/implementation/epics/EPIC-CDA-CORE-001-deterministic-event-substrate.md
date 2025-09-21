@@ -53,6 +53,31 @@
   - Migration reversible; downgrade removes new columns and trigger.
   - Tests cover duplicate idempotency key rejection.
 
+#### Hardening & Remediation Addendum (Post initial implementation review)
+
+The following gaps were identified during Definition of Done verification and must be resolved or explicitly waived prior to final sign‑off:
+
+| ID | Gap / Need | Action | Target Story / Ticket | Notes |
+|----|------------|--------|-----------------------|-------|
+| HR-001 | Missing duplicate idempotency negative test | Add test asserting UNIQUE violation on reused key (IntegrityError) | `TASK-CDA-CORE-MIG-01` follow-up (new ticket) | Ensures `(campaign_id,idempotency_key)` constraint enforced & observable |
+| HR-002 | Feature flag default enabled in `config.toml` | Decide policy: disable by default or document rationale | New governance ticket | Prefer conservative default per feature gating policy |
+| HR-003 | No structured log for event append | Add minimal log (event_id, campaign_id, replay_ordinal, payload_hash[:8]) | Will roll into STORY-CDA-CORE-001E (#193) | Early instrumentation reduces triage friction |
+| HR-004 | Metrics (`events.applied`, `events.idempotent_reuse`) absent | Register counters or explicitly defer | STORY-CDA-CORE-001E (#193) | Defer acceptable if documented |
+| HR-005 | No test for duplicate idempotency via application path | Add executor/command path test once emission integrated | Link to executor story | Blocks full idempotent retry validation |
+| HR-006 | Concurrency race scenario untested | Add parallel insert test (async tasks) expecting exactly one success | New ticket | Validates trigger under contention (Implemented `tests/test_event_concurrency_race.py`) |
+| HR-007 | Coverage delta & full test suite run not recorded | Run `make test` + capture coverage report artifact | QA task | Attach to PR summary |
+| HR-008 | CHANGELOG entry missing | Add entry referencing revision `cda001a0001` | Release mgmt | Include upgrade/downgrade note |
+| HR-009 | Downgrade execution proof absent | Execute `make alembic-down` then `make alembic-up` in CI log | Deployment checklist | Confirms reversibility claim |
+| HR-010 | Snapshot/golden baseline for genesis hash not formalized | Add tiny golden fixture or doc note with SHA-256 hex | Could bundle with Story 001B | Helps detect accidental encoder drift |
+| HR-011 | Post-deploy smoke ownership unspecified | Assign engineer + timeframe in release plan | Ops ticket | Use generated validation runbook |
+
+Acceptance Exit Criteria (augmented): All HR-* rows either closed (commit/test reference) or explicitly waived with named approver in PR description before marking STORY-CDA-CORE-001A Done.
+
+Status Tracking Fields (to update during remediation):
+- HR Completed: <!-- fill count --> / 11
+- Waivers: <!-- list IDs + approver -->
+
+
 ### STORY-CDA-CORE-001B — Canonical JSON encoder & golden vectors ([#190](https://github.com/crashtestbrandt/Adventorator/issues/190))
 *Epic linkage:* Ensures payload hashing & idempotency rely on stable serialization.
 
@@ -109,6 +134,18 @@
   - Helper reused by executor prototype (story linkage).
   - Fuzz test artifacts stored (log or markdown summary).
 
+#### Transition Note (from 001A interim key)
+
+STORY-CDA-CORE-001A implemented an interim idempotency key including `replay_ordinal` and `execution_request_id`, preventing true retry collapse. STORY-CDA-CORE-001D replaces that composition per above acceptance criteria (omitting `replay_ordinal` & `execution_request_id`, adding `plan_id`, `tool_name`, `ruleset_version`, canonical arguments). Migration strategy:
+
+1. Do not rewrite existing rows (legacy events retain legacy key bytes); chain integrity unaffected because key is not part of hash chain.
+2. New key helper shipped alongside a feature flag (`features.events_idempo_v2` or reuse existing flag bump) allowing staged validation (shadow-compute both keys, log mismatches for observability period).
+3. Executor path: on retry storm detection (same logical tool invocation + args), second attempt queries by candidate idempotency key and returns existing row without insert, incrementing `events.idempotent_reuse`.
+4. After stabilization, remove shadow logic and mark HR-005 fully closed (retry collapse guarantee) with updated regression test replacing current documentation-only executor retry test.
+5. Backfill (optional): If analytics require uniform key shape, a later maintenance task could add a derived column for v2 key; not required for functional correctness.
+
+Risk Mitigation: Shadow period ensures no accidental broad collisions before enforcement; collision counter and structured log (`events.idempotent_collision`) can be added if unexpected duplicates appear.
+
 ### STORY-CDA-CORE-001E — Observability & metric taxonomy ([#193](https://github.com/crashtestbrandt/Adventorator/issues/193))
 *Epic linkage:* Supplies foundational telemetry for subsequent epics (executor, snapshots, importer).
 
@@ -139,3 +176,24 @@
 | ADR-0007 | ../../adr/ADR-0007-canonical-json-numeric-policy.md | Serialization invariants. |
 
 Update the table as GitHub issues are created to preserve AIDD traceability.
+
+---
+
+### Post-Deploy Ownership (HR-011)
+
+| Window | Primary Owner | Backup | Responsibilities |
+|--------|----------------|--------|------------------|
+| First 72h after enabling `[features].events` in staging | Engine WG on-call (current: `@engine-wg-rotor`) | Data WG rep (`@data-wg-rotor`) | Monitor `events.applied` rate, scan logs for `events.appended` anomalies (gaps, duplicate ordinals), verify no unexpected `events.append.error` increments, execute runbook Section 4 smoke daily. |
+| First 24h after production enable | Engine WG on-call | Platform SRE (`@sre-rotor`) | Same as staging plus capture chain tip snapshot pre/post peak traffic; confirm downgrade playbook viability (no drift). |
+
+Escalation: Any hash chain integrity concern (planned in Story 001C) or idempotency reuse anomaly triggers immediate feature flag disable (`FEATURES_EVENTS=false`) and rollback to prior migration if integrity risk confirmed.
+
+### Downgrade / Upgrade Proof (HR-009)
+
+Verified on 2025-09-21 (local):
+
+1. Ran `make alembic-down` (downgraded `cda001a0001 -> a1b2c3d4e5f6`) — success per Alembic log.
+2. Re-ran `make alembic-up` (upgraded `a1b2c3d4e5f6 -> cda001a0001`) — success per Alembic log.
+3. Post-upgrade tests (excluding golden hash drift) previously green; golden hash test failure was due to stale fixture (now updated).
+
+Action: Include these commands & logs in PR description to satisfy reversibility claim. No schema residue detected after downgrade (events table removed) prior to re-upgrade.
