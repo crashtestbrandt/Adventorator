@@ -219,7 +219,8 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
     except Exception:
         pass
 
-    # Fallback snapshot emission for raw CLI capture (duplicate with planner.plan but safer here if return_plan path skipped)
+    # Fallback snapshot emission for raw CLI capture.
+    # Duplicates planner.plan but is safer here if the return_plan path is skipped.
     try:  # pragma: no cover - instrumentation only
         if plan_obj is not None:
             import structlog

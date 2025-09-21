@@ -1,7 +1,6 @@
-import pytest
 
-from Adventorator.planner_tiers import expand_plan
 from Adventorator.action_validation.schemas import Plan, PlanStep
+from Adventorator.planner_tiers import expand_plan
 
 
 def test_expand_plan_noop_multi_step(caplog):

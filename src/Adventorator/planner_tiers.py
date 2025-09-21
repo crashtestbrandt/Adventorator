@@ -9,7 +9,7 @@ structured log events so tests can assert placeholder behavior deterministically
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import structlog
 

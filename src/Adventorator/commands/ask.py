@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
+from time import perf_counter
 
 import structlog
 from pydantic import Field
-from time import perf_counter
 
 from Adventorator.action_validation.logging_utils import log_event
 from Adventorator.commanding import Invocation, Option, slash_command
@@ -67,7 +67,7 @@ def _infer_action(text: str) -> str:
             continue
         return t
     # Fallback when no suitable token found
-    return (tokens[0].lower() if tokens else "say")
+    return tokens[0].lower() if tokens else "say"
 
 
 def _safe_echo(text: str, limit: int = 120) -> str:

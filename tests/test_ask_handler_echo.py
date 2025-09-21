@@ -48,5 +48,5 @@ async def test_ask_echo_truncates_and_sanitizes():
     assert responder.messages
     content, _ = responder.messages[0]
     # Sanitized newlines/tabs should be spaces and we should see ellipsis for truncation
-    assert "you said: \"walk to the market and buy apples" in content
-    assert content.endswith("…\"") or "…\"" in content
+    assert 'you said: "walk to the market and buy apples' in content
+    assert content.endswith('…"') or '…"' in content
