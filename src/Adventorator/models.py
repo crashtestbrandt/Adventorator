@@ -5,7 +5,21 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    DDL,
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    event,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -250,29 +264,153 @@ class PendingAction(Base):
 class Event(Base):
     __tablename__ = "events"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
-    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    type: Mapped[str] = mapped_column(String(64), index=True)
-    payload: Mapped[dict] = mapped_column(JSON)
-    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    id: Mapped[int] = mapped_column("event_id", Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
     )
+    scene_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    replay_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    type: Mapped[str] = mapped_column("event_type", String(64), index=True, nullable=False)
+    event_schema_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    world_time: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    wall_time_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    prev_event_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    payload_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    idempotency_key: Mapped[bytes] = mapped_column(LargeBinary(16), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    plan_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    execution_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    migrator_applied_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
-        Index(
-            "ix_events_scene_time",
-            "scene_id",
-            "created_at",
+        UniqueConstraint("campaign_id", "replay_ordinal", name="ux_events_campaign_replay_ordinal"),
+        UniqueConstraint(
+            "campaign_id", "idempotency_key", name="ux_events_campaign_idempotency_key"
         ),
         Index(
-            "ix_events_scene_actor_time",
+            "ix_events_scene_replay_ordinal",
+            "scene_id",
+            "replay_ordinal",
+        ),
+        Index(
+            "ix_events_scene_actor_wall_time",
             "scene_id",
             "actor_id",
-            "created_at",
+            "wall_time_utc",
+        ),
+        Index(
+            "ix_events_scene_wall_time",
+            "scene_id",
+            "wall_time_utc",
         ),
     )
+
+
+_PG_REPLAY_FN = "events_enforce_replay_ordinal"
+_PG_REPLAY_TRIGGER = "events_replay_ordinal_enforce"
+
+event.listen(
+    Event.__table__,
+    "after_create",
+    DDL(
+        f"""
+CREATE FUNCTION {_PG_REPLAY_FN}() RETURNS TRIGGER AS $$
+DECLARE expected INTEGER;
+BEGIN
+    SELECT COALESCE(MAX(replay_ordinal), -1) + 1 INTO expected
+    FROM events
+    WHERE campaign_id = NEW.campaign_id;
+    IF NEW.replay_ordinal IS NULL THEN
+        RAISE EXCEPTION 'events.replay_ordinal_null';
+    END IF;
+    IF NEW.replay_ordinal <> expected THEN
+        RAISE EXCEPTION 'events.replay_ordinal_gap expected % got %', expected, NEW.replay_ordinal;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+        """
+    ).execute_if(dialect="postgresql"),
+)
+event.listen(
+    Event.__table__,
+    "after_create",
+    DDL(
+        f"""
+CREATE TRIGGER {_PG_REPLAY_TRIGGER}
+BEFORE INSERT ON events
+FOR EACH ROW
+EXECUTE FUNCTION {_PG_REPLAY_FN}();
+        """
+    ).execute_if(dialect="postgresql"),
+)
+event.listen(
+    Event.__table__,
+    "before_drop",
+    DDL(f"DROP TRIGGER IF EXISTS {_PG_REPLAY_TRIGGER} ON events;").execute_if(dialect="postgresql"),
+)
+event.listen(
+    Event.__table__,
+    "before_drop",
+    DDL(f"DROP FUNCTION IF EXISTS {_PG_REPLAY_FN}();").execute_if(dialect="postgresql"),
+)
+
+event.listen(
+    Event.__table__,
+    "after_create",
+    DDL(
+        """
+CREATE TRIGGER events_replay_ordinal_null
+BEFORE INSERT ON events
+FOR EACH ROW
+WHEN NEW.replay_ordinal IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'events.replay_ordinal_null');
+END;
+        """
+    ).execute_if(dialect="sqlite"),
+)
+event.listen(
+    Event.__table__,
+    "after_create",
+    DDL(
+        """
+CREATE TRIGGER events_replay_ordinal_gap
+BEFORE INSERT ON events
+FOR EACH ROW
+WHEN NEW.replay_ordinal <> (
+    SELECT COALESCE(MAX(replay_ordinal), -1) + 1
+    FROM events
+    WHERE campaign_id = NEW.campaign_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'events.replay_ordinal_gap');
+END;
+        """
+    ).execute_if(dialect="sqlite"),
+)
+event.listen(
+    Event.__table__,
+    "before_drop",
+    DDL("DROP TRIGGER IF EXISTS events_replay_ordinal_gap;").execute_if(dialect="sqlite"),
+)
+event.listen(
+    Event.__table__,
+    "before_drop",
+    DDL("DROP TRIGGER IF EXISTS events_replay_ordinal_null;").execute_if(dialect="sqlite"),
+)
 
 
 # -----------------------------

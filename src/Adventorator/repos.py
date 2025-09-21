@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Adventorator import models
+from Adventorator.events import envelope as event_envelope
 from Adventorator.metrics import inc_counter
 from Adventorator.schemas import CharacterSheet
 
@@ -698,25 +699,59 @@ async def append_event(
     request_id: str | None = None,
 ) -> models.Event:
     # Normalize actor id (character name when numeric id maps to character)
+    scene = await s.get(models.Scene, scene_id)
+    if scene is None:
+        raise ValueError(f"Scene {scene_id} does not exist")
+    campaign_id = scene.campaign_id
     actor_norm = await normalize_actor_ref(
         s,
-        campaign_id=(
-            # Resolve campaign via scene to avoid requiring it from caller
-            (await s.get(models.Scene, scene_id)).campaign_id  # type: ignore[union-attr]
-            if scene_id
-            else 0
-        ),
+        campaign_id=campaign_id,
         ident=actor_id,
     )
     if actor_norm is None and actor_id is not None:
         actor_norm = str(actor_id)
+    payload_dict = payload or {}
+    last_event = await s.execute(
+        select(models.Event)
+        .where(models.Event.campaign_id == campaign_id)
+        .order_by(models.Event.replay_ordinal.desc())
+        .limit(1)
+    )
+    last_event_row = last_event.scalar_one_or_none()
+    if last_event_row is None:
+        replay_ordinal = 0
+        prev_hash = event_envelope.GENESIS_PREV_EVENT_HASH
+    else:
+        replay_ordinal = last_event_row.replay_ordinal + 1
+        prev_hash = bytes(last_event_row.payload_hash)
+    execution_request_id = request_id or (
+        f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+    )
+    payload_hash = event_envelope.compute_payload_hash(payload_dict)
+    idempotency_key = event_envelope.compute_idempotency_key(
+        campaign_id=campaign_id,
+        event_type=type,
+        execution_request_id=execution_request_id,
+        plan_id=None,
+        payload=payload_dict,
+        replay_ordinal=replay_ordinal,
+    )
     ev = models.Event(
+        campaign_id=campaign_id,
         scene_id=scene_id,
+        replay_ordinal=replay_ordinal,
         actor_id=actor_norm,
         type=type,
-        payload=payload or {},
-        request_id=request_id
-        or f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+        event_schema_version=event_envelope.GENESIS_SCHEMA_VERSION,
+        world_time=replay_ordinal,
+        prev_event_hash=prev_hash,
+        payload_hash=payload_hash,
+        idempotency_key=idempotency_key,
+        plan_id=None,
+        execution_request_id=execution_request_id,
+        approved_by=None,
+        payload=payload_dict,
+        migrator_applied_from=None,
     )
     s.add(ev)
     await _flush_retry(s)
