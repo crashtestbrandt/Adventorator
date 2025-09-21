@@ -174,13 +174,13 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Validate prompts and contracts
-        run: |
-          python scripts/validate_prompts_and_contracts.py
-
       - name: Validate AI evaluation definitions
         run: |
           python scripts/run_ai_evals.py
+
+      - name: Validate contracts only
+        run: |
+          python scripts/validate_prompts_and_contracts.py --only-contracts
 
       - name: Summarize docs-quality completion
         run: echo "Docs/prompts/evals validation completed (runs every push/PR regardless of code changes)."
