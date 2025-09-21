@@ -324,6 +324,7 @@ _PG_REPLAY_TRIGGER = "events_replay_ordinal_enforce"
 event.listen(
     Event.__table__,
     "after_create",
+    # Static DDL (no user input); Bandit B608 false positive acceptable. # nosec B608
     DDL(
         f"""
 CREATE FUNCTION {_PG_REPLAY_FN}() RETURNS TRIGGER AS $$
