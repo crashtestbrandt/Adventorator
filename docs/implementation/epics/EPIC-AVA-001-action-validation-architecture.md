@@ -7,7 +7,7 @@
 **Key risks.** Schema drift between legacy and new contracts, insufficient telemetry to defend AI-assisted decisions, and rollout regressions when feature flags enable new behavior.
 
 **Linked assets.**
-- [ARCH-AVA-001 — Action Validation Architecture](../../architecture/action-validation-architecture.md)
+- [ARCH-AVA-001 — Action Validation Architecture](../../architecture/ARCH-AVA-001-action-validation-architecture.md)
 - [Implementation Plan — Action Validation Architecture](../action-validation-implementation.md)
 - [AIDD DoR/DoD Rituals](../dor-dod-guide.md)
 
@@ -144,7 +144,7 @@
 - **Summary.** Action Validation requires ActivityLog stories (ACTLOG 001A–001D minimum) to supply durable, queryable mechanics records (ExecutionRequest approvals, /roll, /check) and transcript linkage. Detailed milestones, tasks, and defenses live in EPIC-ACTLOG-001.
 - **Acceptance criteria (delegated).**
   - ActivityLog epic Stories 001A–001D completed (flag, schema, initial integrations, transcript linkage).
-    - Status tracked in [EPIC-ACTLOG-001](activitylog-mechanics-ledger.md) with DoR/DoD checklists marked complete.
+  - Status tracked in [EPIC-ACTLOG-001](EPIC-ACTLOG-001-activitylog-mechanics-ledger.md) with DoR/DoD checklists marked complete.
   - Feature flag `features.activity_log` remains a rollback lever; AVA tests pass with flag on/off (`tests/test_action_validation_activity_log_phase6.py::test_roll_command_activity_log_toggle`).
   - Cross-epic traceability updated when ActivityLog issue numbers created and validated via shared test coverage for orchestrator, `/check`, and `/roll` integrations (`tests/test_action_validation_activity_log_phase6.py`).
 - **Tasks (tracked in ACTLOG epic).** Former local tasks migrated and reissued with ACTLOG prefixes.
@@ -196,6 +196,6 @@
 | Artifact | Link | Notes |
 | --- | --- | --- |
 | Epic Issue | [#124](https://github.com/crashtestbrandt/Adventorator/issues/124) | EPIC-AVA-001 Action Validation Pipeline Enablement. |
-| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | STORY-AVA-001G ActivityLog mechanics capture. Tasks: #154 |
+| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | STORY-AVA-001G ActivityLog mechanics capture. Tasks: #154-#155 |
 
 Update the table as GitHub issues are created to preserve AIDD traceability.

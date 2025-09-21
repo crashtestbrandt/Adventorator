@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import argparse
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -117,8 +118,17 @@ def validate_contracts() -> list[str]:
 
 
 def main() -> int:
-    errors = []
-    errors.extend(validate_prompts())
+    parser = argparse.ArgumentParser(description="Validate prompt and contract artifacts")
+    parser.add_argument(
+        "--only-contracts",
+        action="store_true",
+        help="Validate only contracts and skip prompt validation",
+    )
+    args = parser.parse_args()
+
+    errors: list[str] = []
+    if not args.only_contracts:
+        errors.extend(validate_prompts())
     errors.extend(validate_contracts())
 
     if errors:

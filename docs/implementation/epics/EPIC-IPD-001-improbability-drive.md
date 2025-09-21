@@ -7,7 +7,7 @@
 **Key risks.** Tag ontology drift, inadequate disambiguation leading to unsafe or confusing plans, privacy/PII exposure in logs, and rollout regressions when enabling /ask and tagging.
 
 **Linked assets.**
-- [ARCH-AVA-001 — Action Validation Architecture](../../architecture/action-validation-architecture.md)
+- [ARCH-AVA-001 — Action Validation Architecture](../../architecture/ARCH-AVA-001-action-validation-architecture.md)
 - [Implementation Plan — ImprobabilityDrive](../improbability-drive-implementation.md)
 - [EPIC-AVA-001 — Action Validation Pipeline Enablement](./EPIC-AVA-001-action-validation-architecture.md)
 - AIDD governance: [DoR/DoD](../dor-dod-guide.md)
@@ -237,7 +237,7 @@ Module placement:
 | Artifact | Link | Notes |
 | --- | --- | --- |
 | Epic Issue | [TBD](https://github.com/crashtestbrandt/Adventorator/issues/) | Create and link the GitHub issue number when opened. |
-| Architecture | ../../architecture/action-validation-architecture.md | Component 1 (ImprobabilityDrive) specification. |
+| Architecture | ../../architecture/ARCH-AVA-001-action-validation-architecture.md | Component 1 (ImprobabilityDrive) specification. |
 | Implementation Plan | ../improbability-drive-implementation.md | Phases, validation, and rollout plan. |
 
 Update the table as GitHub issues are created to preserve AIDD traceability.

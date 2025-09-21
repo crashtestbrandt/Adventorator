@@ -159,6 +159,6 @@ Smoke test with Web CLI or Discord stub once `/ask` exists. Validate counters vi
 
 ## References
 
-- Architecture: /docs/architecture/action-validation-architecture.md
+- Architecture: /docs/architecture/ARCH-AVA-001-action-validation-architecture.md
 - AVA Epic: /docs/implementation/epics/EPIC-AVA-001-action-validation-architecture.md
 - AIDD Governance: /docs/implementation/dor-dod-guide.md
