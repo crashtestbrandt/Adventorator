@@ -73,7 +73,6 @@ async def test_level2_expansion_inserts_prepare_step(monkeypatch):
     assert out.steps[1].op == "roll.d20"
     # Golden structural comparison (ignore plan_id)
     golden_path = Path("tests/golden/plan_level2_two_steps.json")
-    import json
 
     data = json.loads(golden_path.read_text())
     assert [s.op for s in out.steps] == [step["op"] for step in data["steps"]]
