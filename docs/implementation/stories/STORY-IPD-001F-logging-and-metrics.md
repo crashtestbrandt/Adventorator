@@ -27,6 +27,8 @@ Standardize logs and counters for /ask and tagging; integrate with ActivityLog w
 
 ## Observability
 - Counters: ask.*, kb.*; Structured log events at INFO with keys.
+- Traces
+	- add span `interactions/ask.handle` with tracing backend.
 
 ## Risks & Mitigations
 - Over-logging PII: use redaction filters from Story H; review log keys.
