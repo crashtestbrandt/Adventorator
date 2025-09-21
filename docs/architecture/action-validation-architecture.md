@@ -2,7 +2,7 @@
 
 **Status:** Active — Phases 0–6 implemented/in progress; remaining phases (7–9) planned behind feature flags  \
 **Last Updated:** 2025-09-19  \
-**Primary Epic:** [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implementation/epics/action-validation-architecture.md)  \
+**Primary Epic:** [EPIC-AVA-001 — Action Validation Pipeline Enablement](../implementation/epics/EPIC-AVA-001-action-validation-architecture.md)  \
 **Implementation Plan:** [Action Validation Implementation Plan](../implementation/action-validation-implementation.md)  \
 **Related Governance:** [AIDD DoR/DoD Rituals](../implementation/dor-dod-guide.md)
 
@@ -173,7 +173,7 @@ class ExecutionResult:
 ## Traceability and Roadmap Alignment
 
 * Implementation slices, rollouts, and rollback levers are captured in the [Action Validation Implementation Plan](../implementation/action-validation-implementation.md).
-* Work is tracked under [EPIC-AVA-001](../implementation/epics/action-validation-architecture.md) with Story/Task checklists for each phase.
+* Work is tracked under [EPIC-AVA-001](../implementation/epics/EPIC-AVA-001-action-validation-architecture.md) with Story/Task checklists for each phase.
 * Contract updates should reference or extend relevant ADRs once authored; placeholder links will be updated during Phase 0.
 
 ## Future Opportunities
