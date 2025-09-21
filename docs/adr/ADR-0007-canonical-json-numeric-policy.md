@@ -1,7 +1,9 @@
 # ADR-0007 Canonical JSON & Numeric Policy
 
-Status: Proposed  
-Date: 2025-09-21  
+## Status
+Proposed (2025-09-21)
+
+## Metadata
 Depends On: ADR-0006  
 Traceability: Referenced by [ARCH-CDA-001](../architecture/ARCH-CDA-001-campaign-data-architecture.md)
 
@@ -20,6 +22,9 @@ Canonicalization rules:
 - Large integers > 2^53-1 disallowed in mutation fields (must be strings in non-semantic props).
 - Hash: SHA-256 over canonical serialization.
 
+## Rationale
+Ensure stable, cross-platform hashing and eliminate numeric / Unicode ambiguity that would undermine ledger hash chain guarantees.
+
 ## Consequences
 Pros:
 - Stable hashing cross-platform.
@@ -28,6 +33,10 @@ Pros:
 Cons:
 - Additional encoder complexity.
 - Need explicit conversion for user-supplied floats.
+
+## References
+- ADR-0006 Event Envelope & Hash Chain
+- RFC 8785 (JSON Canonicalization Scheme) — inspiration; simplified subset applied
 
 ## Test Vectors
 10 fixtures stored under `tests/canonical_json/` (Unicode composition, large int edge, nested ordering).

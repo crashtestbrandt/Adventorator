@@ -196,6 +196,6 @@
 | Artifact | Link | Notes |
 | --- | --- | --- |
 | Epic Issue | [#124](https://github.com/crashtestbrandt/Adventorator/issues/124) | EPIC-AVA-001 Action Validation Pipeline Enablement. |
-| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | STORY-AVA-001G ActivityLog mechanics capture. Tasks: #154 |
+| Story 001G | [#131](https://github.com/crashtestbrandt/Adventorator/issues/131) | STORY-AVA-001G ActivityLog mechanics capture. Tasks: #154-#155 |
 
 Update the table as GitHub issues are created to preserve AIDD traceability.

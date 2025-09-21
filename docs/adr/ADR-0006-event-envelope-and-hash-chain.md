@@ -1,7 +1,9 @@
 # ADR-0006 Deterministic Event Envelope & Hash Chain
 
-Status: Proposed  
-Date: 2025-09-21  
+## Status
+Proposed (2025-09-21)
+
+## Metadata
 Related Architecture: ARCH-CDA-001, ARCH-AVA-001  
 Traceability: Referenced by [ARCH-CDA-001](../architecture/ARCH-CDA-001-campaign-data-architecture.md)
 
@@ -16,6 +18,9 @@ Adopt an extended event envelope:
 - Idempotency key (first 16 bytes of composite SHA-256) prevents duplicate application.
 - Genesis event `campaign.genesis` has published expected hash.
 - DB constraints: unique (campaign_id, replay_ordinal) and (campaign_id, idempotency_key).
+
+## Rationale
+Provide tamper evidence, deterministic replay guarantees, and idempotent application to enable future snapshotting, migration safety, and fork reproducibility. Alternatives lacked enforceable integrity or replay determinism.
 
 ## Consequences
 Pros:
@@ -35,6 +40,11 @@ Cons:
 - Alembic migration adds fields & constraints.
 - Trigger enforces dense replay_ordinal.
 - CI test: hash chain continuity + genesis hash match.
+
+## References
+- ADR-0007 Canonical JSON & Numeric Policy
+- ADR-0012 Event Versioning & Migration Protocol (future evolution compatibility)
+- NIST SP 800-90A (hash algorithm considerations)
 
 ## Follow-Up
 - Integrate hash chain verification in snapshot restore path.
