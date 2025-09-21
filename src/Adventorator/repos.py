@@ -698,6 +698,13 @@ async def append_event(
     payload: dict[str, Any] | None,
     request_id: str | None = None,
 ) -> models.Event:
+    # Global lock to avoid overlapping flush() on a shared AsyncSession in highly
+    # concurrent append scenarios (test_event_concurrency_race). This preserves
+    # deterministic ordinal sequencing while allowing callers to fire tasks.
+    # Narrow scope: only guards the flush critical section.
+    global _EVENT_APPEND_LOCK
+    if "_EVENT_APPEND_LOCK" not in globals():  # lazy init to avoid import cycles
+        _EVENT_APPEND_LOCK = asyncio.Lock()  # type: ignore
     # Normalize actor id (character name when numeric id maps to character)
     scene = await s.get(models.Scene, scene_id)
     if scene is None:
@@ -711,51 +718,74 @@ async def append_event(
     if actor_norm is None and actor_id is not None:
         actor_norm = str(actor_id)
     payload_dict = payload or {}
-    last_event = await s.execute(
-        select(models.Event)
-        .where(models.Event.campaign_id == campaign_id)
-        .order_by(models.Event.replay_ordinal.desc())
-        .limit(1)
-    )
-    last_event_row = last_event.scalar_one_or_none()
-    if last_event_row is None:
-        replay_ordinal = 0
-        prev_hash = event_envelope.GENESIS_PREV_EVENT_HASH
-    else:
-        replay_ordinal = last_event_row.replay_ordinal + 1
-        prev_hash = bytes(last_event_row.payload_hash)
-    execution_request_id = request_id or (
-        f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
-    )
-    payload_hash = event_envelope.compute_payload_hash(payload_dict)
-    idempotency_key = event_envelope.compute_idempotency_key(
-        campaign_id=campaign_id,
-        event_type=type,
-        execution_request_id=execution_request_id,
-        plan_id=None,
-        payload=payload_dict,
-        replay_ordinal=replay_ordinal,
-    )
-    ev = models.Event(
-        campaign_id=campaign_id,
-        scene_id=scene_id,
-        replay_ordinal=replay_ordinal,
-        actor_id=actor_norm,
-        type=type,
-        event_schema_version=event_envelope.GENESIS_SCHEMA_VERSION,
-        world_time=replay_ordinal,
-        prev_event_hash=prev_hash,
-        payload_hash=payload_hash,
-        idempotency_key=idempotency_key,
-        plan_id=None,
-        execution_request_id=execution_request_id,
-        approved_by=None,
-        payload=payload_dict,
-        migrator_applied_from=None,
-    )
-    s.add(ev)
-    await _flush_retry(s)
-    inc_counter("events.append.ok")
+    async with _EVENT_APPEND_LOCK:  # type: ignore
+        # Determine ordinal & linkage inside lock to prevent race producing gaps
+        last_event = await s.execute(
+            select(models.Event)
+            .where(models.Event.campaign_id == campaign_id)
+            .order_by(models.Event.replay_ordinal.desc())
+            .limit(1)
+        )
+        last_event_row = last_event.scalar_one_or_none()
+        if last_event_row is None:
+            replay_ordinal = 0
+            prev_hash = event_envelope.GENESIS_PREV_EVENT_HASH
+        else:
+            replay_ordinal = last_event_row.replay_ordinal + 1
+            prev_hash = bytes(last_event_row.payload_hash)
+        execution_request_id = request_id or (
+            f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+        )
+        payload_hash = event_envelope.compute_payload_hash(payload_dict)
+        idempotency_key = event_envelope.compute_idempotency_key(
+            campaign_id=campaign_id,
+            event_type=type,
+            execution_request_id=execution_request_id,
+            plan_id=None,
+            payload=payload_dict,
+            replay_ordinal=replay_ordinal,
+        )
+        ev = models.Event(
+            campaign_id=campaign_id,
+            scene_id=scene_id,
+            replay_ordinal=replay_ordinal,
+            actor_id=actor_norm,
+            type=type,
+            event_schema_version=event_envelope.GENESIS_SCHEMA_VERSION,
+            world_time=replay_ordinal,
+            prev_event_hash=prev_hash,
+            payload_hash=payload_hash,
+            idempotency_key=idempotency_key,
+            plan_id=None,
+            execution_request_id=execution_request_id,
+            approved_by=None,
+            payload=payload_dict,
+            migrator_applied_from=None,
+        )
+        s.add(ev)
+        await _flush_retry(s)
+    inc_counter("events.append.ok")  # legacy naming kept
+    inc_counter("events.applied")  # HR-004 new canonical counter
+    # Structured log for observability (HR-003): include identifiers & hash prefixes
+    try:  # Best-effort: logging must not break persistence path
+        from Adventorator.action_validation.logging_utils import (
+            log_event as _log_event,
+        )  # lazy import
+
+        _log_event(
+            "events",
+            "appended",
+            campaign_id=campaign_id,
+            scene_id=scene_id,
+            event_id=getattr(ev, "id", None),
+            replay_ordinal=replay_ordinal,
+            type=type,
+            request_id=execution_request_id,
+            payload_hash=payload_hash.hex()[:16],
+            idempo_key=idempotency_key.hex()[:16],
+        )
+    except Exception:
+        pass
     return ev
 
 

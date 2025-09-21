@@ -6,7 +6,8 @@ env = "dev"
 # Baseline validation pass: AVA-related features disabled.
 llm = true
 executor = true
-events = true
+# events: disabled by default pending completion of observability & rollback hardening (HR-002)
+events = false
 rules = true
 llm_visible = true
 action_validation = true

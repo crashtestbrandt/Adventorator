@@ -280,14 +280,16 @@ def upgrade() -> None:
             EXECUTE FUNCTION events_enforce_replay_ordinal();
             """
         )
-        op.execute(
-            """
-            SELECT setval(
-                pg_get_serial_sequence('events', 'event_id'),
-                (SELECT COALESCE(MAX(event_id), 0) FROM events)
+        if new_rows:
+            op.execute(
+                """
+                SELECT setval(
+                    pg_get_serial_sequence('events', 'event_id'),
+                    (SELECT MAX(event_id) + 1 FROM events),
+                    false
+                )
+                """
             )
-            """
-        )
     else:
         op.execute(
             """
@@ -407,7 +409,8 @@ def downgrade() -> None:
             """
             SELECT setval(
                 pg_get_serial_sequence('events', 'id'),
-                (SELECT COALESCE(MAX(id), 0) FROM events)
+                COALESCE((SELECT MAX(id) FROM events), 0) + 1,
+                false
             )
             """
         )

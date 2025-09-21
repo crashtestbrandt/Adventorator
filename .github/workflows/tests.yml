@@ -6,13 +6,6 @@ on:
   push:
     branches: [ main ]
 
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   detect-changes:
     name: Detect code-impacting changes
@@ -48,13 +41,41 @@ jobs:
         run: |
           echo "code filter result: ${{ steps.filter.outputs.code }}" || true
 
-  test:
+  test-sqlite:
+    name: Test (sqlite)
     needs: detect-changes
     if: needs.detect-changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        db: [sqlite, postgres]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run tests (sqlite)
+        env:
+          ENV: dev
+          DISCORD_PUBLIC_KEY: dummy
+          DATABASE_URL: sqlite+aiosqlite:///./adventorator_test.sqlite3
+        run: |
+          echo "Running tests for sqlite with DATABASE_URL=$DATABASE_URL"
+          pytest -q
+
+  test-postgres:
+    name: Test (postgres)
+    needs: detect-changes
+    if: needs.detect-changes.outputs.changed == 'true'
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16
@@ -69,7 +90,6 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
-        # Only needed when matrix.db == 'postgres'; harmless otherwise
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,29 +107,30 @@ jobs:
           pip install -e .
 
       - name: Install Postgres client (for psql)
-        if: matrix.db == 'postgres'
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
-      - name: Prepare database (Postgres only)
-        if: matrix.db == 'postgres'
+
+      - name: Prepare database (postgres)
         env:
           PGPASSWORD: adventorator
           DATABASE_URL: postgresql+psycopg://adventorator:adventorator@localhost:5432/adventorator
         run: |
           psql -h localhost -U adventorator -d adventorator -c 'SELECT 1;' || true
           PYTHONPATH=./src alembic upgrade head
-      - name: Run tests (matrix)
+
+      - name: Run tests (postgres)
         env:
           ENV: dev
           DISCORD_PUBLIC_KEY: dummy
-          DATABASE_URL: ${{ matrix.db == 'postgres' && 'postgresql+asyncpg://adventorator:adventorator@localhost:5432/adventorator' || 'sqlite+aiosqlite:///./adventorator_test.sqlite3' }}
+          DATABASE_URL: postgresql+asyncpg://adventorator:adventorator@localhost:5432/adventorator
         run: |
+          echo "Running tests for postgres with DATABASE_URL=$DATABASE_URL"
           pytest -q
 
   code-quality-gates:
     runs-on: ubuntu-latest
-    needs: [detect-changes, test]
+    needs: [detect-changes, test-sqlite, test-postgres]
     if: needs.detect-changes.outputs.changed == 'true'
     steps:
       - name: Checkout
@@ -157,7 +178,6 @@ jobs:
   docs-quality:
     name: Docs / Prompts / Evaluations
     runs-on: ubuntu-latest
-    # Always run; independent of code changes to satisfy requirement (1)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
