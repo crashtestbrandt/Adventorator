@@ -215,9 +215,9 @@ async def plan(
         if return_plan:
             from Adventorator.config import load_settings
             from Adventorator.planner_tiers import (
-                resolve_planning_level,
                 expand_plan,
                 guards_for_steps,
+                resolve_planning_level,
             )
 
             plan_obj = plan_from_planner_output(out)
@@ -259,7 +259,8 @@ async def plan(
                 tiers_enabled=tiers_enabled,
                 guard_counts=[len(s.guards) for s in plan_obj.steps],
             )
-            # Emit a single structured snapshot event with the full plan for external tooling / CLI raw capture.
+            # Emit a single structured snapshot event with the full plan
+            # for external tooling / CLI raw capture.
             try:
                 total_guards = sum(len(s.guards) for s in plan_obj.steps)
                 log.info(

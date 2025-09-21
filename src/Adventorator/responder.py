@@ -73,16 +73,24 @@ async def followup_message(
             r.raise_for_status()
             log.info("discord.followup.sent", http_status_code=r.status_code)
         except httpx.RequestError as e:
-            log.error("discord.followup.network_error", target_url=str(e.request.url), error=str(e))
-            if not settings.discord_webhook_url_override:
+            log.error(
+                "discord.followup.network_error",
+                target_url=str(getattr(e.request, "url", url)),
+                error=str(e),
+                base_url_source=base_url_source,
+            )
+            # In dev, when using an override (settings or header), swallow network errors.
+            # Only re-raise when targeting the default Discord API base.
+            if base_url_source == "default":
                 raise
         except httpx.HTTPStatusError as e:
             log.error(
                 "discord.followup.http_error",
                 http_status_code=e.response.status_code,
                 text_preview=(e.response.text or "")[:200],
+                base_url_source=base_url_source,
             )
-            if not settings.discord_webhook_url_override:
+            if base_url_source == "default":
                 raise
 
 
@@ -139,14 +147,20 @@ async def followup_message_with_attachment(
             r.raise_for_status()
             log.info("discord.followup.sent_attachment", http_status_code=r.status_code)
         except httpx.RequestError as e:
-            log.error("discord.followup.network_error", target_url=str(e.request.url), error=str(e))
-            if not settings.discord_webhook_url_override:
+            log.error(
+                "discord.followup.network_error",
+                target_url=str(getattr(e.request, "url", url)),
+                error=str(e),
+                base_url_source=base_url_source,
+            )
+            if base_url_source == "default":
                 raise
         except httpx.HTTPStatusError as e:
             log.error(
                 "discord.followup.http_error",
                 http_status_code=e.response.status_code,
                 text_preview=(e.response.text or "")[:200],
+                base_url_source=base_url_source,
             )
-            if not settings.discord_webhook_url_override:
+            if base_url_source == "default":
                 raise

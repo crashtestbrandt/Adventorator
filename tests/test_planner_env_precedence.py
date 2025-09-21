@@ -1,9 +1,8 @@
 import os
+import socket
 import subprocess
 import sys
-import json
 import time
-import socket
 from pathlib import Path
 
 import pytest

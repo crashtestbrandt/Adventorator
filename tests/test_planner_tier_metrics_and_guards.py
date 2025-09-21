@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from Adventorator.metrics import reset_counters, get_counter
-from Adventorator.planner import plan as planner_plan
 from Adventorator.action_validation.schemas import Plan
+from Adventorator.metrics import get_counter, reset_counters
+from Adventorator.planner import plan as planner_plan
 
 
 class DummyLLM:
@@ -35,7 +35,8 @@ async def test_planner_monkeypatched_guards_population(monkeypatch):
     from Adventorator import planner_tiers
 
     def _fake_guards_for_steps(steps, *, tiers_enabled: bool = False):  # noqa: D401
-        # Simulate base population (if tiers_enabled true, base impl would add capability:basic_action)
+        # Simulate base population (if tiers_enabled true, base impl would add
+        # capability:basic_action)
         if tiers_enabled:
             for s in steps:
                 if "capability:basic_action" not in s.guards:

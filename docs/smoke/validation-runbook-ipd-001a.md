@@ -2,8 +2,6 @@
 Status: Draft | Audience: Dev / Reviewer / QA
 Scope: Validate Ask contracts placement, runtime schema alignment, feature flags, and non-regression.
 
-> Docs-only branch note: On the `ADR-for-EPIC-IPD-001` branch, validate contracts and flags only. The `/ask` handler and NLU are delivered in Story B/C branches.
-
 ## 1. Preconditions
 - Fresh clone or clean working tree on branch: `180-story-ipd-001a---contracts-and-feature-flag-scaffolding`.
 - Python 3.12+ and Docker (Desktop) installed.
@@ -98,7 +96,7 @@ $env:FEATURES_IMPROBABILITY_DRIVE=$false ; $env:FEATURES_ASK=$false
 - Expected: Flags default off; sub-flags as specified (rule-based true, others false).
 - Observability: Test output PASS.
 
-### 4.4 CLI Wire-Up Sanity (No /ask on this branch)
+### 4.4 CLI Wire-Up Sanity (No /ask yet)
 - Purpose: Ensure CLI tooling runs and application responds to interactions.
 - Steps:
   1) With app running, list commands via web CLI (will discover existing slash commands):
