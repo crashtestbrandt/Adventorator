@@ -2,6 +2,10 @@
 
 These instructions apply to the entire repository.
 
+## .agentsignore
+
+Never open or consider any file specified in ./.agentsignore. The .agentsignore file uses Git ignore pattern rules.
+
 ## Development workflow
 - Prefer the existing Makefile targets (`make dev`, `make run`, `make tunnel`) instead of ad-hoc scripts when bootstrapping or running the service.
 - When modifying Python code, run `make format`, `make lint`, `make type`, and `make test` before committing. For docs-only edits these checks are optional.

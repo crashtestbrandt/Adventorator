@@ -16,6 +16,9 @@ def record_plan_steps(plan: Plan) -> None:
     """
 
     inc_counter("plan.steps.count", len(plan.steps))
+    # Guards count (aggregate across steps)
+    total_guards = sum(len(s.guards) for s in plan.steps)
+    inc_counter("plan.guards.count", total_guards)
     if plan.feasible is True:
         inc_counter("planner.feasible")
     elif plan.feasible is False:
@@ -46,3 +49,8 @@ def record_planner_failure(kind: str) -> None:
     """
     safe = kind.replace(" ", "_").replace("/", "_")
     inc_counter(f"planner.failure.{safe}")
+
+
+def record_planning_tier(level: int) -> None:
+    """Emit a counter for the effective planning tier used."""
+    inc_counter(f"planner.tier.level.{level}")

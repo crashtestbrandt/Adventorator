@@ -1,0 +1,4 @@
+# This file uses Git ignore pattern rules.
+# AGENTS: Do not open or consider any files specified by the patterns here.
+
+prompts/dev/*

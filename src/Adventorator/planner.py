@@ -213,7 +213,76 @@ async def plan(
             duration_ms=int((time.monotonic() - started) * 1000),
         )
         if return_plan:
-            return plan_from_planner_output(out)
+            from Adventorator.config import load_settings
+            from Adventorator.planner_tiers import (
+                resolve_planning_level,
+                expand_plan,
+                guards_for_steps,
+            )
+
+            plan_obj = plan_from_planner_output(out)
+            settings = None
+            try:
+                settings = load_settings()
+            except Exception:  # pragma: no cover
+                settings = None
+            level = resolve_planning_level(settings)
+            tiers_enabled = (
+                getattr(settings, "features_planning_tiers", False)
+                if settings is not None
+                else False
+            )
+            log.info(
+                "planner.tier.selected",
+                level=level,
+                tiers_enabled=tiers_enabled,
+                step_count=len(plan_obj.steps),
+            )
+            pre_ops = [s.op for s in plan_obj.steps]
+            log.debug(
+                "planner.tier.pre_expand",
+                level=level,
+                steps=pre_ops,
+                tiers_enabled=tiers_enabled,
+            )
+            plan_obj = expand_plan(plan_obj, level)
+            post_ops = [s.op for s in plan_obj.steps]
+            log.debug(
+                "planner.tier.post_expand",
+                level=level,
+                steps=post_ops,
+                changed=pre_ops != post_ops,
+            )
+            guards_for_steps(plan_obj.steps, tiers_enabled=tiers_enabled)
+            log.debug(
+                "planner.tier.guards_applied",
+                tiers_enabled=tiers_enabled,
+                guard_counts=[len(s.guards) for s in plan_obj.steps],
+            )
+            # Emit a single structured snapshot event with the full plan for external tooling / CLI raw capture.
+            try:
+                total_guards = sum(len(s.guards) for s in plan_obj.steps)
+                log.info(
+                    "planner.plan_snapshot",
+                    level=level,
+                    tiers_enabled=tiers_enabled,
+                    step_count=len(plan_obj.steps),
+                    guard_total=total_guards,
+                    plan=plan_obj.model_dump(),
+                )
+            except Exception:  # pragma: no cover - snapshot emission should never raise
+                pass
+            try:
+                from Adventorator.action_validation.metrics import (
+                    record_plan_steps,
+                    record_planning_tier,
+                )
+
+                record_planning_tier(level)
+                record_plan_steps(plan_obj)
+            except Exception:  # pragma: no cover
+                pass
+            return plan_obj
         return out
     except Exception:
         log.warning("planner.validation.failed", raw_text_preview=(text or "")[:200])

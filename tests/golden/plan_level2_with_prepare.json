@@ -1,0 +1,11 @@
+{
+  "feasible": true,
+  "steps": [
+    {"op": "prepare.roll", "args": {}, "guards": ["capability:basic_action"]},
+    {"op": "roll.d20", "args": {}, "guards": ["capability:basic_action"]}
+  ],
+  "failed_predicates": [],
+  "repairs": [],
+  "alternatives": [],
+  "rationale": ""
+}
