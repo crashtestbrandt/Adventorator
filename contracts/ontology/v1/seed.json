@@ -1,0 +1,17 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Adventorator Ontology Seed",
+    "version": "v1",
+    "description": "Seed ontology tag definitions for planner / action validation pipelines."
+  },
+  "x-ontology": {
+    "version": 1,
+    "tags": [
+      {"id": "action.attack", "kind": "action", "description": "Offensive action against a target"},
+      {"id": "target.npc", "kind": "entity", "description": "Non-player character target"},
+      {"id": "target.enemy", "kind": "entity", "description": "Hostile enemy target"},
+      {"id": "context.combat", "kind": "context", "description": "Indicates combat scenario context"}
+    ]
+  }
+}
