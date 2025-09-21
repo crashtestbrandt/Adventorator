@@ -97,6 +97,8 @@ def _toml_settings_source() -> dict[str, Any]:
     out["features_ask_nlu_rule_based"] = bool(ask_cfg.get("nlu_rule_based", True))
     out["features_ask_kb_lookup"] = bool(ask_cfg.get("kb_lookup", False))
     out["features_ask_planner_handoff"] = bool(ask_cfg.get("planner_handoff", False))
+    # Dev toggle for verbose NLU logging (no metrics) — defaults off
+    out["features_ask_nlu_debug"] = bool(ask_cfg.get("nlu_debug", False))
 
     log_cfg = t.get("logging", {}) or {}
     # Derive per-handler levels if provided as strings; otherwise fallback from booleans
@@ -194,6 +196,7 @@ class Settings(BaseSettings):
     features_ask_nlu_rule_based: bool = True
     features_ask_kb_lookup: bool = False
     features_ask_planner_handoff: bool = False
+    features_ask_nlu_debug: bool = False
 
     # --- Retrieval (Phase 6) ---
     class RetrievalConfig(BaseModel):

@@ -1,0 +1,13 @@
+{
+  "input": "go to the door then attack",
+  "intent": {
+    "action": "move",
+    "actor_ref": null,
+    "target_ref": "door",
+    "modifiers": []
+  },
+  "tags": [
+    {"key": "action.move", "confidence": 1.0},
+    {"key": "target.object", "value": "obj:door", "confidence": 1.0}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "input": "I attack the goblin quickly",
+  "intent": {
+    "action": "attack",
+    "actor_ref": null,
+    "target_ref": "goblin",
+    "modifiers": ["quickly"]
+  },
+  "tags": [
+    {"key": "action.attack", "confidence": 1.0},
+    {"key": "target.npc", "value": "npc:goblin", "confidence": 1.0}
+  ]
+}
