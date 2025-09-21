@@ -5,7 +5,7 @@ Status: Planned
 Owner: NLU/Ontology WG
 
 ## Summary
-Implement a rule-based parser for action, actor, object/target refs, plus AffordanceTags extraction from a small ontology; include entity normalization hooks.
+Implement a deterministic, rule-based parser for action, actor, object/target refs, plus AffordanceTags extraction from a small ontology; include entity normalization hooks. This story owns the initial token/stopword heuristic; no external NLP.
 
 ## Acceptance Criteria
 - Deterministic parsing with seeded examples; no network calls.
@@ -36,6 +36,7 @@ Implement a rule-based parser for action, actor, object/target refs, plus Afford
 - Overfitting rules: keep coverage broad; add fixtures iteratively.
 
 ## Dependencies
+- ADR-0005 (contracts/flags/rollout)
 - Story E (ontology) may run in parallel for seed ontology.
  - Story D (KB adapter) for future normalization enhancements.
 

@@ -11,6 +11,7 @@
 - [Implementation Plan — ImprobabilityDrive](../improbability-drive-implementation.md)
 - [EPIC-AVA-001 — Action Validation Pipeline Enablement](./EPIC-AVA-001-action-validation-architecture.md)
 - AIDD governance: [DoR/DoD](../dor-dod-guide.md)
+- ADR: [ADR-0005 — ImprobabilityDrive (/ask): contracts, flags, and rollout](../../adr/ADR-0005-improbabilitydrive-contracts-and-flags.md)
 
 **Definition of Ready.** Stories satisfy cross-team DoR plus:
 - Proposed contracts for AskReport/IntentFrame/AffordanceTags enumerated with versioning.
@@ -21,6 +22,7 @@
 - Contracts, prompts, and flags merged and linked here; architecture references updated if needed.
 - Quality gates (format, lint, type, test) run green with new assets included. Docs-only edits may skip code gates per AGENTS.md.
 - Observability updates documented (structured logs, counters) and ActivityLog integration points identified.
+- Smoke runbook: [Validation Runbook — STORY-IPD-001A](../../smoke/validation-runbook-ipd-001a.md)
 
 ---
 
@@ -29,6 +31,8 @@
 - 2025-09-20: Defer external NLP libraries (e.g., spaCy). Proceed with deterministic rule-based NLU and KB lookups in Phases 2–3. Any future evaluation remains parked behind a disabled flag and will require benchmarks, privacy review, and an ADR.
 
 ---
+
+> Branch scope note: The `ADR-for-EPIC-IPD-001` branch is documentation-only (ADR + epic/stories/runbook). Source changes for `/ask` and NLU will land in Story B/C branches.
 
 ## Stories
 
