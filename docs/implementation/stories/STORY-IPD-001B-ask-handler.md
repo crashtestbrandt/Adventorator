@@ -5,13 +5,13 @@ Status: Planned
 Owner: Interactions/Responder WG
 
 ## Summary
-Add `/ask` handler using registry decorators and responder abstraction; when enabled, constructs AskReport using NLU/tagging scaffold and emits structured logs/metrics.
+Add `/ask` handler using registry decorators and responder abstraction; wire config gating and minimal observability stubs. No NLU/tagging logic in this story; that lands in Story C.
 
 ## Acceptance Criteria
 - `/ask` available behind `features.ask` and `features.improbability_drive`.
-- On success, returns a concise textual summary and stores full AskReport for observability.
-- On disable, no behavior change to existing commands.
- - Handler lives alongside existing interaction handlers, using `@slash_command` and `inv.responder.send(...)` as per AGENTS.md.
+- When disabled, returns a clear “disabled” message; no behavior change to existing commands.
+- When enabled, accepts input and returns an ephemeral acknowledgement (no action/target inference in this story).
+- Handler lives alongside existing interaction handlers, using `@slash_command` and `inv.responder.send(...)` as per AGENTS.md.
 
 ## Tasks
 - [ ] TASK-IPD-HANDLER-04 — Implement `/ask` handler with config gating and responder usage.
@@ -38,7 +38,7 @@ Add `/ask` handler using registry decorators and responder abstraction; when ena
 - User confusion: return concise summaries; feature flag off by default.
 
 ## Dependencies
-- Story A (contracts/flags) must be in place.
+- ADR-0005 (contracts/flags/rollout) and Story A (contracts/flags) are in place.
 
 ## Feature Flags
 - features.improbability_drive

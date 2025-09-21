@@ -5,7 +5,7 @@ Status: Planned
 Owner: Contracts/Config WG
 
 ## Summary
-Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and AffordanceTags with serialization helpers and adapters as needed. Add feature flags to gate rollout.
+Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and AffordanceTags with serialization helpers and adapters as needed. Add feature flags to gate rollout. See ADR-0005 for the governance decision on contract registry placement and settings precedence.
 
 ## Acceptance Criteria
 - Models align with ARCH-AVA-001 contracts and pass round-trip serialization tests.
@@ -41,6 +41,7 @@ Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and Affordanc
 
 ## Dependencies
 - ARCH-AVA-001 contracts.
+ - ADR-0005 ImprobabilityDrive contracts and flags.
 
 ## Feature Flags
 - features.improbability_drive (default=false)
@@ -67,3 +68,6 @@ Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and Affordanc
 - Contracts module (runtime models): `src/Adventorator/schemas.py` (AskReport, IntentFrame, AffordanceTag)
 - Contract registry (artifact): `contracts/ask/v1/` JSON schema, validated by `scripts/validate_prompts_and_contracts.py`
 - Tests: `tests/ask/` with golden round-trip fixtures
+
+Follow-ups proposed:
+- Add a parity test ensuring `AskReport.model_json_schema()` remains in sync with `contracts/ask/v1/ask-report.v1.json`.
