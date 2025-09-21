@@ -5,9 +5,25 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    event as sa_event,
+)
+from sqlalchemy.orm import Mapped, mapped_column, synonym
 
 from Adventorator.db import Base
 
@@ -250,29 +266,159 @@ class PendingAction(Base):
 class Event(Base):
     __tablename__ = "events"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    scene_id: Mapped[int] = mapped_column(ForeignKey("scenes.id", ondelete="CASCADE"), index=True)
-    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    type: Mapped[str] = mapped_column(String(64), index=True)
-    payload: Mapped[dict] = mapped_column(JSON)
-    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    event_id: Mapped[int] = mapped_column("event_id", Integer, primary_key=True, autoincrement=True)
+    id = synonym("event_id")
+
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
     )
+    scene_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scenes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    replay_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column("event_type", String(64), nullable=False)
+    type = synonym("event_type")
+    event_schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    world_time: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    wall_time_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    prev_event_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    payload_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    idempotency_key: Mapped[bytes] = mapped_column(LargeBinary(16), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    plan_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    execution_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    request_id = synonym("execution_request_id")
+    approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    migrator_applied_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
+        UniqueConstraint("campaign_id", "replay_ordinal", name="ux_events_campaign_replay"),
+        UniqueConstraint("campaign_id", "idempotency_key", name="ux_events_campaign_idempotency"),
         Index(
-            "ix_events_scene_time",
-            "scene_id",
-            "created_at",
+            "ix_events_campaign_replay",
+            "campaign_id",
+            "replay_ordinal",
         ),
         Index(
-            "ix_events_scene_actor_time",
-            "scene_id",
+            "ix_events_campaign_wall_time",
+            "campaign_id",
+            "wall_time_utc",
+        ),
+        Index(
+            "ix_events_campaign_actor",
+            "campaign_id",
             "actor_id",
-            "created_at",
+        ),
+        Index(
+            "ix_events_plan",
+            "plan_id",
+        ),
+        Index(
+            "ix_events_execution_request",
+            "execution_request_id",
         ),
     )
+
+
+# Dense replay ordinal trigger DDL
+_EVENTS_REPLAY_TRIGGER_FN = "events_enforce_dense_replay_fn"
+_EVENTS_REPLAY_TRIGGER = "events_enforce_dense_replay"
+
+_POSTGRES_REPLAY_FN_SQL = f"""
+CREATE OR REPLACE FUNCTION {_EVENTS_REPLAY_TRIGGER_FN}()
+RETURNS TRIGGER AS $$
+DECLARE
+    last_ordinal integer;
+BEGIN
+    SELECT replay_ordinal INTO last_ordinal
+    FROM events
+    WHERE campaign_id = NEW.campaign_id
+    ORDER BY replay_ordinal DESC
+    LIMIT 1
+    FOR UPDATE;
+
+    IF last_ordinal IS NULL THEN
+        IF NEW.replay_ordinal IS NULL THEN
+            NEW.replay_ordinal := 0;
+        ELSIF NEW.replay_ordinal <> 0 THEN
+            RAISE EXCEPTION USING MESSAGE = format(
+                'Replay ordinal must start at 0 for campaign %%s (got %%s)',
+                NEW.campaign_id,
+                NEW.replay_ordinal
+            );
+        END IF;
+    ELSE
+        IF NEW.replay_ordinal IS NULL THEN
+            NEW.replay_ordinal := last_ordinal + 1;
+        ELSIF NEW.replay_ordinal <> last_ordinal + 1 THEN
+            RAISE EXCEPTION USING MESSAGE = format(
+                'Replay ordinal must increment by 1 for campaign %%s (expected %%s got %%s)',
+                NEW.campaign_id,
+                last_ordinal + 1,
+                NEW.replay_ordinal
+            );
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+_POSTGRES_REPLAY_TRIGGER_SQL = f"""
+CREATE TRIGGER {_EVENTS_REPLAY_TRIGGER}
+BEFORE INSERT ON events
+FOR EACH ROW
+EXECUTE FUNCTION {_EVENTS_REPLAY_TRIGGER_FN}();
+"""
+
+_SQLITE_REPLAY_TRIGGER_SQL = f"""
+CREATE TRIGGER {_EVENTS_REPLAY_TRIGGER}
+BEFORE INSERT ON events
+BEGIN
+    SELECT
+        CASE
+            WHEN NEW.replay_ordinal IS NULL THEN
+                RAISE(ABORT, 'replay_ordinal must not be NULL')
+            WHEN NEW.replay_ordinal <> (
+                COALESCE(
+                    (
+                        SELECT replay_ordinal
+                        FROM events
+                        WHERE campaign_id = NEW.campaign_id
+                        ORDER BY replay_ordinal DESC
+                        LIMIT 1
+                    ),
+                    -1
+                ) + 1
+            ) THEN
+                RAISE(ABORT, 'replay_ordinal must form a dense sequence per campaign')
+        END;
+END;
+"""
+
+
+@sa_event.listens_for(Event.__table__, "after_create")
+def _create_events_replay_trigger(target, connection, **kw) -> None:
+    dialect = connection.dialect.name
+    if dialect == "postgresql":
+        connection.execute(text(_POSTGRES_REPLAY_FN_SQL))
+        connection.execute(text(_POSTGRES_REPLAY_TRIGGER_SQL))
+    elif dialect == "sqlite":
+        connection.execute(text(_SQLITE_REPLAY_TRIGGER_SQL))
+
+
+@sa_event.listens_for(Event.__table__, "before_drop")
+def _drop_events_replay_trigger(target, connection, **kw) -> None:
+    dialect = connection.dialect.name
+    if dialect == "postgresql":
+        connection.execute(text(f"DROP TRIGGER IF EXISTS {_EVENTS_REPLAY_TRIGGER} ON events"))
+        connection.execute(text(f"DROP FUNCTION IF EXISTS {_EVENTS_REPLAY_TRIGGER_FN}()"))
+    elif dialect == "sqlite":
+        connection.execute(text(f"DROP TRIGGER IF EXISTS {_EVENTS_REPLAY_TRIGGER}"))
 
 
 # -----------------------------

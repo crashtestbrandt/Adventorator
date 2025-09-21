@@ -14,6 +14,12 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Adventorator import models
+from Adventorator.events import (
+    compute_idempotency_key,
+    compute_payload_hash,
+    ensure_genesis_event,
+    get_chain_tip,
+)
 from Adventorator.metrics import inc_counter
 from Adventorator.schemas import CharacterSheet
 
@@ -320,14 +326,14 @@ async def healthcheck(s: AsyncSession) -> None:
 
 
 async def get_latest_event_id_for_scene(s: AsyncSession, *, scene_id: int) -> int | None:
-    """Return the most recent Event.id for a scene, or None if none exist.
+    """Return the most recent Event.event_id for a scene, or None if none exist.
 
     This is used to key renderer cache by the last event applied to the scene.
     """
     stmt = (
-        select(models.Event.id)
+        select(models.Event.event_id)
         .where(models.Event.scene_id == scene_id)
-        .order_by(models.Event.id.desc())
+        .order_by(models.Event.event_id.desc())
         .limit(1)
     )
     q = await s.execute(stmt)
@@ -697,26 +703,56 @@ async def append_event(
     payload: dict[str, Any] | None,
     request_id: str | None = None,
 ) -> models.Event:
+    scene = await s.get(models.Scene, scene_id)
+    if scene is None:
+        raise ValueError(f"Scene {scene_id} does not exist")
+    campaign_id = scene.campaign_id
+
     # Normalize actor id (character name when numeric id maps to character)
-    actor_norm = await normalize_actor_ref(
-        s,
-        campaign_id=(
-            # Resolve campaign via scene to avoid requiring it from caller
-            (await s.get(models.Scene, scene_id)).campaign_id  # type: ignore[union-attr]
-            if scene_id
-            else 0
-        ),
-        ident=actor_id,
-    )
+    actor_norm = await normalize_actor_ref(s, campaign_id=campaign_id, ident=actor_id)
     if actor_norm is None and actor_id is not None:
         actor_norm = str(actor_id)
+    payload_dict: dict[str, Any] = dict(payload or {})
+    request_ref = (
+        request_id or f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+    )
+
+    tip = await get_chain_tip(s, campaign_id=campaign_id)
+    if tip is None:
+        genesis = await ensure_genesis_event(s, campaign_id=campaign_id)
+        last_ordinal = genesis.replay_ordinal
+        prev_hash = bytes(genesis.payload_hash)
+    else:
+        last_ordinal, prev_hash = tip
+
+    next_ordinal = last_ordinal + 1
+    payload_hash = compute_payload_hash(payload_dict)
+    idem_key = compute_idempotency_key(
+        campaign_id=campaign_id,
+        event_type=type,
+        payload=payload_dict,
+        plan_id=None,
+        execution_request_id=request_ref,
+    )
+    wall_time = datetime.now(timezone.utc)
+
     ev = models.Event(
+        campaign_id=campaign_id,
         scene_id=scene_id,
+        replay_ordinal=next_ordinal,
+        event_type=type,
+        event_schema_version=1,
+        world_time=next_ordinal,
+        wall_time_utc=wall_time,
+        prev_event_hash=prev_hash,
+        payload_hash=payload_hash,
+        idempotency_key=idem_key,
         actor_id=actor_norm,
-        type=type,
-        payload=payload or {},
-        request_id=request_id
-        or f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+        plan_id=None,
+        execution_request_id=request_ref,
+        approved_by=None,
+        payload=payload_dict,
+        migrator_applied_from=None,
     )
     s.add(ev)
     await _flush_retry(s)
@@ -841,8 +877,8 @@ async def list_events(
 ) -> list[models.Event]:
     stmt = select(models.Event).where(models.Event.scene_id == scene_id)
     if since_id is not None:
-        stmt = stmt.where(models.Event.id > since_id)
-    stmt = stmt.order_by(models.Event.id.asc()).limit(limit)
+        stmt = stmt.where(models.Event.event_id > since_id)
+    stmt = stmt.order_by(models.Event.replay_ordinal.asc()).limit(limit)
     q = await s.execute(stmt)
     return list(q.scalars().all())
 
