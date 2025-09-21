@@ -191,25 +191,6 @@
   - Documentation updated describing tier behavior and guard semantics.
   - Tests stored with golden fixtures verifying Plan JSON.
 
-### STORY-AVA-001J — Operational hardening and rollout
-*Epic linkage:* Ensures safe rollout with metrics, timeouts, and staged enablement.
-
-- **Summary.** Apply operational guardrails, metrics, and rollout plans for enabling Action Validation in production.
-- **Acceptance criteria.**
-  - Planner/orchestrator timeouts and payload bounds enforced with configuration knobs.
-  - Metrics for planner feasibility, predicate failures, executor preview/apply, and ActivityLog creation captured.
-  - Rollout plan defines dev, canary, and GA enablement with rollback triggers.
-- **Tasks.**
-  - [ ] `TASK-AVA-TIMEOUT-29` — Implement timeout and payload bound configurations with safe defaults. *(Planner timeout wired; payload bounding and executor knobs outstanding.)*
-  - [ ] `TASK-AVA-METRIC-30` — Expand metrics taxonomy and dashboards for rollout monitoring. *(Planner/predicate metrics exist; rollout dashboards pending.)*
-  - [ ] `TASK-AVA-RUNBOOK-31` — Document rollout/canary plan with escalation and rollback procedures.
-- **DoR.**
-  - Operations team reviews rollout plan outline.
-  - Monitoring requirements baselined with SRE/analytics.
-- **DoD.**
-  - Runbook linked in operations resources and this epic.
-  - Metrics dashboards or mockups attached to Story issue.
-
 ## Traceability Log
 
 | Artifact | Link | Notes |

@@ -14,7 +14,7 @@ The `/plan` command delegates free-form player intent to the AI planner. The pla
 - A generated command catalog (JSON) is stored in `contracts/planner/catalog.v{n}.json` and updated whenever commands change.
 - Planner prompts reference the catalog via explicit version tags stored under `prompts/planner/`.
 - CI quality gates compare the catalog to live registry metadata and block merges when drift is detected.
-- Feature flag `features.planner` controls rollout; disabling it bypasses planner routing and surfaces manual command selection.
+- Rollout is gated by `[planner].enabled` (legacy fallback: `[features].planner`); disabling bypasses planner routing and surfaces manual command selection.
 
 ## Rationale
 - Contract-first governance reduces planner hallucinations and ensures compatibility with slash command schema changes.

@@ -1,6 +1,10 @@
 ---
+id: PROMPT-DOD-ANALYSIS-V1
 version: 1
+model: governance-analysis
 author: Brandt
+owner: AIDD Governance WG
+adr: ADR-0003
 purpose: Provide a rigorous, traceable Definition of Done (DoD) analysis ensuring all delivery, quality, and governance criteria are satisfied prior to closure of <!-- AIDD item -->.
 ---
 

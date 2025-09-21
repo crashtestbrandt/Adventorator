@@ -1,6 +1,10 @@
 ---
+id: PROMPT-VALIDATION-RUNBOOK-V1
 version: 1
+model: governance-validation
 author: Brandt
+owner: QA & Delivery WG
+adr: ADR-0003
 purpose: Generate an e2e runbook a dev can follow to smoke/regression test a change.
 ---
 

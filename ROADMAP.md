@@ -60,20 +60,20 @@ Authoritative sources of truth:
 ## 7. Cross-Cutting Epics — 🔄 / 🛣️
 | Epic | Status | Purpose |
 |------|--------|---------|
-| Action Validation (EPIC-AVA-001) | 🔄 Maturing | Planner → Orchestrator → Executor validation chain; evolving with ActivityLog dependency. |
+| Action Validation (EPIC-AVA-001) | 🔄 Maturing | Planner → Orchestrator → Executor validation chain (see ADR-0001, ADR-0003, ADR-0004) with ActivityLog dependency. |
 | Activity Log Mechanics Ledger (EPIC-ACTLOG-001) | 🛣️ Planned | Unified auditable mechanics ledger (taxonomy, schema, determinism, metrics). |
 
 ## 8. Feature Flag Overview
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `features.planner` | on (prod controlled) | Enable `/act` planning. |
+| `features.planner` | on (prod controlled) | Enable `/plan` semantic routing. |
 | `features.executor` | off (guarded) | Enable execution tool chain (preview/apply). |
 | `features.executor_confirm` | on | Enforce confirmation gating for mutating actions. |
-| `features.events` | on (with kill-switch) | Event-sourced persistence. |
+| `features.events` | true (rollback: set false) | Event-sourced persistence. |
 | `features.combat` | off (progressive rollout) | Encounter + combat tool surface. |
 | `features.map` | off | Map rendering pipeline. |
 | `features.retrieval` | on (scoped) | Content retrieval context enrichment. |
-| `features.activity_log` | off | Mechanics ledger instrumentation rollout. |
+| `features.activity_log` | true | Mechanics ledger instrumentation rollout (disable for rollback). |
 | (See `config.toml` for authoritative list) |  |  |
 
 ## 9. Current Focus & Near-Term Priorities

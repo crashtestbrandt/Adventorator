@@ -1,6 +1,10 @@
 ---
+id: PROMPT-DOR-ANALYSIS-V1
 version: 1
+model: governance-analysis
 author: Brandt
+owner: AIDD Governance WG
+adr: ADR-0003
 purpose: Verify project is in an appropriate state prior to moving forward with a new epic, story, or task.
 ---
 

@@ -1,6 +1,10 @@
 ---
+id: PROMPT-VALIDATION-EXECUTE-V1
 version: 1
+model: governance-validation
 author: Brandt
+owner: QA & Delivery WG
+adr: ADR-0003
 purpose: Interactively execute a validation runbook to smoke/regression test a change.
 ---
 

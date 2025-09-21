@@ -107,11 +107,6 @@ db-upgrade: alembic-up
 alembic-down:
 	. .venv/bin/activate && PYTHONPATH=./src alembic downgrade -1
 
-# Build docs/implementation_plan.md from GitHub issues titled "Phase N"
-.PHONY: implementation-plan
-implementation-plan:
-	. .venv/bin/activate && python3 scripts/build_implementation_plan.py
-
 .PHONY: compose-up compose-down
 compose-up:
 	docker compose up -d --build db app
