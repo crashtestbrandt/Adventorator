@@ -349,23 +349,22 @@ event.listen(
     Event.__table__,
     "after_create",
     DDL(
-        f"""
-CREATE TRIGGER {_PG_REPLAY_TRIGGER}
-BEFORE INSERT ON events
-FOR EACH ROW
-EXECUTE FUNCTION {_PG_REPLAY_FN}();
-        """
+        "\nCREATE TRIGGER "
+        + _PG_REPLAY_TRIGGER
+        + "\nBEFORE INSERT ON events\nFOR EACH ROW\nEXECUTE FUNCTION "
+        + _PG_REPLAY_FN
+        + "();\n        "
     ).execute_if(dialect="postgresql"),
 )
 event.listen(
     Event.__table__,
     "before_drop",
-    DDL(f"DROP TRIGGER IF EXISTS {_PG_REPLAY_TRIGGER} ON events;").execute_if(dialect="postgresql"),
+    DDL("DROP TRIGGER IF EXISTS " + _PG_REPLAY_TRIGGER + " ON events;").execute_if(dialect="postgresql"),
 )
 event.listen(
     Event.__table__,
     "before_drop",
-    DDL(f"DROP FUNCTION IF EXISTS {_PG_REPLAY_FN}();").execute_if(dialect="postgresql"),
+    DDL("DROP FUNCTION IF EXISTS " + _PG_REPLAY_FN + "();").execute_if(dialect="postgresql"),
 )
 
 event.listen(

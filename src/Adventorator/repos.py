@@ -689,6 +689,17 @@ async def create_pending_action(
     return pa
 
 
+_EVENT_APPEND_LOCKS: dict[int, asyncio.Lock] = {}
+
+
+def _event_lock_for_campaign(campaign_id: int) -> asyncio.Lock:
+    lock = _EVENT_APPEND_LOCKS.get(campaign_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _EVENT_APPEND_LOCKS[campaign_id] = lock
+    return lock
+
+
 async def append_event(
     s: AsyncSession,
     *,
@@ -699,11 +710,7 @@ async def append_event(
     request_id: str | None = None,
 ) -> models.Event:
     # Per-campaign lock map to increase parallelism across campaigns while
-    # retaining deterministic intra-campaign ordering. Lazy init to avoid
-    # import cycles and unnecessary lock creation.
-    global _EVENT_APPEND_LOCKS
-    if "_EVENT_APPEND_LOCKS" not in globals():  # type: ignore
-        _EVENT_APPEND_LOCKS = {}  # type: ignore[var-annotated]
+    # retaining deterministic intra-campaign ordering.
     # Normalize actor id (character name when numeric id maps to character)
     scene = await s.get(models.Scene, scene_id)
     if scene is None:
@@ -717,12 +724,7 @@ async def append_event(
     if actor_norm is None and actor_id is not None:
         actor_norm = str(actor_id)
     payload_dict = payload or {}
-    # Acquire campaign-specific lock (created on demand)
-    lock = _EVENT_APPEND_LOCKS.get(campaign_id)
-    if lock is None:
-        lock = asyncio.Lock()
-        _EVENT_APPEND_LOCKS[campaign_id] = lock
-    async with lock:  # type: ignore
+    async with _event_lock_for_campaign(campaign_id):
         # Determine ordinal & linkage inside lock to prevent race producing gaps
         last_event = await s.execute(
             select(models.Event)

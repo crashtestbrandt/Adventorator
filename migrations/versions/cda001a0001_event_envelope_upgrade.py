@@ -1,4 +1,9 @@
-"""story cda core 001a event envelope and constraints"""
+"""story cda core 001a event envelope and constraints
+
+NOTE: _idempotency_key uses length-prefixed framing (len:bytes) per part to
+avoid delimiter collision and align with envelope computation semantics.
+Original implementation used a pipe-delimited join which risked ambiguity.
+"""
 
 from __future__ import annotations
 
@@ -71,7 +76,7 @@ def _idempotency_key(
     payload: dict[str, Any],
     replay_ordinal: int,
 ) -> bytes:
-    material = [
+    parts = [
         str(campaign_id).encode("utf-8"),
         event_type.encode("utf-8"),
         (execution_request_id or "").encode("utf-8"),
@@ -79,7 +84,12 @@ def _idempotency_key(
         str(replay_ordinal).encode("utf-8"),
         _canonical_bytes(payload),
     ]
-    return hashlib.sha256(b"|".join(material)).digest()[:16]
+    framed: list[bytes] = []
+    for p in parts:
+        framed.append(str(len(p)).encode("ascii"))
+        framed.append(b":")
+        framed.append(p)
+    return hashlib.sha256(b"".join(framed)).digest()[:16]
 
 
 def _coerce_datetime(value: Any) -> datetime:
