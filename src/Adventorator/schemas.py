@@ -131,9 +131,7 @@ class AskReport(BaseModel):
     version: _Literal["1.0"] = Field(default="1.0", description="Contract version")
     raw_text: str = Field(..., description="Original user text input")
     intent: IntentFrame = Field(..., description="Primary interpreted intent")
-    tags: list[AffordanceTag] = Field(
-        default_factory=list, description="Extracted affordance tags"
-    )
+    tags: list[AffordanceTag] = Field(default_factory=list, description="Extracted affordance tags")
 
     def to_json(self) -> str:
         return self.model_dump_json(by_alias=False, exclude_none=True)

@@ -217,7 +217,7 @@ PYTHONPATH=./src python scripts/web_cli.py plan "roll a d20"
 Observe plaintext response mapping to /roll or planned command execution.
 
 Enable AVA + Predicate Gate:
-- Set `action_validation=true`, `predicate_gate=true` in config.toml.
+- Under `[features]` set `action_validation = true` and `predicate_gate = true` in `config.toml`, then restart the server.
 - Restart server if config changed.
 Then:
 ```

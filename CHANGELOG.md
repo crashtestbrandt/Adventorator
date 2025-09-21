@@ -14,6 +14,7 @@
 - Planner cache key refactored from scene-based to `(guild_id, channel_id, message)` to reduce coupling to scene lifecycle and enable reuse across scene context resets.
 - `reset_counters()` now also clears the planner rate limiter internal state to prevent cross‑test interference causing false cache miss / hit metric assertions.
 - Predicate gate now sets `Plan.feasible = False` and clears steps on failure while attaching structured failure metadata under `failed_predicates`.
+- Documentation alignment: removed undocumented `/campaign` command, normalized planner flag naming to `[planner].enabled`, corrected `features.activity_log` default in roadmap, standardized feature flag listing styles, clarified flag placement in smoke validation guide, and updated ADR-0001 for current flag nomenclature.
 
 ### Fixed
 - Intermittent missing `planner.cache.hit` metric under `features_action_validation=True` due to leftover rate limiting state between tests; resolved by clearing rate limiter in `reset_counters()`.

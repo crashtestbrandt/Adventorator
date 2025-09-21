@@ -34,11 +34,10 @@ End-to-end automated DnD 5e campaign management within a Discord channel for all
 - Campaign data uploaded as a .zip via `/campaign upload` with well-formed definitions for important people, places/geography, history, theme, etc. LLM tools can safely fill reasonable gaps.
 - Gameplay swaps between exploration (asynchronous, free-form) and encounter (synchronous, opt-in, turn-order) modes according to party actions.
 - Core commands and roles:
-  - `/ooc` — Out-of-character chat with the narrator like a human DM.
   - `/plan` — Take in-character actions that don’t affect shared state, or preview actions that do.
   - `/do` — Attempt to take actions that affect other players or world state (guarded by preview/confirm).
   - `/sheet create|upload|show [id]` — Manage character sheets.
-  - `/campaign upload|summary|start|restart [id]` — Manage campaign data.
+  <!-- Removed undocumented /campaign command (not yet implemented; future ingestion epic will introduce official commands). -->
   - Plus `/roll`, `/check`, and emergent GM tools under feature flags.
 
 ---
@@ -57,9 +56,9 @@ Components at a glance
 - Executor + ToolRegistry (`executor.py`, `tool_registry.py`): JSON ToolCallChain with dry-run previews and validated arg schemas.
 - Pending actions + confirm (`models.PendingAction`, `commands/confirm|cancel|pending.py`): Previews that require explicit confirmation before apply.
 - Event ledger (`models.Event`, folds in `repos.py`): Append-only mutations with replay support; executor apply emits events.
-- Observability: JSON logs with request_id, metrics counters, and feature flags for safe rollback: `features_llm`, `features_planner`, `features_executor`, `features_executor_confirm`, `features_events`, `retrieval.enabled`, `ops.metrics_endpoint_enabled`.
+- Observability: JSON logs with request_id, metrics counters, and feature flags for safe rollback: `[features].llm`, `[planner].enabled`, `[features].executor`, `[features].executor_confirm`, `[features].events`, `[features.retrieval].enabled`, `[ops].metrics_endpoint_enabled`.
 
-Diagram: current system
+Diagram: current system (with Action Validation phases)
 
 ```mermaid
 flowchart TD
@@ -69,6 +68,7 @@ flowchart TD
     Discord["Discord Interactions"]:::ext
     Webhooks["Discord Webhooks API"]:::ext
     LLM["LLM API"]:::ext
+    MCP["MCP Client(s)" ]:::ext
   end
 
   %% Edge
@@ -86,8 +86,14 @@ flowchart TD
 
     subgraph AI[AI Layer]
       Planner["Planner\n(/plan router)"]:::biz
+      PGate["Predicate Gate\n(static checks)"]:::val
       Orchestrator["Orchestrator\nproposal + defenses"]:::biz
       Retrieval["Retrieval (player-safe)"]:::biz
+    end
+
+    subgraph AV[Action Validation]
+      ExecReq["ExecutionRequest\n(plan_id + steps + ctx)"]:::obj
+      ActivityLog["ActivityLog\n(event audit trail)"]:::val
     end
 
     subgraph EXEC[Executor]
@@ -103,6 +109,7 @@ flowchart TD
       Content[(ContentNodes)]:::data
       Pending[(PendingActions)]:::data
       Events[(Events Ledger)]:::data
+      ActLog[(ActivityLogs)]:::data
     end
 
     Metrics["Metrics counters"]:::ops
@@ -114,23 +121,33 @@ flowchart TD
   DUser -->|Slash command| Discord --> Tunnel --> App --> Verify --> Defer
   Defer --> Dispatcher
   Dispatcher -->|/roll,/check,/sheet| Rules --> Responder
-  Dispatcher -->|/plan| Planner --> Dispatcher
+  Dispatcher -->|/plan| Planner --> PGate
+  PGate -->|ok| Planner
+  PGate -->|fail| Responder
+  Planner -->|routed /do| Orchestrator
   Dispatcher -->|/do| Orchestrator
   Orchestrator -->|if enabled| Retrieval --> Content
   Orchestrator -->|LLM JSON| LLM --> Orchestrator
   Orchestrator -->|validated proposal| Rules
-  Orchestrator --> Exec
+  Orchestrator --> ExecReq
+  ExecReq --> ActivityLog
+  ActivityLog --> Repos
+  ExecReq -->|to chain| Exec
   Exec --> Registry
   Exec -->|dry-run| Responder
-  Exec -->|create| Pending
+  Exec -->|create pending| Pending
+  Exec -->|apply events| Events
+  Events --> Repos
+  Responder --> Transcripts
   Responder --> Webhooks --> Discord --> DUser
   Dispatcher --> Repos
-  Responder --> Transcripts
-  Exec -->|apply| Events
-  Events --> Repos
   Repos --> Scenes
   Repos --> Characters
   Repos --> Transcripts
+  ActivityLog --> ActLog
+  %% Optional MCP path: ExecutionRequest fan-out
+  ExecReq -.->|if features.mcp| MCP
+  MCP -.-> ActivityLog
   Metrics -.-> APP
   Logs -.-> APP
 
@@ -140,6 +157,8 @@ flowchart TD
   classDef data fill:#fff7e6,stroke:#f59e0b,stroke-width:1px,color:#7c3e00
   classDef ops  fill:#eefaf0,stroke:#10b981,stroke-width:1px,color:#065f46
   classDef biz  fill:#f0f5ff,stroke:#3b82f6,stroke-width:1px,color:#1e3a8a
+  classDef val  fill:#fff0f3,stroke:#ec4899,stroke-width:1px,color:#831843
+  classDef obj  fill:#f5f3ff,stroke:#7c3aed,stroke-width:1px,color:#352f64
 ```
 
 ### Core AI Components: Planner, Orchestrator, and Executor
@@ -154,7 +173,7 @@ File: `Adventorator/planner.py`
 - How it works:
   - Builds a live catalog from the command registry (`command_loader` + `all_commands`), including Pydantic v2 option schemas.
   - Prompts the LLM with TOOLS + minimal rules context, then extracts the first JSON object.
-  - Produces a single-step `Plan` (legacy `PlannerOutput` internally adapted) and enforces an allowlist: `{roll, check, sheet.create, sheet.show, do, ooc}`.
+  - Produces a single-step `Plan` (legacy `PlannerOutput` internally adapted) and enforces an allowlist: `{roll, check, sheet.create, sheet.show, do}`.
 - Contract (inputs/outputs):
   - Input: `user_msg: str`
   - Output: `Plan | None` (Level 1 ⇒ exactly one `PlanStep {op,args}`)
@@ -219,6 +238,14 @@ At runtime: `/plan` may select `/do`; the `/do` handler calls the orchestrator. 
 
 ### Key Command Flows
 
+#### Diagram Legend
+
+- Validation (pink): Static or deterministic guards (Predicate Gate) and audit records (ActivityLog).
+- Object (lavender): In-flight structured request objects (`ExecutionRequest`).
+- MCP (dashed link): Optional future fan-out when `features.mcp` is enabled.
+- Events vs Pending: Pending actions require confirmation; applied events mutate ledger for replay.
+- Feature Flags: Planner (`[planner].enabled`), Predicate Gate (`features_predicate_gate`), Action Validation (`features_action_validation`), Executor (`features_executor`), Events (`features_events`), Retrieval (`features.retrieval.enabled`), MCP (`features.mcp`).
+
 #### The `/plan` Command Flow
 
 Semantically routes freeform input to a strict slash command using schemas from the registry. Often selects `/do`, which then uses the Orchestrator (and optionally the Executor preview path).
@@ -228,20 +255,37 @@ sequenceDiagram
   actor User
   participant App as Adventorator Service
   participant Planner
+  participant PGate as Predicate Gate
   participant Registry as Command Registry
   participant LLM as LLM
+  participant ExecReq as ExecutionRequest
 
-  Note over Planner: 30s cache suppresses duplicates
+  Note over Planner: 30s cache (dedupe semantic intents)
 
   User->>App: /plan "I try to pick the lock"
   App->>Planner: build messages (TOOLS + rules list)
-  Planner->>Registry: load catalog (commands + schemas)
+  Planner->>Registry: load catalog (schemas)
   Planner->>LLM: generate_response(TOOLS + user)
   LLM-->>Planner: JSON text
-  Planner->>Planner: extract_first_json + validate allowlist
-  Planner-->>App: Plan (single step) | None
+  Planner->>Planner: parse first JSON + allowlist
+  alt predicate gate enabled
+    Planner->>PGate: evaluate(plan.args)
+    PGate-->>Planner: ok | failures[]
+    alt failures
+      Planner-->>App: rejected (predicate failures)
+      App-->>User: error summary (ephemeral)
+    else ok
+      Planner->>ExecReq: build(plan_id, steps, ctx)
+      ExecReq-->>Planner: ref
+      Planner-->>App: Plan + ExecutionRequest
+    end
+  else gate disabled
+    Planner->>ExecReq: build(plan_id, steps, ctx)
+    ExecReq-->>Planner: ref
+    Planner-->>App: Plan + ExecutionRequest
+  end
 
-  Note over App: If valid, dispatch to target handler via registry
+  Note over App: Dispatch to resolved command handler (/do, /roll, etc.)
 
   App-->>User: Routed result or fallback
 ```
@@ -258,66 +302,50 @@ sequenceDiagram
   participant DB as Database
   participant Retrieval as Retrieval
   participant LLM as LLM
+  participant ExecReq as ExecutionRequest
   participant Exec as Executor
   participant Registry as ToolRegistry
   participant Rules as Ruleset
+  participant ALog as ActivityLog
+  participant MCP as MCP (opt)
 
   User->>App: /do "I pick the lock"
-  App->>Orc: run_orchestrator(scene, msg, settings)
+  App->>Orc: run_orchestrator(scene,msg,settings)
   Orc->>DB: get_recent_transcripts(scene)
   DB-->>Orc: transcripts
   alt retrieval enabled
     Orc->>Retrieval: top-k snippets (player-safe)
     Retrieval-->>Orc: snippets
   end
-  Orc->>LLM: generate_json(narrator)
+  Orc->>LLM: generate_json(narrator prompt)
   LLM-->>Orc: proposal + narration
-  Orc->>Orc: validate (action, ability, DC)
-  Orc->>Orc: defenses (banned verbs, unknown actors)
+  Orc->>Orc: defenses (schema, ability/DC bounds, verbs, actors)
+  Orc->>ExecReq: build(plan_id, steps, ctx)
+  ExecReq-->>Orc: ref
+  Orc->>ALog: record(orchestrator.result)
+  alt features.mcp
+    ExecReq->>MCP: fan-out (future adapter)
+    MCP-->>ALog: activity entries
+  end
   alt executor enabled
-    Orc->>Exec: execute_chain(dry_run=True, ToolCallChain)
-    Exec->>Registry: get(tool) + validate args
-    Registry-->>Exec: spec
-    Exec-->>App: Preview mechanics (+ predicted events)
-    App->>DB: create PendingAction
-    App-->>User: show preview + confirm/cancel
+    Orc->>Exec: preview(chain from ExecReq)
+    Exec->>Registry: validate tools/args
+    Registry-->>Exec: specs
+    Exec-->>App: Preview mechanics + predicted events
+    App->>DB: create PendingAction + transcript(meta)
+    App-->>User: preview + confirm/cancel
     User->>App: /confirm id
     App->>Exec: apply_chain
     Exec->>DB: append Events
+    Exec->>ALog: record(executor.apply)
     App-->>User: applied result
   else local rules
     Orc->>Rules: compute_check(...)
     Rules-->>Orc: mechanics
+    Orc->>ALog: record(local.rules)
     Orc-->>App: mechanics + narration
     App-->>User: result
   end
-```
-
-#### The `/ooc` Command Flow
-
-This flow is simpler, as it bypasses the `planner` and the `rules` engine, using the LLM only for narration.
-
-```mermaid
-sequenceDiagram
-  participant User
-  participant App as Adventorator Service
-  participant DB as Database
-  participant LLM as LLM API
-
-  User->>App: /ooc "What does the room smell like?"
-
-  Note over App: Dispatches "ooc" command
-
-  App->>DB: get_recent_transcripts(scene)
-  DB-->>App: transcripts
-
-  Note over App: Formats history + user text into prompt
-
-  App->>LLM: generate_response(narration-only)
-  LLM-->>App: narration
-
-  App-->>User: send follow-up
-  Note over App: visibility via features.llm_visible
 ```
 
 -----
@@ -418,9 +446,9 @@ Behavior is configured via `config.toml`, which can be overridden by environment
 
 **Key Toggles:**
 
-  * `features.llm`: Master switch for all LLM-powered features (`/ooc`, `/plan`).
+  * `features.llm`: Master switch for all LLM-powered features (`/do`, `/plan`).
   * `features.llm_visible`: If `true`, LLM narration is posted publicly; otherwise, it runs in a "shadow mode" (logged but not sent to Discord).
-  * `features.planner`: Hard on/off switch for the `/plan` planner.
+  * `[planner].enabled` — Hard on/off switch for the `/plan` planner (legacy fallback: `[features].planner`).
   * `ops.metrics_endpoint_enabled`: If `true`, exposes a `GET /metrics` endpoint.
 
 **LLM Client:**
