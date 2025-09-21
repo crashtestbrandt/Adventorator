@@ -99,8 +99,6 @@ class LLMOutput(BaseModel):
 # Ask (/ask) data models
 # -----------------------------
 
-from typing import Literal as _Literal  # local alias to avoid polluting exports
-
 
 class AffordanceTag(BaseModel):
     key: str = Field(..., description="Ontology key, e.g., action.attack or target.npc")
@@ -114,6 +112,9 @@ class AffordanceTag(BaseModel):
         description="Confidence for tag extraction (rule-based defaults to 1.0)",
     )
 
+    # Disallow unknown fields to align with contract additionalProperties=false
+    model_config = dict(extra="forbid")
+
 
 class IntentFrame(BaseModel):
     # Minimal baseline fields; extend via versioned contract if needed
@@ -126,9 +127,12 @@ class IntentFrame(BaseModel):
     )
     modifiers: list[str] = Field(default_factory=list, description="Free-form modifiers or adverbs")
 
+    # Disallow unknown fields to align with contract additionalProperties=false
+    model_config = dict(extra="forbid")
+
 
 class AskReport(BaseModel):
-    version: _Literal["1.0"] = Field(default="1.0", description="Contract version")
+    version: Literal["1.0"] = Field(default="1.0", description="Contract version")
     raw_text: str = Field(..., description="Original user text input")
     intent: IntentFrame = Field(..., description="Primary interpreted intent")
     tags: list[AffordanceTag] = Field(default_factory=list, description="Extracted affordance tags")
@@ -139,3 +143,6 @@ class AskReport(BaseModel):
     @classmethod
     def from_json(cls, data: str) -> "AskReport":
         return cls.model_validate_json(data)
+
+    # Disallow unknown fields to align with contract additionalProperties=false
+    model_config = dict(extra="forbid")
