@@ -54,3 +54,40 @@ Migration Guidance:
 3. When adding new commands, update the catalog and ensure `PlanStep` serialization tests cover argument defaults.
 
 This section deprecates the term `PlannerOutput` except when referring to historical context in this ADR.
+
+## Guards Evolution (Story STORY-AVA-001I Context)
+
+Phase scope (STORY-AVA-001I):
+- Introduce stable `PlanStep.guards: list[str]` field (always present, may be empty).
+- Provide a single population hook `planner_tiers.guards_for_steps(steps)` invoked after any (future) tier expansion.
+- Emit counters `planner.tier.level.<n>` and aggregate `plan.guards.count` without requiring non-empty guards during this story.
+ - (Updated) When tier feature flag is enabled, inject deterministic baseline guard `capability:basic_action` per step to exercise populated serialization.
+
+Naming convention (approved): `<category>:<identifier>[:<subject>]` with reserved categories:
+- `predicate` — Precondition or world-state predicate required (e.g., `predicate:exists:actor`).
+- `resource` — Resource or consumable requirement (e.g., `resource:slot:inventory`).
+- `cooldown` — Temporal gating (e.g., `cooldown:attack`).
+- `capability` — Actor capability or learned skill (e.g., `capability:lockpicking`).
+- `environment` — Spatial / environmental condition (e.g., `environment:line_of_sight`).
+
+Deferred (future stories):
+- Non-string structured guards (object form) will layer behind a formatter while preserving backward compatibility: tests will continue to assert list-of-string shape until an ADR amends this.
+- Multi-step (Level >1) decomposition producing guard sets per derived step.
+- Guard derivation from predicate gate failures (mapping failed predicates to `predicate:*` guard hints) and from resource planners.
+
+Testing strategy (current story):
+- Golden fixtures ensure both empty (flag off) and populated (flag on) guards serialize deterministically.
+- Monkeypatch test still injects additional synthetic guards to validate formatting extensibility.
+- Metrics tests assert counters for tier level and guards count (0 flag off, >0 flag on, >0 monkeypatched).
+
+Rollback guarantees:
+- Disabling `features_planning_tiers` forces Level 1 single-step with unchanged empty guards list; logs continue to emit `planner.tier.selected`.
+- Adding populated guards later will not alter existing empty-list expectations; tests accept zero-or-more entries.
+ - Deterministic guard injection is skipped when flag off, preserving backward-compatible baseline payload.
+
+Operational notes:
+- Cardinality of `planner.tier.level.<n>` intentionally low (bounded by configured max level; currently 1).
+- `plan.guards.count` remains an integer counter; no per-guard label emission to avoid high-cardinality risks.
+ - Level 2 scaffold inserts a reversible `prepare.<root_op>` step ahead of the original single step strictly for exercising multi-step serialization; future HTN logic will replace this with domain-driven decompositions.
+
+This evolution plan prevents schema churn while enabling incremental enrichment.

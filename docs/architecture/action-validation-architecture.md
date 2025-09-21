@@ -181,3 +181,32 @@ class ExecutionResult:
 * **Swappable Game Systems.** Add new MCP servers to support rule variants (Pathfinder, Cyberpunk) without changing the pipeline.
 * **Procedural Content Generation.** Reuse semantic tags to drive quest and encounter generation.
 * **Community Modding.** Publish MCP tool contracts and tag ontology to enable third-party content creation.
+
+### Tiered Planning Scaffolding (Story AVA-001I)
+
+The tiered planning scaffold introduces configuration-driven selection of a planning "level" without altering current single-step behavior (Level 1). Higher levels (>=2) are placeholders reserved for future HTN / GOAP style decompositions.
+
+Key elements:
+- Feature Flag: `features_planning_tiers` (default: false) acts as a global kill-switch. When disabled, effective level is forced to 1 regardless of `planner_max_level`.
+- Max Level: `[planner].max_level` (default: 1) constrains the highest expansion tier when the flag is enabled.
+- Resolver: `planner_tiers.resolve_planning_level(settings)` centralizes logic (flag + clamp enforcement) to avoid scattering conditional checks.
+- Expansion Stub: `planner_tiers.expand_plan(plan, level)` currently returns the input plan unchanged for levels >1 while emitting `planner.tier.expansion.stub_used` log events for observability.
+- Guards Hook: `planner_tiers.guards_for_steps(steps)` presently leaves `PlanStep.guards` empty, stabilizing serialization. A single hook function concentrates future guard population logic (predicate prerequisites, resource locks, etc.).
+- Guard Schema (Phase 0): `PlanStep.guards` is a list of strings. Future rich guard objects will be layered via a utility format (`guard_utils.format_guard`) to avoid retroactive schema churn; existing tests assert field presence (even if empty) to guarantee backward compatibility.
+
+Metrics & Logging:
+- New metrics counters: `planner.tier.level.<n>`, `plan.guards.count`, and existing `plan.steps.count` extended to capture guard totals.
+- Log Events: `planner.tier.selected {level, tiers_enabled}` and `planner.tier.expansion.stub_used {requested_level}` provide traceability for flag-driven flow decisions.
+
+Backward / Forward Compatibility:
+- With the flag off, output Plan JSON remains a single-step representation identical to pre-scaffold behavior except for the guaranteed presence of an (empty) `guards` list.
+- Golden fixture `tests/golden/plan_single_step_level1.json` secures serialization stability. Any future multi-step introduction must add new fixtures rather than mutate existing ones.
+- Adding populated guards in a later phase will not modify the shape of existing steps; tests assert the field as a list permitting zero or more entries.
+
+Rollback Strategy:
+- Disable `features_planning_tiers` to hard-revert to Level 1 behavior (no multi-step path executed). Metrics will show only `planner.tier.level.1` counters; higher-level counters cease incrementing, facilitating operational verification of rollback completeness.
+
+Open Items (post-scaffold):
+- Define concrete guard categories and semantics once multi-step decomposition rules are ratified.
+- Introduce deterministic expansion algorithms before any LLM involvement to preserve reproducibility.
+- Add richer observability (timings per tier) once expansion cost is non-trivial.

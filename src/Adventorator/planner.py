@@ -213,7 +213,41 @@ async def plan(
             duration_ms=int((time.monotonic() - started) * 1000),
         )
         if return_plan:
-            return plan_from_planner_output(out)
+            from Adventorator.config import load_settings
+            from Adventorator.planner_tiers import (
+                resolve_planning_level,
+                expand_plan,
+                guards_for_steps,
+            )
+
+            plan_obj = plan_from_planner_output(out)
+            settings = None
+            try:
+                settings = load_settings()
+            except Exception:  # pragma: no cover
+                settings = None
+            level = resolve_planning_level(settings)
+            log.info(
+                "planner.tier.selected",
+                level=level,
+                tiers_enabled=getattr(settings, "features_planning_tiers", False)
+                if settings is not None
+                else False,
+            )
+            plan_obj = expand_plan(plan_obj, level)
+            tiers_enabled = getattr(settings, "features_planning_tiers", False) if settings is not None else False
+            guards_for_steps(plan_obj.steps, tiers_enabled=tiers_enabled)
+            try:
+                from Adventorator.action_validation.metrics import (
+                    record_plan_steps,
+                    record_planning_tier,
+                )
+
+                record_planning_tier(level)
+                record_plan_steps(plan_obj)
+            except Exception:  # pragma: no cover
+                pass
+            return plan_obj
         return out
     except Exception:
         log.warning("planner.validation.failed", raw_text_preview=(text or "")[:200])

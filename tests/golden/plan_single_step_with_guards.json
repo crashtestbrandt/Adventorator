@@ -1,0 +1,14 @@
+{
+  "feasible": true,
+  "steps": [
+    {
+      "op": "roll.d20",
+      "args": {},
+      "guards": ["capability:basic_action", "predicate:exists:actor"]
+    }
+  ],
+  "failed_predicates": [],
+  "repairs": [],
+  "alternatives": [],
+  "rationale": ""
+}

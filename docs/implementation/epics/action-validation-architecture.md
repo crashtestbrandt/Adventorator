@@ -175,13 +175,15 @@
 
 - **Summary.** Introduce scaffolding for higher-tier planning and ensure Plan serialization supports guards metadata.
 - **Acceptance criteria.**
-  - Level 1 remains default with explicit placeholders for HTN/GOAP expansions.
-  - PlanStep `guards` populated (possibly empty) with serialization stability tests.
-  - Feature flag disables Level 2+ paths.
+  - Level 1 remains default with explicit placeholders for HTN/GOAP expansions (flag-off path enforces single-step).
+  - `PlanStep.guards` field always present; serialization tests cover empty list and synthetic populated example (population via monkeypatch only this story; real derivation deferred).
+  - Feature flag disables Level 2+ paths and rollback test verifies disabling after enable restores Level 1 behavior.
 - **Tasks.**
-  - [ ] `TASK-AVA-TIER-26` — Implement tier selection scaffolding with flags controlling Level 2/3 entry points.
-  - [ ] `TASK-AVA-GUARD-27` — Populate guards metadata and document serialization expectations. *(PlanStep `guards` field exists but remains empty in practice.)*
-  - [ ] `TASK-AVA-TEST-28` — Add tests ensuring Plan serialization stability and guards formatting.
+  - [ ] `TASK-AVA-TIER-26` — Tier selection scaffolding & flag. (Code in place; metrics/log events emit; awaiting metrics/log tests.)
+  - [ ] `TASK-AVA-GUARD-27` — Guards hook + naming convention ADR section. (Hook + ADR-0001 Guards Evolution added; runtime population deferred.)
+  - [ ] `TASK-AVA-TEST-28` — Serialization + populated guards (monkeypatch) + rollback tests. (Tests added: metrics/guards/rollback; pending review.)
+  - [ ] `TASK-AVA-METRIC-33` — Emit `planner.tier.level.*`, `plan.guards.count` metrics. (Implemented; test coverage added.)
+  - [ ] `TASK-AVA-DOC-32` — Architecture/ADR documentation for tiers & guards. (Architecture section + ADR update complete.)
 - **DoR.**
   - Planning roadmap for Level 2/3 reviewed and documented.
   - Serialization changes communicated to downstream consumers.
