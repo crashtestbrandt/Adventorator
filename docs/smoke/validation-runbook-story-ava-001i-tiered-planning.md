@@ -1,12 +1,12 @@
 # Validation Runbook — STORY-AVA-001I Tiered Planning Scaffolding
 
-Status: Draft (manual validation)
-Scope: Ensures Tiered Planning scaffolding (Level 1 baseline, Level 2 prepare-step expansion, guards field + metrics + logs) is functioning and regressions are not introduced.
+Status: Draft (manual validation) — UPDATED for raw snapshot & cache bypass instrumentation
+Scope: Ensures Tiered Planning scaffolding (Level 1 baseline, Level 2 prepare-step expansion, guards field + metrics + logs, structured plan snapshot event) is functioning and regressions are not introduced.
 Audience: Developers and reviewers performing pre-merge or pre-release checks.
 
 ---
 ## 1. Preconditions
-- Fresh clone OR clean working tree; no uncommitted changes.
+- Fresh clone OR clean working tree; no uncommitted changes(Optional).
 - Python 3.11+ available locally (project uses a virtualenv via `make` targets).
 - Docker (optional path) installed and running.
 - (Optional) Discord bot credentials if validating via Discord (token, guild/server, channel).
@@ -15,6 +15,8 @@ Audience: Developers and reviewers performing pre-merge or pre-release checks.
 Environment Variables Used:
 - `FEATURES_PLANNING_TIERS` ("true" / "false")
 - `PLANNER_MAX_LEVEL` (integer >=1)
+ - `FEATURES_ACTION_VALIDATION` and `FEATURES_PREDICATE_GATE` must be `true` to exercise the `return_plan` path that emits structured snapshots.
+ - `WEB_CLI_RAW_MODE=1` (auto-set by `--raw`) forces cache bypass for plan generation to guarantee fresh snapshot emission during diagnostics.
 
 ---
 ## 2. Fresh Clone & Local Setup
@@ -68,52 +70,77 @@ docker run --rm -it -p 8000:8000 \
 ## 5. Web CLI Manual Validation (`scripts/web_cli.py`)
 The web CLI provides an internal interaction path without Discord.
 
+The CLI now supports a `--raw` flag which:
+1. Sets `WEB_CLI_RAW_MODE=1` (bypasses in-memory planner cache so instrumentation is exercised).
+2. Tails `logs/adventorator.jsonl` for the latest `planner.plan_snapshot` event.
+3. Prints the extracted structured plan JSON after the normal user-facing response.
+
+Snapshot Event:
+`planner.plan_snapshot` (fields: `step_count`, `guard_total` (if emitted in planner), full `plan` dict, optional `source=command_handler_fallback`).
+
+Use `--raw` for all validation steps below unless explicitly testing legacy output.
+
 ### 5.1 Baseline Level 1 (Flag Off)
 ```bash
 export FEATURES_PLANNING_TIERS=false
-python scripts/web_cli.py plan "roll a d20"
+export FEATURES_ACTION_VALIDATION=true
+export FEATURES_PREDICATE_GATE=true
+python scripts/web_cli.py --raw plan "roll a d20"
 ```
 Expected:
 - Plan JSON shows exactly one step: `roll.d20`.
 - `guards` list is present and empty: `"guards": []`.
 - Logs contain `planner.tier.selected` with `tiers_enabled=false`.
 - No `planner.tier.expansion.level2_applied` event.
+ - Raw section prints NO guard entries and `step_count` = 1 in `planner.plan_snapshot`.
 
 ### 5.2 Deterministic Guard Injection (Flag On, Level 1)
 ```bash
 export FEATURES_PLANNING_TIERS=true
 export PLANNER_MAX_LEVEL=1
-python scripts/web_cli.py plan "roll a d20"
+export FEATURES_ACTION_VALIDATION=true
+export FEATURES_PREDICATE_GATE=true
+python scripts/web_cli.py --raw plan "roll a d20"
 ```
 Expected:
 - Still one step.
 - Guards contains `capability:basic_action`.
 - Counter behavior if metrics endpoint/print inspected (optional): `plan.guards.count == 1`.
+ - Snapshot shows `step_count` = 1 and `guard_total` (if present) = 1.
 
 ### 5.3 Level 2 Expansion (Prepare Step)
 ```bash
 export FEATURES_PLANNING_TIERS=true
 export PLANNER_MAX_LEVEL=2
-python scripts/web_cli.py plan "roll a d20"
+export FEATURES_ACTION_VALIDATION=true
+export FEATURES_PREDICATE_GATE=true
+python scripts/web_cli.py --raw plan "roll a d20"
 ```
 Expected:
 - Two steps: first `prepare.roll`, second `roll.d20`.
 - Each step has `"guards": ["capability:basic_action"]`.
 - Structured log includes `planner.tier.expansion.level2_applied` with `requested_level=2` and `new_steps=2`.
+ - Snapshot shows `step_count` = 2 and `guards` present on both steps.
 
 ### 5.4 Rollback Behavior
 ```bash
-export FEATURES_PLANNING_TIERS=true
-export PLANNER_MAX_LEVEL=2
-python scripts/web_cli.py plan "roll a d20" > /tmp/plan_enabled.json
-export FEATURES_PLANNING_TIERS=false
-unset PLANNER_MAX_LEVEL
-python scripts/web_cli.py plan "roll a d20" > /tmp/plan_disabled.json
+# Enabled (capture raw snapshot JSON including prepare step)
+export FEATURES_PLANNING_TIERS=true PLANNER_MAX_LEVEL=2 FEATURES_ACTION_VALIDATION=true FEATURES_PREDICATE_GATE=true
+python scripts/web_cli.py --raw plan "roll a d20" > /tmp/plan_enabled.json
+
+# Disabled rollback (single-step, empty guards)
+export FEATURES_PLANNING_TIERS=false PLANNER_MAX_LEVEL=2 FEATURES_ACTION_VALIDATION=true FEATURES_PREDICATE_GATE=true
+python scripts/web_cli.py --raw plan "roll a d20" > /tmp/plan_disabled.json
+
+# Quick structural diff (number of steps & guards) without noisy timestamps:
+jq '.plan.steps | length' /tmp/plan_enabled.json /tmp/plan_disabled.json
+jq '[.plan.steps[].guards|length] | add' /tmp/plan_enabled.json /tmp/plan_disabled.json
 ```
 Diff expectations:
 - `/tmp/plan_enabled.json` has 2 steps & guards populated.
 - `/tmp/plan_disabled.json` has 1 step & empty guards.
 - No residual prepare step or guards after disable.
+ - Optional: Verify same `plan_id` across snapshots (demonstrates reversible scaffold) — if identical user prompt reused and cache bypassed by `--raw` you may still see new IDs; not required for acceptance.
 
 ### 5.5 Monkeypatched Guard Enrichment (Optional Dev Check)
 Run the existing test directly for demonstration:
@@ -149,21 +176,17 @@ Toggle flag off and repeat; confirm single-step plan and absence of expansion lo
 
 ---
 ## 7. Metrics & Observability Spot Checks
-If metrics are exported in-process (e.g., via internal registry or endpoint):
-- Trigger successive plans at different levels.
-- Confirm counters increment:
-  - `planner.tier.level.1` increments when level resolves to 1.
-  - `planner.tier.level.2` increments when expansion occurs.
-  - `plan.steps.count` equals number of steps emitted.
-  - `plan.guards.count` equals total guards across steps.
-Dev helper (Python REPL snippet):
-```python
-from Adventorator.metrics import get_counter
-print(get_counter("planner.tier.level.1"))
-print(get_counter("planner.tier.level.2"))
-print(get_counter("plan.steps.count"))
-print(get_counter("plan.guards.count"))
+If metrics endpoint enabled (`ops.metrics_endpoint_enabled=true` in `config.toml`):
+
+```bash
+curl -s http://127.0.0.1:18000/metrics | jq 'pick(["planner.tier.level.1","planner.tier.level.2","plan.steps.count","plan.guards.count"])'
 ```
+Expect:
+- `planner.tier.level.2` >= 1 after a Level 2 run.
+- `plan.steps.count` equals cumulative steps emitted (sum across runs).
+- `plan.guards.count` equals cumulative guards (Level 2 adds 2 per run, Level 1 adds 1 when tiers enabled).
+
+If endpoint disabled, run inside the server process *before* exit (not a separate shell) or rely on test assertions.
 
 ---
 ## 8. Golden Fixture Integrity
@@ -195,6 +218,7 @@ Run full suite again before committing.
 - [ ] Level 2 expansion inserts prepare step + log event.
 - [ ] Rollback (disable flag) returns to single-step & empty guards.
 - [ ] Metrics counters increment as expected.
+ - [ ] Raw snapshot (`planner.plan_snapshot`) captured for Level 1 & 2.
 - [ ] Golden fixtures pass unchanged.
 - [ ] Optional Discord validation (if applicable) completed.
 

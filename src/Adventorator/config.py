@@ -25,7 +25,7 @@ def _toml_settings_source() -> dict[str, Any]:
         "features_predicate_gate": t.get("features", {}).get("predicate_gate", False),
         "features_mcp": t.get("features", {}).get("mcp", False),
         "features_activity_log": t.get("features", {}).get("activity_log", False),
-    "features_planning_tiers": t.get("features", {}).get("planning_tiers", False),
+        "features_planning_tiers": t.get("features", {}).get("planning_tiers", False),
         # Map rendering (Phase 12) — prefer [map].enabled with legacy fallback
         "features_map": bool(
             (t.get("map", {}) or {}).get(

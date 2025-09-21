@@ -13,7 +13,7 @@ action_validation = true
 predicate_gate = true
 mcp = false
 activity_log = true
-planning_tiers = false  # Enables tiered planning scaffolding (Level >1 expansion paths)
+planning_tiers = true  # Enables tiered planning scaffolding (Level >1 expansion paths)
 
 # Retrieval-augmented orchestration.
 # Note: provider "none" uses the built-in SQL fallback retriever.

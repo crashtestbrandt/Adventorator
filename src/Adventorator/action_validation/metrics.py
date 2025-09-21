@@ -54,4 +54,3 @@ def record_planner_failure(kind: str) -> None:
 def record_planning_tier(level: int) -> None:
     """Emit a counter for the effective planning tier used."""
     inc_counter(f"planner.tier.level.{level}")
-

@@ -58,10 +58,13 @@ async def test_level2_expansion_inserts_prepare_step(monkeypatch):
     monkeypatch.setenv("PLANNER_MAX_LEVEL", "2")
     s = load_settings()
     assert resolve_planning_level(s) == 2
+
     class DummyLLM2:
         async def generate_response(self, messages):  # minimal stub interface
             return '{"command":"roll","subcommand":"d20","args":{}}'
+
     from Adventorator.planner import plan as planner_plan
+
     llm = DummyLLM2()
     out = await planner_plan(llm, "roll a d20", return_plan=True)
     assert isinstance(out, Plan)
@@ -71,6 +74,7 @@ async def test_level2_expansion_inserts_prepare_step(monkeypatch):
     # Golden structural comparison (ignore plan_id)
     golden_path = Path("tests/golden/plan_level2_two_steps.json")
     import json
+
     data = json.loads(golden_path.read_text())
     assert [s.op for s in out.steps] == [step["op"] for step in data["steps"]]
     assert [s.args for s in out.steps] == [step["args"] for step in data["steps"]]

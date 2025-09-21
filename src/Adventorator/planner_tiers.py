@@ -51,7 +51,7 @@ def expand_plan(plan: Plan, level: int) -> Plan:
         return plan
     if len(plan.steps) == 1:
         original = plan.steps[0]
-        prep = PlanStep(op="prepare." + original.op.split('.')[0], args={})
+        prep = PlanStep(op="prepare." + original.op.split(".")[0], args={})
         new_steps = [prep, original]
         new_plan = plan.model_copy(update={"steps": new_steps})
         log.info(
