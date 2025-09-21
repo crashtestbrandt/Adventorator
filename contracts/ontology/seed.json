@@ -1,0 +1,14 @@
+{
+  "version": "0.1",
+  "actions": {
+    "attack": ["attack", "hit", "strike", "swing"],
+    "move": ["move", "go", "walk", "run"],
+    "cast": ["cast", "spell", "castspell"]
+  },
+  "targets": {
+    "goblin": { "type": "npc", "synonyms": ["goblin", "gobo"] },
+    "guard": { "type": "npc", "synonyms": ["guard", "watchman"] },
+    "door": { "type": "object", "synonyms": ["door", "gate"] }
+  },
+  "modifiers": ["carefully", "quickly", "silently", "stealthily"]
+}

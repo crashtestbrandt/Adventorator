@@ -1,0 +1,12 @@
+{
+  "input": "hit it",
+  "intent": {
+    "action": "attack",
+    "actor_ref": null,
+    "target_ref": null,
+    "modifiers": []
+  },
+  "tags": [
+    {"key": "action.attack", "confidence": 1.0}
+  ]
+}

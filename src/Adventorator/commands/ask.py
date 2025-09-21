@@ -7,6 +7,7 @@ import structlog
 from pydantic import Field
 
 from Adventorator.action_validation.logging_utils import log_event
+from Adventorator.ask_nlu import parse_and_tag
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.metrics import inc_counter, observe_histogram
 from Adventorator.schemas import AffordanceTag, AskReport, IntentFrame
@@ -117,15 +118,15 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
     inc_counter("ask.received")
     log_event("ask", "initiated", user_id=str(inv.user_id or ""))
 
-    # Minimal baseline: rule-based scaffold placeholder when enabled
-    # Future Story C/D will replace this with real parsing and optional KB lookups.
-    intent = IntentFrame(action=_infer_action(user_msg), actor_ref=None, target_ref=None)
-    tags: list[AffordanceTag] = []
+    # Rule-based NLU is the default when enabled; otherwise fall back to minimal inference
     if getattr(settings, "features_ask_nlu_rule_based", True):
-        # Extremely naive tag based on first token; acts as a scaffold
-        first = intent.action
-        if first:
-            tags.append(AffordanceTag(key=f"action.{first}", confidence=1.0))
+        intent, tags = parse_and_tag(
+            user_msg,
+            debug=getattr(settings, "features_ask_nlu_debug", False),
+        )
+    else:
+        intent = IntentFrame(action=_infer_action(user_msg), actor_ref=None, target_ref=None)
+        tags = [AffordanceTag(key=f"action.{intent.action}", confidence=1.0)]
 
     _report = AskReport(raw_text=user_msg, intent=intent, tags=tags)
 
@@ -141,4 +142,35 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
     summary = f"🧭 Interpreted intent: action='{intent.action}' • you said: \"{echo}\""
     if intent.target_ref:
         summary += f", target='{intent.target_ref}'"
+    # When NLU debug is enabled, append a compact actions list to the summary
+    if getattr(settings, "features_ask_nlu_debug", False):
+        try:
+            action_tags = [t.key.split(".", 1)[1] for t in tags if t.key.startswith("action.")]
+            if action_tags:
+                summary += f" • actions={action_tags}"
+        except Exception:
+            pass
     await inv.responder.send(summary, ephemeral=True)
+
+    # Optional developer debug message that surfaces recognized actions and tags
+    if getattr(settings, "features_ask_nlu_debug", False):
+        try:
+            # Summarize action tags distinctly from other tags
+            action_tags = [t.key.split(".", 1)[1] for t in tags if t.key.startswith("action.")]
+            # Render tags as key or key=value
+            def _fmt_tag(t: AffordanceTag) -> str:
+                return f"{t.key}={t.value}" if getattr(t, "value", None) else t.key
+
+            tag_preview = ", ".join(_fmt_tag(t) for t in tags)
+            dbg = (
+                "🔎 NLU debug: "
+                f"actions={action_tags or [intent.action]} ; "
+                f"target={intent.target_ref or 'None'} ; "
+                f"modifiers={intent.modifiers or []} ; "
+                f"tags=[{tag_preview}]"
+            )
+            # Keep message compact and ephemeral
+            await inv.responder.send(dbg[:1800], ephemeral=True)
+        except Exception:
+            # Never fail user flow due to debug rendering
+            pass
