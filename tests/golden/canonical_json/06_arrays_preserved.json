@@ -1,0 +1,10 @@
+{
+  "mixed": [
+    1,
+    null,
+    "string",
+    {
+      "nested": "object"
+    }
+  ]
+}

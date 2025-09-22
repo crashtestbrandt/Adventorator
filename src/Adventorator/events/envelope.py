@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from Adventorator import models
+from Adventorator.canonical_json import (
+    canonical_json_bytes as canonical_json_bytes_full,
+)
+from Adventorator.canonical_json import (
+    compute_canonical_hash,
+)
 
 CANONICAL_JSON_SEPARATORS = (",", ":")
 
@@ -23,24 +28,21 @@ GENESIS_SCHEMA_VERSION = 1
 
 
 def canonical_json_bytes(payload: Mapping[str, Any] | None) -> bytes:
-    """Encode payload using the provisional canonical policy.
+    """Encode payload using the canonical policy from ADR-0007.
 
-    The full canonical encoder (ordering, NFC normalization, integer-only policy)
-    will be delivered in STORY-CDA-CORE-001B. For STORY-CDA-CORE-001A we ensure
-    stable key ordering and compact separators to guarantee deterministic hashes
+    This function now uses the full canonical encoder implementing:
+    - UTF-8 NFC Unicode normalization
+    - Lexicographic key ordering
+    - Null field elision  
+    - Integer-only numeric policy (rejects floats/NaN)
+    - Compact separators
+
+    For STORY-CDA-CORE-001B, this replaces the provisional implementation
+    used in STORY-CDA-CORE-001A while maintaining backward compatibility
     for simple payloads like the genesis `{}` envelope.
     """
-
-    if payload is None:
-        payload = {}
-    # Ensure ascii to avoid platform differences until unicode normalization
-    # lands with the canonical encoder story.
-    return json.dumps(
-        payload,
-        ensure_ascii=True,
-        separators=CANONICAL_JSON_SEPARATORS,
-        sort_keys=True,
-    ).encode("utf-8")
+    # Use the full canonical encoder from the dedicated module
+    return canonical_json_bytes_full(payload)
 
 
 def compute_payload_hash(payload: Mapping[str, Any] | None) -> bytes:
@@ -169,6 +171,7 @@ __all__ = [
     "GENESIS_SCHEMA_VERSION",
     "GenesisEvent",
     "canonical_json_bytes",
+    "compute_canonical_hash",
     "compute_idempotency_key",
     "compute_payload_hash",
     "compute_envelope_hash",

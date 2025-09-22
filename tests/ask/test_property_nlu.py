@@ -1,8 +1,8 @@
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from Adventorator.ask_nlu import parse_and_tag
 from Adventorator.schemas import AskReport
-
 
 alpha_space = st.text(alphabet=st.characters(whitelist_categories=("Ll", "Lu")) | st.just(" "), min_size=0, max_size=40)
 

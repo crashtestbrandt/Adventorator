@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "name": "Alice",
+      "active": true
+    },
+    {
+      "name": "Bob",
+      "active": false
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "created": null
+  }
+}
