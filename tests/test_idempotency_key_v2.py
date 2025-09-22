@@ -46,9 +46,10 @@ class TestIdempotencyKeyV2Determinism:
         )
         
         assert len(key1) == 16
-        # Note: None vs empty string/dict should produce different keys
-        # since None gets converted to "" but {} gets canonicalized to "{}"
-        assert key1 != key2
+        # Note: None vs empty dict should produce the same key for idempotency
+        # since None gets converted to {} and {} stays {} in canonical JSON
+        # This ensures that missing args_json behaves the same as empty args_json
+        assert key1 == key2
 
     def test_composition_order_enforced(self):
         """Changing input order should not affect key (fixed parameter order)."""

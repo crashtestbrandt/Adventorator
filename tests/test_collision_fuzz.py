@@ -119,6 +119,8 @@ class IdempotencyCollisionTester:
         # Store input->key mapping for collision analysis  
         input_to_key: Dict[str, bytes] = {}
         key_to_inputs: Dict[bytes, List[Dict[str, Any]]] = defaultdict(list)
+        inputs_seen: Set[str] = set()
+        duplicate_inputs = 0
         
         for i in range(iterations):
             if i % 1000 == 0:
@@ -127,11 +129,18 @@ class IdempotencyCollisionTester:
             inputs = self.generate_random_idempotency_input()
             key = compute_idempotency_key_v2(**inputs)
             
-            # Track all inputs that generate each key
+            # Check if this exact input was already generated
+            inputs_str = str(sorted(inputs.items()))
+            if inputs_str in inputs_seen:
+                duplicate_inputs += 1
+                continue  # Skip duplicate inputs
+            inputs_seen.add(inputs_str)
+            
+            # Track all unique inputs that generate each key
             key_to_inputs[key].append(inputs)
             
-            if len(key_to_inputs[key]) > 1:
-                # Collision detected
+            if len(key_to_inputs[key]) == 2:
+                # First collision detected for this key (between different inputs)
                 self.collision_count += 1
                 self.collision_details.append((
                     key_to_inputs[key][0],  # First input
@@ -140,10 +149,12 @@ class IdempotencyCollisionTester:
         
         return {
             "total_iterations": iterations,
+            "unique_inputs": len(inputs_seen),
+            "duplicate_inputs": duplicate_inputs,
             "unique_keys": len(key_to_inputs),
             "collision_count": self.collision_count,
             "collision_details": self.collision_details,
-            "collision_rate": self.collision_count / iterations if iterations > 0 else 0,
+            "collision_rate": self.collision_count / len(inputs_seen) if len(inputs_seen) > 0 else 0,
         }
 
 
@@ -155,28 +166,31 @@ def test_collision_fuzz_10k_iterations():
     
     print("\n=== FUZZ TEST RESULTS ===")
     print(f"Total iterations: {results['total_iterations']:,}")
+    print(f"Unique inputs: {results['unique_inputs']:,}")
+    print(f"Duplicate inputs skipped: {results['duplicate_inputs']:,}")
     print(f"Unique keys generated: {results['unique_keys']:,}")
     print(f"Collisions detected: {results['collision_count']}")
     print(f"Collision rate: {results['collision_rate']:.10f}")
-    
+
     # Calculate expected collision probability for 16-byte keys
     # Birthday paradox approximation: P ≈ n²/(2×2^(8×16)) for n trials
-    n = results['total_iterations']
+    n = results['unique_inputs']  # Use unique inputs for calculation
     key_space = 2 ** (8 * 16)  # 2^128 for 16-byte keys
     expected_collision_prob = (n * n) / (2 * key_space)
-    
+
     print(f"Expected collision probability: {expected_collision_prob:.2e}")
     print(f"Key space size: 2^128 = {key_space:.2e}")
-    
-    # The acceptance criteria specify zero collisions for N>=10k
+
+    # Verify we generated no collisions (main acceptance criteria)
     assert results['collision_count'] == 0, (
-        f"Found {results['collision_count']} collisions in {n:,} iterations. "
+        f"Found {results['collision_count']} collisions in {n:,} unique inputs. "
         f"Expected 0 collisions for acceptance criteria."
     )
     
-    # Verify we actually generated diverse keys
-    assert results['unique_keys'] == results['total_iterations'], (
-        "Each iteration should generate a unique key unless there's a collision"
+    # Verify that each unique input generates a unique key (no collisions)
+    assert results['unique_keys'] == results['unique_inputs'], (
+        f"Expected {results['unique_inputs']} unique keys for {results['unique_inputs']} unique inputs, "
+        f"but got {results['unique_keys']} keys. This indicates {results['unique_inputs'] - results['unique_keys']} collisions."
     )
     
     # Log collision details if any (should be empty for passing test)
