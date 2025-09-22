@@ -8,6 +8,17 @@ This playbook documents budgets, metrics, and rollout/rollback guidance required
 - **Cardinality guardrails.** Dimensions limited to `guild_id`, `channel_id`, `feature_flag`, `actor_id` (for orchestrator) to keep metrics stores manageable.
 - **Alert routing.** Alerts page the on-call DM SRE rotation via OpsGenie; dashboards live in the "Adventorator Core" Grafana folder.
 
+## Event Hash Chain Budgets (STORY-CDA-CORE-001C)
+
+- **Metrics.**
+  - `events.applied` (counter) — Total events successfully persisted with hash chain linkage.
+  - `events.hash_mismatch` (counter) — Hash chain corruption detected; should be zero under normal conditions.
+- **Logs.** Hash chain mismatch events structured as `event.chain_mismatch` with fields:
+  - `campaign_id`, `replay_ordinal`, `event_type` — Event context for debugging
+  - `expected_hash`, `actual_hash` — Hex-encoded hash prefixes (16 chars) for correlation
+- **Verification API.** `verify_hash_chain(events)` returns summary dict; `get_campaign_events_for_verification(session, campaign_id=N)` retrieves ordered events.
+- **Alert thresholds.** Any `events.hash_mismatch` > 0 triggers immediate investigation; indicates data corruption or implementation bug.
+
 ## Planner Budgets
 
 - **Metrics.**
@@ -76,6 +87,8 @@ This playbook documents budgets, metrics, and rollout/rollback guidance required
 | Executor | `locks.wait_ms` | `executor.lock.wait.seconds` | histogram | resource=`encounter|combatant|global` |
 | ExecutionRequest | (n/a) | `executor.execution_request.steps.count` | histogram | n/a |
 | ActivityLog | (n/a) | `activity_log.entry.count` | counter | type=`mechanics` |
+| Events | (n/a) | `events.applied` | counter | n/a |
+| Events | (n/a) | `events.hash_mismatch` | counter | n/a |
 | Encounter | `encounter.turn.advance` | `encounter.turn.advance.count` | counter | result=`success|conflict` |
 | Encounter | `encounter.round.duration_ms` | `encounter.round.duration.seconds` | histogram | n/a |
 

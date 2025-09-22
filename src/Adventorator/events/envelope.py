@@ -161,6 +161,90 @@ class GenesisEvent:
         )
 
 
+class HashChainMismatchError(Exception):
+    """Raised when hash chain verification detects corruption."""
+    
+    def __init__(self, ordinal: int, expected_hash: bytes, actual_hash: bytes):
+        self.ordinal = ordinal
+        self.expected_hash = expected_hash
+        self.actual_hash = actual_hash
+        super().__init__(
+            f"Hash mismatch at ordinal {ordinal}: "
+            f"expected {expected_hash.hex()[:16]}, got {actual_hash.hex()[:16]}"
+        )
+
+
+def verify_hash_chain(events: list) -> dict[str, Any]:
+    """Verify hash chain integrity for a list of events.
+    
+    Args:
+        events: List of Event model instances ordered by replay_ordinal
+        
+    Returns:
+        dict: Verification summary with counts and status
+        
+    Raises:
+        HashChainMismatchError: When a hash mismatch is detected
+    """
+    from Adventorator.action_validation.logging_utils import log_event
+    from Adventorator.metrics import inc_counter
+    
+    if not events:
+        return {"verified_count": 0, "status": "success", "chain_length": 0}
+    
+    # Sort by replay_ordinal to ensure proper chain traversal
+    events = sorted(events, key=lambda e: e.replay_ordinal)
+    
+    expected_prev_hash = GENESIS_PREV_EVENT_HASH
+    verified_count = 0
+    
+    for event in events:
+        # Check that prev_event_hash matches expected value
+        if event.prev_event_hash != expected_prev_hash:
+            # Log structured mismatch event
+            log_event(
+                "event", 
+                "chain_mismatch",
+                campaign_id=event.campaign_id,
+                replay_ordinal=event.replay_ordinal,
+                expected_hash=expected_prev_hash.hex()[:16],
+                actual_hash=event.prev_event_hash.hex()[:16],
+                event_type=event.type,
+            )
+            
+            # Increment mismatch metric  
+            inc_counter("events.hash_mismatch")
+            
+            # Raise exception with details
+            raise HashChainMismatchError(
+                ordinal=event.replay_ordinal,
+                expected_hash=expected_prev_hash,
+                actual_hash=event.prev_event_hash
+            )
+        
+        # Compute the envelope hash of this event for the next iteration
+        expected_prev_hash = compute_envelope_hash(
+            campaign_id=event.campaign_id,
+            scene_id=event.scene_id,
+            replay_ordinal=event.replay_ordinal,
+            event_type=event.type,
+            event_schema_version=event.event_schema_version,
+            world_time=event.world_time,
+            wall_time_utc=event.wall_time_utc,
+            prev_event_hash=event.prev_event_hash,
+            payload_hash=event.payload_hash,
+            idempotency_key=event.idempotency_key,
+        )
+        
+        verified_count += 1
+    
+    return {
+        "verified_count": verified_count,
+        "status": "success", 
+        "chain_length": len(events)
+    }
+
+
 __all__ = [
     "GENESIS_EVENT_TYPE",
     "GENESIS_IDEMPOTENCY_KEY",
@@ -170,9 +254,11 @@ __all__ = [
     "GENESIS_PREV_EVENT_HASH",
     "GENESIS_SCHEMA_VERSION",
     "GenesisEvent",
+    "HashChainMismatchError",
     "canonical_json_bytes",
     "compute_canonical_hash",
     "compute_idempotency_key",
     "compute_payload_hash",
     "compute_envelope_hash",
+    "verify_hash_chain",
 ]
