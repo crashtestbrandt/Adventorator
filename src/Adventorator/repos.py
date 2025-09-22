@@ -807,6 +807,27 @@ async def append_event(
     return ev
 
 
+async def get_campaign_events_for_verification(
+    s: AsyncSession, *, campaign_id: int
+) -> list[models.Event]:
+    """Retrieve all events for a campaign ordered by replay_ordinal for hash chain verification.
+    
+    Args:
+        s: Database session
+        campaign_id: Campaign ID to retrieve events for
+        
+    Returns:
+        List of Event instances ordered by replay_ordinal
+    """
+    stmt = (
+        select(models.Event)
+        .where(models.Event.campaign_id == campaign_id)
+        .order_by(models.Event.replay_ordinal)
+    )
+    result = await s.execute(stmt)
+    return list(result.scalars().all())
+
+
 # -----------------------------
 # Pending Actions Helper Queries
 # -----------------------------
