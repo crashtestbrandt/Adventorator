@@ -1,0 +1,10 @@
+{
+  "outer_z": {
+    "inner_b": 1,
+    "inner_a": 2
+  },
+  "outer_a": {
+    "inner_z": 3,
+    "inner_m": 4
+  }
+}

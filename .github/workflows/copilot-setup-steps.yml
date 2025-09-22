@@ -1,0 +1,135 @@
+name: Copilot Setup Steps
+
+on:
+  workflow_call:
+  workflow_dispatch: {}
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # System package installation
+      - name: Install system dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl wget build-essential libffi-dev libssl-dev \
+            postgresql-client lsof net-tools
+
+      # Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Python setup with caching
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # Install uv package manager (alternative to pip install fallback)
+      - name: Install uv package manager
+        run: |
+          set -euo pipefail
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      # Node.js setup (for potential frontend tools)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      # Docker setup for service dependencies
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Start ephemeral PostgreSQL service
+      - name: Start PostgreSQL service
+        run: |
+          set -euo pipefail
+          docker run --rm -d --name test-postgres \
+            -e POSTGRES_USER=adventorator \
+            -e POSTGRES_PASSWORD=adventorator \
+            -e POSTGRES_DB=adventorator \
+            -p 5432:5432 \
+            --health-cmd "pg_isready -U adventorator -d adventorator" \
+            --health-interval 5s \
+            --health-timeout 3s \
+            --health-retries 10 \
+            postgres:16
+          
+          # Wait for PostgreSQL to be healthy using Docker health status
+          echo "Waiting for PostgreSQL to be healthy..."
+          timeout 60s bash -c 'until [ "$(docker inspect --format="{{.State.Health.Status}}" test-postgres)" = "healthy" ]; do sleep 2; done'
+          echo "PostgreSQL is healthy and ready"
+
+      # Python environment setup
+      - name: Create Python virtual environment
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
+          echo "$PWD/.venv/bin" >> $GITHUB_PATH
+
+      # Install Python dependencies with caching
+      - name: Install Python dependencies
+        run: |
+          set -euo pipefail
+          if command -v uv >/dev/null 2>&1; then
+            uv pip install -r requirements.txt
+            uv pip install -e .
+          else
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install -e .
+          fi
+
+      # Environment verification
+      - name: Verify environment setup
+        run: |
+          set -euo pipefail
+          echo "=== Environment Verification ==="
+          echo "Python version: $(python --version)"
+          echo "pip version: $(pip --version)"
+          if command -v uv >/dev/null 2>&1; then
+            echo "uv version: $(uv --version)"
+          fi
+          echo "Node.js version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo "Docker version: $(docker --version)"
+          echo
+          echo "=== Service Health Checks ==="
+          echo "PostgreSQL status:"
+          docker exec test-postgres pg_isready -U adventorator -d adventorator
+          echo "PostgreSQL connection test:"
+          docker exec test-postgres psql -U adventorator -d adventorator -c "SELECT version();"
+          echo
+          echo "=== Python Package Verification ==="
+          python -c "import Adventorator; print('✅ Adventorator package installed successfully')"
+          echo
+          echo "=== Port Availability ==="
+          echo "Checking critical ports..."
+          ss -tlnp | grep -E ':5432|:18000' || echo "No conflicts detected"
+          echo
+          echo "🎉 Environment setup complete and verified!"
+
+      # Cleanup on failure with logs
+      - name: Cleanup services on failure
+        if: failure()
+        run: |
+          echo "=== PostgreSQL Container Logs ==="
+          docker logs test-postgres || echo "No logs available"
+          echo "=== Stopping services ==="
+          docker stop test-postgres || true
+          docker rm test-postgres || true
+
+      # Always cleanup services
+      - name: Always cleanup services
+        if: always()
+        run: |
+          docker stop test-postgres || true
+          docker rm test-postgres || true
