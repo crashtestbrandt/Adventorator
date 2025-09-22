@@ -94,7 +94,7 @@ def example_executor_integration():
     # In the executor when reusing an existing event:
     log_idempotency_reuse(
         campaign_id=12345,
-        idempotency_key=b"\\x01\\x02\\x03...",
+        idempotency_key=b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10',
         event_id=67890,
         tool_name="dice_roll",
         plan_id="plan-abc123"
@@ -104,7 +104,7 @@ def example_executor_integration():
     # If collision is ever detected (should be rare):
     log_idempotency_collision(
         campaign_id=12345,
-        idempotency_key=b"\\x01\\x02\\x03...",
+        idempotency_key=b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10',
         original_event_id=67890,
         collision_inputs={
             "plan_id": "different-plan",

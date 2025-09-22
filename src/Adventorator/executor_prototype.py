@@ -172,7 +172,7 @@ class SimpleExecutorPrototype:
             event_schema_version=GENESIS_SCHEMA_VERSION,
             world_time=latest_ordinal + 1,  # Simplified world time
             wall_time_utc=datetime.now(timezone.utc),
-            prev_event_hash=b"\\x00" * 32,  # Simplified for prototype
+            prev_event_hash=b'\x00' * 32,  # Simplified for prototype
             payload_hash=compute_payload_hash(payload),
             idempotency_key=idempotency_key,
             actor_id=request.actor_id,
