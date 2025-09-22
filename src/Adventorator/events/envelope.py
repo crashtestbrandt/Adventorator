@@ -130,6 +130,54 @@ def compute_idempotency_key(
     return digest[:16]
 
 
+def compute_idempotency_key_v2(
+    *,
+    plan_id: str | None,
+    campaign_id: int,
+    event_type: str,
+    tool_name: str | None,
+    ruleset_version: str | None,
+    args_json: Mapping[str, Any] | None,
+) -> bytes:
+    """Derive a deterministic 16-byte idempotency key per STORY-CDA-CORE-001D.
+
+    Implements the ADR-specified composition for true retry collapse:
+    SHA256(plan_id || campaign_id || event_type || tool_name || ruleset_version || canonical(args_json))[:16]
+
+    This composition excludes replay_ordinal and execution_request_id to enable
+    proper idempotency - the same logical operation should produce the same key
+    regardless of retry attempts.
+
+    Args:
+        plan_id: Unique plan identifier (nullable for non-planned events)
+        campaign_id: Campaign identifier  
+        event_type: Event type string
+        tool_name: Name of the tool being executed (nullable)
+        ruleset_version: Version of ruleset being used (nullable)
+        args_json: Canonical JSON-serializable arguments (nullable)
+
+    Returns:
+        16-byte deterministic key prefix
+    """
+    # Length-prefixed binary framing to avoid delimiter collision ambiguity.
+    # Order follows acceptance criteria specification.
+    components: list[tuple[str, bytes]] = [
+        ("plan_id", (plan_id or "").encode("utf-8")),
+        ("campaign_id", str(campaign_id).encode("utf-8")),
+        ("event_type", event_type.encode("utf-8")),
+        ("tool_name", (tool_name or "").encode("utf-8")),
+        ("ruleset_version", (ruleset_version or "").encode("utf-8")),
+        ("args_json", canonical_json_bytes(args_json)),
+    ]
+    framed: list[bytes] = []
+    for label, value in components:
+        framed.append(label.encode("utf-8"))
+        framed.append(len(value).to_bytes(4, "big", signed=False))
+        framed.append(value)
+    digest = hashlib.sha256(b"".join(framed)).digest()
+    return digest[:16]
+
+
 @dataclass(slots=True, frozen=True)
 class GenesisEvent:
     """Simple data container for the genesis event envelope."""
@@ -258,6 +306,7 @@ __all__ = [
     "canonical_json_bytes",
     "compute_canonical_hash",
     "compute_idempotency_key",
+    "compute_idempotency_key_v2",
     "compute_payload_hash",
     "compute_envelope_hash",
     "verify_hash_chain",
