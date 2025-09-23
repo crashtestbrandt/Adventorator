@@ -160,16 +160,18 @@ async def test_retry_storm_single_winner(db):
     assert len(successful_results) == retry_attempts, "All attempts should succeed (create or reuse)"
     
     # Verify only one event was actually persisted
-    from sqlalchemy import select, func
-    from Adventorator import models
-    
-    count_stmt = select(func.count(models.Event.id)).where(
-        models.Event.campaign_id == campaign.id,
-        models.Event.idempotency_key == idempotency_key
-    )
-    event_count = await db.scalar(count_stmt)
-    
-    assert event_count == 1, f"Expected 1 event, found {event_count}"
+    # Use a fresh session to avoid transaction isolation issues
+    async with sessionmaker() as verify_db:
+        from sqlalchemy import select, func
+        from Adventorator import models
+        
+        count_stmt = select(func.count(models.Event.id)).where(
+            models.Event.campaign_id == campaign.id,
+            models.Event.idempotency_key == idempotency_key
+        )
+        event_count = await verify_db.scalar(count_stmt)
+        
+        assert event_count == 1, f"Expected 1 event, found {event_count}"
     
     # Verify metrics
     assert simulator.retry_count == retry_attempts
