@@ -162,13 +162,20 @@ def compute_idempotency_key_v2(
     """
     # Length-prefixed binary framing to avoid delimiter collision ambiguity.
     # Order follows acceptance criteria specification.
+    
+    # Special handling for args_json to distinguish None from empty dict
+    if args_json is None:
+        args_bytes = b"<null>"  # Sentinel value for None
+    else:
+        args_bytes = canonical_json_bytes(args_json)
+    
     components: list[tuple[str, bytes]] = [
         ("plan_id", (plan_id or "").encode("utf-8")),
         ("campaign_id", str(campaign_id).encode("utf-8")),
         ("event_type", event_type.encode("utf-8")),
         ("tool_name", (tool_name or "").encode("utf-8")),
         ("ruleset_version", (ruleset_version or "").encode("utf-8")),
-        ("args_json", canonical_json_bytes(args_json)),
+        ("args_json", args_bytes),
     ]
     framed: list[bytes] = []
     for label, value in components:

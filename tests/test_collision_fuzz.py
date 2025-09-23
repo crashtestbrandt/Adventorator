@@ -119,6 +119,8 @@ class IdempotencyCollisionTester:
         # Store input->key mapping for collision analysis  
         input_to_key: Dict[str, bytes] = {}
         key_to_inputs: Dict[bytes, List[Dict[str, Any]]] = defaultdict(list)
+        seen_inputs: Set[str] = set()  # Track seen input combinations
+        true_collisions = 0  # Count only different inputs with same key
         
         for i in range(iterations):
             if i % 1000 == 0:
@@ -127,23 +129,32 @@ class IdempotencyCollisionTester:
             inputs = self.generate_random_idempotency_input()
             key = compute_idempotency_key_v2(**inputs)
             
+            # Create a deterministic string representation of inputs for deduplication
+            inputs_str = str(sorted(inputs.items()))
+            
             # Track all inputs that generate each key
             key_to_inputs[key].append(inputs)
             
             if len(key_to_inputs[key]) > 1:
-                # Collision detected
-                self.collision_count += 1
-                self.collision_details.append((
-                    key_to_inputs[key][0],  # First input
-                    inputs  # Colliding input
-                ))
+                # Check if this is a true collision (different inputs, same key)
+                first_inputs_str = str(sorted(key_to_inputs[key][0].items()))
+                current_inputs_str = str(sorted(inputs.items()))
+                
+                if first_inputs_str != current_inputs_str:
+                    # True collision: different inputs produced same key
+                    true_collisions += 1
+                    self.collision_count += 1
+                    self.collision_details.append((
+                        key_to_inputs[key][0],  # First input
+                        inputs  # Colliding input
+                    ))
         
         return {
             "total_iterations": iterations,
             "unique_keys": len(key_to_inputs),
-            "collision_count": self.collision_count,
+            "collision_count": true_collisions,  # Only count true hash collisions
             "collision_details": self.collision_details,
-            "collision_rate": self.collision_count / iterations if iterations > 0 else 0,
+            "collision_rate": true_collisions / iterations if iterations > 0 else 0,
         }
 
 
@@ -174,10 +185,10 @@ def test_collision_fuzz_10k_iterations():
         f"Expected 0 collisions for acceptance criteria."
     )
     
-    # Verify we actually generated diverse keys
-    assert results['unique_keys'] == results['total_iterations'], (
-        "Each iteration should generate a unique key unless there's a collision"
-    )
+    # For this test, some duplicate inputs are expected due to random generation
+    # The important thing is zero true hash collisions
+    print(f"✓ Zero hash collisions detected")
+    print(f"✓ Test generated {results['unique_keys']:,} unique keys from {n:,} iterations")
     
     # Log collision details if any (should be empty for passing test)
     if results['collision_details']:
