@@ -2,6 +2,7 @@
 
 import asyncio
 import pytest
+import time
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -12,8 +13,8 @@ from Adventorator.events.envelope import GENESIS_SCHEMA_VERSION
 class RetryStormSimulator:
     """Simulates rapid retry attempts for idempotency testing."""
     
-    def __init__(self, db_session):
-        self.db = db_session
+    def __init__(self, sessionmaker):
+        self.sessionmaker = sessionmaker
         self.retry_count = 0
         self.successful_inserts = 0
         self.idempotent_reuses = 0
@@ -26,6 +27,8 @@ class RetryStormSimulator:
     ) -> tuple[bool, Any]:
         """Attempt to create an event, handling idempotency conflicts.
         
+        Uses a separate database session to avoid concurrency issues.
+        
         Returns:
             (success: bool, event_or_existing)
         """
@@ -34,49 +37,55 @@ class RetryStormSimulator:
         
         self.retry_count += 1
         
-        try:
-            # Check if event already exists with this idempotency key
-            from sqlalchemy import select
-            stmt = select(models.Event).where(
-                models.Event.campaign_id == campaign_id,
-                models.Event.idempotency_key == idempotency_key
-            )
-            existing = await self.db.scalar(stmt)
-            
-            if existing:
-                self.idempotent_reuses += 1
-                return True, existing
-            
-            # Try to create new event
-            event = models.Event(
-                campaign_id=campaign_id,
-                idempotency_key=idempotency_key,
-                **event_data
-            )
-            
-            self.db.add(event)
-            await self.db.flush()
-            
-            self.successful_inserts += 1
-            return True, event
-            
-        except (IntegrityError, OperationalError):
-            # Race condition - another attempt won
-            await self.db.rollback()
-            
-            # Fetch the winning event
-            stmt = select(models.Event).where(
-                models.Event.campaign_id == campaign_id,
-                models.Event.idempotency_key == idempotency_key
-            )
-            existing = await self.db.scalar(stmt)
-            
-            if existing:
-                self.idempotent_reuses += 1
-                return True, existing
-            else:
-                # This should not happen
-                return False, None
+        # Use a separate session for each attempt to avoid concurrency issues
+        async with self.sessionmaker() as db:
+            try:
+                # Check if event already exists with this idempotency key
+                from sqlalchemy import select
+                stmt = select(models.Event).where(
+                    models.Event.campaign_id == campaign_id,
+                    models.Event.idempotency_key == idempotency_key
+                )
+                existing = await db.scalar(stmt)
+                
+                if existing:
+                    self.idempotent_reuses += 1
+                    return True, existing
+                
+                # Try to create new event
+                event = models.Event(
+                    campaign_id=campaign_id,
+                    idempotency_key=idempotency_key,
+                    **event_data
+                )
+                
+                db.add(event)
+                await db.commit()  # Use commit instead of flush for full transaction
+                
+                self.successful_inserts += 1
+                return True, event
+                
+            except (IntegrityError, OperationalError) as e:
+                # Race condition - another attempt won
+                await db.rollback()
+                
+                # Fetch the winning event
+                stmt = select(models.Event).where(
+                    models.Event.campaign_id == campaign_id,
+                    models.Event.idempotency_key == idempotency_key
+                )
+                existing = await db.scalar(stmt)
+                
+                if existing:
+                    self.idempotent_reuses += 1
+                    return True, existing
+                else:
+                    # This should not happen
+                    return False, f"No event found after integrity error: {e}"
+            except Exception as e:
+                # Catch any other exceptions for debugging
+                await db.rollback()
+                return False, f"Unexpected error: {type(e).__name__}: {e}"
 
 
 @pytest.mark.asyncio
@@ -92,7 +101,7 @@ async def test_retry_storm_single_winner(db):
     from Adventorator.events.envelope import GenesisEvent
     genesis = GenesisEvent(campaign_id=campaign.id, scene_id=scene.id).instantiate()
     db.add(genesis)
-    await db.flush()
+    await db.commit()  # Commit so other sessions can see it
     
     # Define the operation that will be retried
     plan_id = "retry-storm-plan-123"
@@ -130,7 +139,9 @@ async def test_retry_storm_single_winner(db):
     }
     
     # Simulate rapid retry storm (minimum 10 as per acceptance criteria)
-    simulator = RetryStormSimulator(db)
+    from Adventorator.db import get_sessionmaker
+    sessionmaker = get_sessionmaker()
+    simulator = RetryStormSimulator(sessionmaker)
     retry_attempts = 15  # Exceed minimum requirement
     
     # Execute retries rapidly
@@ -185,7 +196,7 @@ async def test_retry_storm_different_operations_different_events(db):
     from Adventorator.events.envelope import GenesisEvent
     genesis = GenesisEvent(campaign_id=campaign.id, scene_id=scene.id).instantiate()
     db.add(genesis)
-    await db.flush()
+    await db.commit()  # Commit so other sessions can see it
     
     # Define two different operations
     operations = [
@@ -233,7 +244,9 @@ async def test_retry_storm_different_operations_different_events(db):
         }
         
         # 5 retries per operation
-        simulator = RetryStormSimulator(db)
+        from Adventorator.db import get_sessionmaker
+        sessionmaker = get_sessionmaker()
+        simulator = RetryStormSimulator(sessionmaker)
         for retry in range(5):
             task = simulator.simulate_event_creation_attempt(
                 campaign.id, idempotency_key, event_data
@@ -273,7 +286,7 @@ async def test_retry_storm_performance_baseline(db):
     from Adventorator.events.envelope import GenesisEvent
     genesis = GenesisEvent(campaign_id=campaign.id, scene_id=scene.id).instantiate()
     db.add(genesis)
-    await db.flush()
+    await db.commit()  # Commit so other sessions can see it
     
     # Define operation
     idempotency_key = compute_idempotency_key_v2(
@@ -303,7 +316,9 @@ async def test_retry_storm_performance_baseline(db):
     }
     
     # Time the retry storm
-    simulator = RetryStormSimulator(db)
+    from Adventorator.db import get_sessionmaker
+    sessionmaker = get_sessionmaker()
+    simulator = RetryStormSimulator(sessionmaker)
     retry_count = 25  # Higher count for performance test
     
     start_time = time.time()
