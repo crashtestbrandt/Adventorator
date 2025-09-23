@@ -301,6 +301,111 @@ def verify_hash_chain(events: list) -> dict[str, Any]:
     }
 
 
+async def get_chain_tip(session, campaign_id: int) -> tuple[int, bytes] | None:
+    """Get the current chain tip for a campaign.
+    
+    Args:
+        session: Database session
+        campaign_id: Campaign identifier
+        
+    Returns:
+        tuple: (replay_ordinal, payload_hash) of the latest event,
+               or None if no events exist
+    """
+    from sqlalchemy import select
+
+    from Adventorator import models
+    
+    # Get the event with the highest replay_ordinal for this campaign
+    stmt = (
+        select(models.Event.replay_ordinal, models.Event.payload_hash)
+        .where(models.Event.campaign_id == campaign_id)
+        .order_by(models.Event.replay_ordinal.desc())
+        .limit(1)
+    )
+    
+    result = await session.execute(stmt)
+    row = result.first()
+    
+    if row:
+        return row.replay_ordinal, row.payload_hash
+    else:
+        return None
+
+
+def log_event_applied(
+    *,
+    event_id: int,
+    campaign_id: int,
+    replay_ordinal: int,
+    event_type: str,
+    idempotency_key: bytes,
+    payload_hash: bytes,
+    plan_id: str | None = None,
+    execution_request_id: str | None = None,
+    latency_ms: float | None = None,
+) -> None:
+    """Log structured event application with required metadata.
+    
+    This emits the structured log format specified in the acceptance criteria
+    for STORY-CDA-CORE-001E observability.
+    """
+    from Adventorator.action_validation.logging_utils import log_event
+    from Adventorator.metrics import inc_counter
+    
+    # Required structured log fields per acceptance criteria
+    log_data = {
+        "event_id": event_id,
+        "replay_ordinal": replay_ordinal,
+        "chain_tip_hash": payload_hash.hex()[:16],  # First 16 chars for readability
+        "idempotency_key_hex": idempotency_key.hex(),
+        "event_type": event_type,
+        "campaign_id": campaign_id,
+    }
+    
+    # Optional fields
+    if plan_id:
+        log_data["plan_id"] = plan_id
+    if execution_request_id:
+        log_data["execution_request_id"] = execution_request_id
+    if latency_ms is not None:
+        log_data["latency_ms"] = latency_ms
+    
+    # Log structured event
+    log_event("event", "applied", **log_data)
+    
+    # Increment metrics
+    inc_counter("events.applied")
+    
+    if latency_ms is not None:
+        # Record latency in histogram (simplified - just record the value)
+        # In a real system this would use proper histogram buckets
+        inc_counter("event.apply.latency_ms", int(latency_ms))
+
+
+def log_idempotent_reuse(
+    *,
+    event_id: int,
+    campaign_id: int,
+    idempotency_key: bytes,
+    plan_id: str | None = None,
+) -> None:
+    """Log when an event creation was skipped due to idempotency."""
+    from Adventorator.action_validation.logging_utils import log_event
+    from Adventorator.metrics import inc_counter
+    
+    log_event(
+        "event",
+        "idempotent_reuse",
+        event_id=event_id,
+        campaign_id=campaign_id,
+        idempotency_key_hex=idempotency_key.hex(),
+        plan_id=plan_id,
+    )
+    
+    inc_counter("events.idempotent_reuse")
+
+
 __all__ = [
     "GENESIS_EVENT_TYPE",
     "GENESIS_IDEMPOTENCY_KEY",
@@ -318,4 +423,7 @@ __all__ = [
     "compute_payload_hash",
     "compute_envelope_hash",
     "verify_hash_chain",
+    "get_chain_tip",
+    "log_event_applied",
+    "log_idempotent_reuse",
 ]

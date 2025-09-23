@@ -2,11 +2,11 @@
 
 import random
 import string
-import hashlib
-from typing import Set, List, Dict, Any, Tuple
 from collections import defaultdict
+from typing import Any
 
 import pytest
+
 from Adventorator.events.envelope import compute_idempotency_key_v2
 
 
@@ -15,16 +15,16 @@ class IdempotencyCollisionTester:
     
     def __init__(self, seed: int = 42):
         self.rng = random.Random(seed)
-        self.generated_keys: Set[bytes] = set()
+        self.generated_keys: set[bytes] = set()
         self.collision_count = 0
-        self.collision_details: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+        self.collision_details: list[tuple[dict[str, Any], dict[str, Any]]] = []
         
     def generate_random_string(self, min_len: int = 1, max_len: int = 50) -> str:
         """Generate a random string."""
         length = self.rng.randint(min_len, max_len)
         return ''.join(self.rng.choices(string.ascii_letters + string.digits + '-_', k=length))
     
-    def generate_random_json(self, max_depth: int = 3, max_items: int = 10) -> Dict[str, Any]:
+    def generate_random_json(self, max_depth: int = 3, max_items: int = 10) -> dict[str, Any]:
         """Generate random JSON-serializable data."""
         if max_depth <= 0:
             # Base case - return simple value
@@ -58,7 +58,7 @@ class IdempotencyCollisionTester:
         
         return result
     
-    def generate_random_idempotency_input(self) -> Dict[str, Any]:
+    def generate_random_idempotency_input(self) -> dict[str, Any]:
         """Generate random inputs for idempotency key computation."""
         return {
             "plan_id": self.rng.choice([
@@ -97,7 +97,7 @@ class IdempotencyCollisionTester:
             ])
         }
     
-    def test_single_input(self, inputs: Dict[str, Any]) -> bytes:
+    def test_single_input(self, inputs: dict[str, Any]) -> bytes:
         """Test a single input and check for collisions."""
         key = compute_idempotency_key_v2(**inputs)
         
@@ -112,14 +112,12 @@ class IdempotencyCollisionTester:
         self.generated_keys.add(key)
         return key
     
-    def run_fuzz_test(self, iterations: int) -> Dict[str, Any]:
+    def run_fuzz_test(self, iterations: int) -> dict[str, Any]:
         """Run fuzz test with specified iterations."""
         print(f"Starting fuzz test with {iterations} iterations...")
         
         # Store input->key mapping for collision analysis  
-        input_to_key: Dict[str, bytes] = {}
-        key_to_inputs: Dict[bytes, List[Dict[str, Any]]] = defaultdict(list)
-        seen_inputs: Set[str] = set()  # Track seen input combinations
+        key_to_inputs: dict[bytes, list[dict[str, Any]]] = defaultdict(list)
         true_collisions = 0  # Count only different inputs with same key
         
         for i in range(iterations):
@@ -128,9 +126,6 @@ class IdempotencyCollisionTester:
             
             inputs = self.generate_random_idempotency_input()
             key = compute_idempotency_key_v2(**inputs)
-            
-            # Create a deterministic string representation of inputs for deduplication
-            inputs_str = str(sorted(inputs.items()))
             
             # Track all inputs that generate each key
             key_to_inputs[key].append(inputs)
@@ -187,7 +182,7 @@ def test_collision_fuzz_10k_iterations():
     
     # For this test, some duplicate inputs are expected due to random generation
     # The important thing is zero true hash collisions
-    print(f"✓ Zero hash collisions detected")
+    print("✓ Zero hash collisions detected")
     print(f"✓ Test generated {results['unique_keys']:,} unique keys from {n:,} iterations")
     
     # Log collision details if any (should be empty for passing test)

@@ -135,7 +135,7 @@ def test_observe_histogram_overflow_bucket():
 @pytest.mark.asyncio
 async def test_event_apply_latency_timing(db):
     """Test that event apply operations record latency histogram."""
-    from Adventorator import repos, metrics
+    from Adventorator import metrics, repos
     
     metrics.reset_counters()
     

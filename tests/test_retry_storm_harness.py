@@ -1,12 +1,16 @@
 """Retry storm test harness (STORY-CDA-CORE-001D)."""
 
 import asyncio
-import pytest
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Any
 
-from Adventorator.events.envelope import compute_idempotency_key_v2, compute_payload_hash
-from Adventorator.events.envelope import GENESIS_SCHEMA_VERSION
+import pytest
+
+from Adventorator.events.envelope import (
+    GENESIS_SCHEMA_VERSION,
+    compute_idempotency_key_v2,
+    compute_payload_hash,
+)
 
 
 class RetryStormSimulator:
@@ -22,17 +26,18 @@ class RetryStormSimulator:
         self, 
         campaign_id: int,
         idempotency_key: bytes,
-        event_data: Dict[str, Any]
+        event_data: dict[str, Any]
     ) -> tuple[bool, Any]:
         """Attempt to create an event, handling idempotency conflicts.
         
         Returns:
             (success: bool, event_or_existing)
         """
+        from sqlalchemy import select
+        from sqlalchemy.exc import IntegrityError, OperationalError
+
         from Adventorator import models
         from Adventorator.db import get_sessionmaker
-        from sqlalchemy.exc import IntegrityError, OperationalError
-        from sqlalchemy import select
         
         self.retry_count += 1
         
@@ -150,7 +155,7 @@ async def test_retry_storm_single_winner(db):
     
     # Execute retries rapidly
     tasks = []
-    for i in range(retry_attempts):
+    for _i in range(retry_attempts):
         task = simulator.simulate_event_creation_attempt(
             campaign.id, idempotency_key, event_data
         )
@@ -168,7 +173,8 @@ async def test_retry_storm_single_winner(db):
     print(f"Successful attempts: {len(successful_results)}, Failed attempts: {len(failed_results)}")
     
     # Verify only one event was actually persisted
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
+
     from Adventorator import models
     
     count_stmt = select(func.count(models.Event.id)).where(
@@ -188,7 +194,9 @@ async def test_retry_storm_single_winner(db):
     assert event.payload == payload
     assert event.plan_id == plan_id
     
-    print(f"✓ Retry storm test passed: {event_count} event persisted from {retry_attempts} attempts")
+    print(
+        f"✓ Retry storm test passed: {event_count} event persisted from {retry_attempts} attempts"
+    )
     
     # Note: We don't assert all retries succeed because with SQLite concurrency,
     # some attempts may fail due to locking. The key test is idempotency - 
@@ -256,7 +264,7 @@ async def test_retry_storm_different_operations_different_events(db):
         
         # 5 retries per operation
         simulator = RetryStormSimulator(db)
-        for retry in range(5):
+        for _retry in range(5):
             task = simulator.simulate_event_creation_attempt(
                 campaign.id, idempotency_key, event_data
             )
@@ -270,7 +278,8 @@ async def test_retry_storm_different_operations_different_events(db):
     assert len(successful_results) >= 2, "At least one retry per operation should succeed"
     
     # Verify exactly 2 unique events were created (one per operation)
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
+
     from Adventorator import models
     
     count_stmt = select(func.count(models.Event.id)).where(
@@ -286,6 +295,7 @@ async def test_retry_storm_different_operations_different_events(db):
 async def test_retry_storm_performance_baseline(db):
     """Measure retry storm handling performance for observability."""
     import time
+
     from Adventorator import repos
     
     # Setup
@@ -331,7 +341,7 @@ async def test_retry_storm_performance_baseline(db):
     start_time = time.time()
     
     tasks = []
-    for i in range(retry_count):
+    for _i in range(retry_count):
         task = simulator.simulate_event_creation_attempt(
             campaign.id, idempotency_key, event_data
         )
@@ -347,7 +357,8 @@ async def test_retry_storm_performance_baseline(db):
     assert len(successful_results) >= 1, "At least one attempt should succeed"
     
     # Verify only one event was persisted
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
+
     from Adventorator import models
     
     count_stmt = select(func.count(models.Event.id)).where(

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Standalone test for idempotency key v2 implementation."""
 
-import sys
 import hashlib
 import json
-from typing import Mapping, Any
+import sys
+from collections.abc import Mapping
+from typing import Any
 
 
 def canonical_json_bytes(payload: Mapping[str, Any] | None) -> bytes:

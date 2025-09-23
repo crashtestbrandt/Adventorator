@@ -1,11 +1,14 @@
 """Simple executor prototype demonstrating idempotency key v2 reuse (STORY-CDA-CORE-001D)."""
 
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
-from Adventorator.events.envelope import compute_idempotency_key_v2, compute_payload_hash
-from Adventorator.events.envelope import GENESIS_SCHEMA_VERSION
+from Adventorator.events.envelope import (
+    GENESIS_SCHEMA_VERSION,
+    compute_idempotency_key_v2,
+    compute_payload_hash,
+)
 
 
 @dataclass
@@ -15,7 +18,7 @@ class ExecutorRequest:
     campaign_id: int
     tool_name: str
     ruleset_version: str
-    args_json: Dict[str, Any]
+    args_json: dict[str, Any]
     actor_id: str
     scene_id: int
 
@@ -23,11 +26,11 @@ class ExecutorRequest:
 @dataclass
 class ExecutorResult:
     """Result of executor operation."""
-    event_id: Optional[int]
+    event_id: int | None
     idempotency_key: bytes
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     was_reused: bool
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class SimpleExecutorPrototype:
@@ -105,6 +108,7 @@ class SimpleExecutorPrototype:
     async def _find_existing_event(self, campaign_id: int, idempotency_key: bytes):
         """Find existing event with the given idempotency key."""
         from sqlalchemy import select
+
         from Adventorator import models
         
         stmt = select(models.Event).where(
@@ -113,7 +117,7 @@ class SimpleExecutorPrototype:
         )
         return await self.db.scalar(stmt)
     
-    async def _execute_tool(self, request: ExecutorRequest) -> Dict[str, Any]:
+    async def _execute_tool(self, request: ExecutorRequest) -> dict[str, Any]:
         """Simulate tool execution (placeholder implementation)."""
         
         # Simple tool simulation based on tool name
@@ -156,7 +160,7 @@ class SimpleExecutorPrototype:
             }
     
     async def _create_event(
-        self, request: ExecutorRequest, idempotency_key: bytes, payload: Dict[str, Any]
+        self, request: ExecutorRequest, idempotency_key: bytes, payload: dict[str, Any]
     ):
         """Create new event in the database."""
         from Adventorator import models
@@ -190,7 +194,8 @@ class SimpleExecutorPrototype:
     
     async def _get_latest_replay_ordinal(self, campaign_id: int) -> int:
         """Get latest replay ordinal for campaign (simplified)."""
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
+
         from Adventorator import models
         
         stmt = select(func.max(models.Event.replay_ordinal)).where(
