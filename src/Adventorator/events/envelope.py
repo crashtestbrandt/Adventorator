@@ -142,7 +142,8 @@ def compute_idempotency_key_v2(
     """Derive a deterministic 16-byte idempotency key per STORY-CDA-CORE-001D.
 
     Implements the ADR-specified composition for true retry collapse:
-    SHA256(plan_id || campaign_id || event_type || tool_name || ruleset_version || canonical(args_json))[:16]
+    SHA256(plan_id || campaign_id || event_type || tool_name || 
+           ruleset_version || canonical(args_json))[:16]
 
     This composition excludes replay_ordinal and execution_request_id to enable
     proper idempotency - the same logical operation should produce the same key

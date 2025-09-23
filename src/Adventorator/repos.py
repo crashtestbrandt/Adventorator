@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -15,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from Adventorator import models
 from Adventorator.events import envelope as event_envelope
-from Adventorator.metrics import inc_counter
+from Adventorator.metrics import inc_counter, observe_histogram
 from Adventorator.schemas import CharacterSheet
 
 _MAX_ACTIVITY_SUMMARY_LEN = 160
@@ -709,6 +710,9 @@ async def append_event(
     payload: dict[str, Any] | None,
     request_id: str | None = None,
 ) -> models.Event:
+    # Start timing for latency histogram
+    start_time_ms = time.time() * 1000
+    
     # Per-campaign lock map to increase parallelism across campaigns while
     # retaining deterministic intra-campaign ordering.
     # Normalize actor id (character name when numeric id maps to character)
@@ -784,6 +788,12 @@ async def append_event(
         await _flush_retry(s)
     inc_counter("events.append.ok")  # legacy naming kept
     inc_counter("events.applied")  # HR-004 new canonical counter
+    
+    # Record latency histogram for observability (STORY-CDA-CORE-001E)
+    end_time_ms = time.time() * 1000
+    latency_ms = int(end_time_ms - start_time_ms)
+    observe_histogram("event.apply.latency_ms", latency_ms)
+    
     # Structured log for observability (HR-003): include identifiers & hash prefixes
     try:  # Best-effort: logging must not break persistence path
         from Adventorator.action_validation.logging_utils import (
@@ -797,10 +807,12 @@ async def append_event(
             scene_id=scene_id,
             event_id=getattr(ev, "id", None),
             replay_ordinal=replay_ordinal,
+            chain_tip_hash=prev_hash.hex()[:16],  # Current chain tip (what this event links to)
+            idempotency_key_hex=idempotency_key.hex()[:16],  # Fixed field name
+            plan_id=getattr(ev, "plan_id", None),  # If provided
+            execution_request_id=execution_request_id,  # If provided
             type=type,
-            request_id=execution_request_id,
             payload_hash=payload_hash.hex()[:16],
-            idempo_key=idempotency_key.hex()[:16],
         )
     except Exception:
         pass
@@ -826,6 +838,31 @@ async def get_campaign_events_for_verification(
     )
     result = await s.execute(stmt)
     return list(result.scalars().all())
+
+
+async def get_chain_tip(
+    s: AsyncSession, *, campaign_id: int
+) -> tuple[int, bytes] | None:
+    """Get the chain tip for a campaign (last replay_ordinal, payload_hash).
+    
+    Args:
+        s: Database session
+        campaign_id: Campaign ID to get tip for
+        
+    Returns:
+        Tuple of (replay_ordinal, payload_hash) for the last event, or None if no events exist
+    """
+    stmt = (
+        select(models.Event.replay_ordinal, models.Event.payload_hash)
+        .where(models.Event.campaign_id == campaign_id)
+        .order_by(models.Event.replay_ordinal.desc())
+        .limit(1)
+    )
+    result = await s.execute(stmt)
+    row = result.first()
+    if row is None:
+        return None
+    return (row.replay_ordinal, row.payload_hash)
 
 
 # -----------------------------

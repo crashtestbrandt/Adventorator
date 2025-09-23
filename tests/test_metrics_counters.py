@@ -130,3 +130,41 @@ def test_observe_histogram_overflow_bucket():
         assert counters["histo.latency.count"] == 1
     finally:
         metrics.reset_counters()
+
+
+@pytest.mark.asyncio
+async def test_event_apply_latency_timing(db):
+    """Test that event apply operations record latency histogram."""
+    from Adventorator import repos, metrics
+    
+    metrics.reset_counters()
+    
+    # Setup campaign/scene
+    camp = await repos.get_or_create_campaign(db, 1, name="Latency Test")
+    scene = await repos.ensure_scene(db, camp.id, 300)
+    
+    # Append an event (should record latency)
+    await repos.append_event(
+        db,
+        scene_id=scene.id,
+        actor_id="latency_actor",
+        type="latency_test",
+        payload={"test": "latency_measurement"},
+        request_id="latency_req",
+    )
+    
+    # Check that latency histogram was recorded
+    counters = metrics.get_counters()
+    
+    # Should have latency histogram entries
+    latency_keys = [k for k in counters.keys() if k.startswith("histo.event.apply.latency_ms")]
+    assert len(latency_keys) > 0, f"Expected latency histogram entries, got: {list(counters.keys())}"
+    
+    # Should have count and sum
+    assert "histo.event.apply.latency_ms.count" in counters
+    assert "histo.event.apply.latency_ms.sum" in counters
+    assert counters["histo.event.apply.latency_ms.count"] == 1
+    assert counters["histo.event.apply.latency_ms.sum"] > 0  # Should be positive
+    
+    # Should also have events.applied counter incremented
+    assert counters["events.applied"] == 1

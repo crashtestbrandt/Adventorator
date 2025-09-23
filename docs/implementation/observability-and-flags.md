@@ -89,6 +89,9 @@ This playbook documents budgets, metrics, and rollout/rollback guidance required
 | ActivityLog | (n/a) | `activity_log.entry.count` | counter | type=`mechanics` |
 | Events | (n/a) | `events.applied` | counter | n/a |
 | Events | (n/a) | `events.hash_mismatch` | counter | n/a |
+| Events | (n/a) | `events.conflict` | counter | n/a |
+| Events | (n/a) | `events.idempotent_reuse` | counter | n/a |
+| Events | (n/a) | `event.apply.latency_ms` | histogram | n/a |
 | Encounter | `encounter.turn.advance` | `encounter.turn.advance.count` | counter | result=`success|conflict` |
 | Encounter | `encounter.round.duration_ms` | `encounter.round.duration.seconds` | histogram | n/a |
 
