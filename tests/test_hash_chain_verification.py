@@ -246,3 +246,46 @@ async def test_hash_chain_genesis_linkage(db):
     result = verify_hash_chain([event])
     assert result["status"] == "success"
     assert result["verified_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_chain_tip_accessor(db):
+    """Test chain tip accessor returns last (replay_ordinal, payload_hash)."""
+    from Adventorator import repos
+    
+    reset_counters()
+    
+    # Setup campaign/scene
+    camp = await repos.get_or_create_campaign(db, 1, name="Chain Tip Test")
+    scene = await repos.ensure_scene(db, camp.id, 200)
+    
+    # Test empty chain
+    tip = await repos.get_chain_tip(db, campaign_id=camp.id)
+    assert tip is None
+    
+    # Append some events
+    events = []
+    for i in range(3):
+        event = await repos.append_event(
+            db,
+            scene_id=scene.id,
+            actor_id=f"actor{i}",
+            type="tip_test_event",
+            payload={"step": i, "data": f"tip_payload_{i}"},
+            request_id=f"tip_req_{i}",
+        )
+        events.append(event)
+    
+    # Get chain tip
+    tip = await repos.get_chain_tip(db, campaign_id=camp.id)
+    assert tip is not None
+    
+    tip_ordinal, tip_payload_hash = tip
+    
+    # Should match the last event
+    last_event = events[-1]
+    assert tip_ordinal == last_event.replay_ordinal
+    assert tip_payload_hash == last_event.payload_hash
+    
+    # Verify it's actually the latest (highest ordinal)
+    assert tip_ordinal == 2  # 0, 1, 2 = 3 events, last ordinal is 2

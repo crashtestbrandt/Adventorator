@@ -100,3 +100,15 @@ def observe_histogram(name: str, value: int, *, buckets: list[int] | None = None
         h[key] = h.get(key, 0) + 1
     _hist_sums[name] += int(value)
     _hist_counts[name] += 1
+
+
+# Convenience functions for STORY-CDA-CORE-001E event metrics
+
+def record_event_conflict() -> None:
+    """Record an event conflict (placeholder until executor implementation)."""
+    inc_counter("events.conflict")
+
+
+def record_idempotent_reuse() -> None:
+    """Record event idempotency reuse."""
+    inc_counter("events.idempotent_reuse")

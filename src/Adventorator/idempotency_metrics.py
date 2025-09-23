@@ -54,12 +54,17 @@ def log_idempotency_collision(
 
 
 def increment_metric(metric_name: str, value: int = 1, tags: dict[str, str] | None = None) -> None:
-    """Placeholder metric increment function.
+    """Metric increment function integrating with the Adventorator metrics system.
     
-    In a real implementation, this would integrate with the application's
-    metrics system (e.g., Prometheus, StatsD, etc.).
+    Integrates with the existing metrics.py module for consistent metric handling.
     """
-    # For now, just log the metric
+    # Import here to avoid circular imports
+    from Adventorator.metrics import inc_counter
+    
+    # Use the actual metrics system
+    inc_counter(metric_name, value)
+    
+    # Also log for debugging/observability
     logger.info(
         f"metric.{metric_name}",
         extra={
