@@ -16,7 +16,7 @@ mcp = false
 activity_log = true
 planning_tiers = true  # Enables tiered planning scaffolding (Level >1 expansion paths)
 improbability_drive = true
-ask = { enabled = true, nlu_rule_based = true, nlu_debug = true }
+ask = { enabled = true, nlu_rule_based = true, nlu_debug = true, kb_lookup = false }
 
 # --- ImprobabilityDrive /ask feature flags ---
 # Two supported forms:
@@ -29,6 +29,14 @@ ask = { enabled = true, nlu_rule_based = true, nlu_debug = true }
 # nlu_rule_based = true     # deterministic NLU baseline (defaults true when enabled)
 # kb_lookup = false         # knowledge base / ontology lookup
 # planner_handoff = false   # pass intent to planner for tool selection
+
+# Knowledge Base configuration (gated by features.improbability_drive and features.ask.kb_lookup)
+[ask.kb]
+timeout_s = 0.05
+max_candidates = 5
+cache_ttl_s = 60
+cache_max_size = 1024
+max_terms_per_call = 20
 
 # Retrieval-augmented orchestration.
 # Note: provider "none" uses the built-in SQL fallback retriever.

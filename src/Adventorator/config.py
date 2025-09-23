@@ -147,6 +147,24 @@ def _toml_settings_source() -> dict[str, Any]:
             "top_k": int(retrieval_cfg.get("top_k", 4)),
         }
 
+    # KB Configuration (Phase 3)
+    # Example TOML:
+    # [ask.kb]
+    # timeout_s = 0.05
+    # max_candidates = 5
+    # cache_ttl_s = 60
+    # cache_max_size = 1024
+    # max_terms_per_call = 20
+    kb_cfg = t.get("ask", {}).get("kb", {}) or {}
+    if kb_cfg:
+        out["ask_kb"] = {
+            "timeout_s": float(kb_cfg.get("timeout_s", 0.05)),
+            "max_candidates": int(kb_cfg.get("max_candidates", 5)),
+            "cache_ttl_s": float(kb_cfg.get("cache_ttl_s", 60.0)),
+            "cache_max_size": int(kb_cfg.get("cache_max_size", 1024)),
+            "max_terms_per_call": int(kb_cfg.get("max_terms_per_call", 20)),
+        }
+
     # Ops toggles
     ops_cfg = t.get("ops", {}) or {}
     out["metrics_endpoint_enabled"] = ops_cfg.get("metrics_endpoint_enabled", False)
@@ -197,6 +215,16 @@ class Settings(BaseSettings):
     features_ask_kb_lookup: bool = False
     features_ask_planner_handoff: bool = False
     features_ask_nlu_debug: bool = False
+
+    # --- KB Configuration (Phase 3) ---
+    class AskKBConfig(BaseModel):
+        timeout_s: float = 0.05
+        max_candidates: int = 5
+        cache_ttl_s: float = 60.0
+        cache_max_size: int = 1024
+        max_terms_per_call: int = 20
+
+    ask_kb: AskKBConfig = AskKBConfig()
 
     # --- Retrieval (Phase 6) ---
     class RetrievalConfig(BaseModel):

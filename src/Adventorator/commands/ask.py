@@ -130,6 +130,59 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
 
     _report = AskReport(raw_text=user_msg, intent=intent, tags=tags)
 
+    # Optional KB lookup for entity resolution (Phase 3)
+    kb_resolutions = []
+    if (
+        getattr(settings, "features_ask_kb_lookup", False)
+        and getattr(settings, "features_improbability_drive", False)
+    ):
+        try:
+            from Adventorator.kb.adapter import get_kb_adapter
+            
+            # Extract potential entity terms from tags and intent
+            entity_terms = []
+            if intent.target_ref:
+                entity_terms.append(intent.target_ref)
+            
+            # Extract entity-like tags (excluding action tags)
+            for tag in tags:
+                if (
+                    not tag.key.startswith("action.")
+                    and hasattr(tag, "value")
+                    and tag.value
+                    and tag.value not in entity_terms
+                ):
+                    entity_terms.append(tag.value)
+            
+            if entity_terms:
+                # Get KB adapter with settings
+                kb_config = getattr(settings, "ask_kb", None)
+                kb_kwargs = {}
+                if kb_config:
+                    kb_kwargs = {
+                        "timeout_s": getattr(kb_config, "timeout_s", 0.05),
+                        "max_candidates": getattr(kb_config, "max_candidates", 5),
+                        "cache_ttl_s": getattr(kb_config, "cache_ttl_s", 60.0),
+                        "cache_max_size": getattr(kb_config, "cache_max_size", 1024),
+                        "max_terms_per_call": getattr(kb_config, "max_terms_per_call", 20),
+                    }
+                
+                kb_adapter = get_kb_adapter(**kb_kwargs)
+                kb_resolutions = await kb_adapter.bulk_resolve(
+                    entity_terms,
+                    limit=kb_kwargs.get("max_candidates", 5),
+                    timeout_s=kb_kwargs.get("timeout_s", 0.05),
+                    max_terms=kb_kwargs.get("max_terms_per_call", 20),
+                )
+                
+                log_event("ask", "kb_lookup", 
+                         terms_count=len(entity_terms), 
+                         resolutions_count=len(kb_resolutions))
+        except Exception as e:
+            # Never fail user flow due to KB lookup errors
+            log.warning("kb.lookup.integration_error", error=str(e))
+            inc_counter("kb.lookup.integration_error")
+
     # Emit observability; Story F will expand metrics/logs
     inc_counter("ask.ask_report.emitted")
     log_event("ask", "completed", action=intent.action, tags=len(tags))
@@ -169,6 +222,21 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
                 f"modifiers={intent.modifiers or []} ; "
                 f"tags=[{tag_preview}]"
             )
+            
+            # Add KB resolution info if available
+            if kb_resolutions:
+                kb_summary = []
+                for i, res in enumerate(kb_resolutions[:3]):  # Show first 3
+                    if res.canonical_id:
+                        kb_summary.append(f"{res.canonical_id}")
+                    elif res.candidates:
+                        kb_summary.append(f"{len(res.candidates)} candidates")
+                    else:
+                        kb_summary.append("no match")
+                if len(kb_resolutions) > 3:
+                    kb_summary.append(f"... +{len(kb_resolutions)-3} more")
+                dbg += f" ; kb=[{', '.join(kb_summary)}]"
+            
             # Keep message compact and ephemeral
             await inv.responder.send(dbg[:1800], ephemeral=True)
         except Exception:
