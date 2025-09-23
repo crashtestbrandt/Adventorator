@@ -1,0 +1,48 @@
+{
+  "canonical_entities": [
+    {
+      "term": "gandalf",
+      "expected_canonical": "character:1",
+      "expected_candidates": [
+        {"id": "character:1", "label": "Gandalf"}
+      ],
+      "expected_reason": "Exact match found"
+    },
+    {
+      "term": "Frodo",
+      "expected_canonical": "character:2", 
+      "expected_candidates": [
+        {"id": "character:2", "label": "Frodo"}
+      ],
+      "expected_reason": "Exact match found"
+    }
+  ],
+  "ambiguous_entities": [
+    {
+      "term": "guard",
+      "expected_canonical": null,
+      "expected_candidates": [
+        {"id": "character:3", "label": "Guard Captain"},
+        {"id": "character:4", "label": "City Guard"}
+      ],
+      "expected_reason": "Partial matches found"
+    },
+    {
+      "term": "orc",
+      "expected_canonical": null,
+      "expected_candidates": [
+        {"id": "character:5", "label": "Orc Warrior"},
+        {"id": "character:6", "label": "Orc Shaman"}
+      ],
+      "expected_reason": "Partial matches found"
+    }
+  ],
+  "no_match_entities": [
+    {
+      "term": "nonexistent",
+      "expected_canonical": null,
+      "expected_candidates": [],
+      "expected_reason": "No matches found"
+    }
+  ]
+}
