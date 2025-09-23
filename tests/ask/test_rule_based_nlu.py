@@ -24,3 +24,15 @@ def test_parse_and_tag_unknown_surfaces():
     # Without ontology match, action falls back to first non-stopword token
     assert intent.action in {"bonk", "say"}
     assert any(t.key.startswith("unknown.") for t in tags)
+
+
+def test_parse_and_tag_empty_input_fallbacks():
+    intent, tags = parse_and_tag("")
+
+    # With no tokens, action should safely fall back to 'say' and no target/modifiers
+    assert intent.action == "say"
+    assert intent.target_ref is None
+    assert intent.modifiers == []
+    # Expect a single fallback action tag and no unknowns/targets
+    keys = {t.key for t in tags}
+    assert keys == {"action.say"}

@@ -27,8 +27,12 @@ def generate_random_inputs(rng):
             "tool.execute", "spell.cast", "action.attack", "rule.check",
             generate_random_string(rng, 3, 20)
         ]),
-        "tool_name": rng.choice([None, "dice_roll", "spell_check", generate_random_string(rng, 3, 20)]),
-        "ruleset_version": rng.choice([None, "dnd5e-v1.0", "dnd5e-v1.1", generate_random_string(rng, 3, 15)]),
+        "tool_name": rng.choice(
+            [None, "dice_roll", "spell_check", generate_random_string(rng, 3, 20)]
+        ),
+        "ruleset_version": rng.choice(
+            [None, "dnd5e-v1.0", "dnd5e-v1.1", generate_random_string(rng, 3, 15)]
+        ),
         "args_json": rng.choice([None, {}, {"test": rng.randint(1, 100)}])
     }
 

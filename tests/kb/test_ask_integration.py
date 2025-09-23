@@ -1,9 +1,10 @@
 """Integration test for KB in ask command flow."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from Adventorator.commands.ask import ask_cmd
-from Adventorator.commanding import Invocation
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ async def test_ask_command_with_kb_disabled(mock_invocation, mock_opts):
     mock_invocation.settings.features_ask_kb_lookup = False
     
     with patch('Adventorator.commands.ask.parse_and_tag') as mock_parse, \
-         patch('Adventorator.commands.ask.log_event') as mock_log:
+        patch('Adventorator.commands.ask.log_event') as _mock_log:
         
         # Mock NLU response
         mock_intent = MagicMock()
@@ -73,7 +74,7 @@ async def test_ask_command_with_kb_disabled(mock_invocation, mock_opts):
 async def test_ask_command_with_kb_enabled(mock_invocation, mock_opts):
     """Test ask command when KB is enabled."""
     with patch('Adventorator.commands.ask.parse_and_tag') as mock_parse, \
-         patch('Adventorator.commands.ask.log_event') as mock_log, \
+        patch('Adventorator.commands.ask.log_event') as mock_log, \
          patch('Adventorator.commands.ask.get_kb_adapter') as mock_get_adapter:
         
         # Mock NLU response with entity
@@ -103,8 +104,10 @@ async def test_ask_command_with_kb_enabled(mock_invocation, mock_opts):
         mock_adapter.bulk_resolve.assert_called_once()
         
         # Verify KB lookup was logged
-        kb_log_calls = [call for call in mock_log.call_args_list 
-                       if len(call[0]) > 1 and call[0][1] == "kb_lookup"]
+        kb_log_calls = [
+            call for call in mock_log.call_args_list
+            if len(call[0]) > 1 and call[0][1] == "kb_lookup"
+        ]
         assert len(kb_log_calls) > 0
 
 
@@ -112,7 +115,7 @@ async def test_ask_command_with_kb_enabled(mock_invocation, mock_opts):
 async def test_ask_command_kb_error_handling(mock_invocation, mock_opts):
     """Test ask command gracefully handles KB errors."""
     with patch('Adventorator.commands.ask.parse_and_tag') as mock_parse, \
-         patch('Adventorator.commands.ask.log_event') as mock_log, \
+        patch('Adventorator.commands.ask.log_event') as _mock_log, \
          patch('Adventorator.commands.ask.get_kb_adapter') as mock_get_adapter:
         
         # Mock NLU response

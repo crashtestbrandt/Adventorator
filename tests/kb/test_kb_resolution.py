@@ -1,10 +1,12 @@
 """Test KB resolution determinism and candidate ordering."""
 
-import pytest
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock
-from Adventorator.kb.adapter import KBAdapter, Candidate, KBResolution
+
+import pytest
+
+from Adventorator.kb.adapter import KBAdapter
 
 
 @pytest.fixture
@@ -42,12 +44,14 @@ async def test_deterministic_resolution(mock_sessionmaker, golden_data):
             mock_char = AsyncMock()
             mock_char.id = 1
             mock_char.name = "Gandalf"
-            mock_sessionmaker.return_value.execute.return_value.scalars.return_value.all.return_value = [mock_char]
+            mock_sessionmaker.return_value.execute.return_value.\
+                scalars.return_value.all.return_value = [mock_char]
         elif entity["term"].lower() == "frodo":
             mock_char = AsyncMock()
             mock_char.id = 2
             mock_char.name = "Frodo"
-            mock_sessionmaker.return_value.execute.return_value.scalars.return_value.all.return_value = [mock_char]
+            mock_sessionmaker.return_value.execute.return_value.\
+                scalars.return_value.all.return_value = [mock_char]
         
         result = await adapter.resolve_entity(entity["term"])
         
@@ -76,7 +80,8 @@ async def test_candidates_stable_order(mock_sessionmaker, golden_data):
                 mock_char.id = i
                 mock_char.name = candidate["label"]
                 mock_chars.append(mock_char)
-            mock_sessionmaker.return_value.execute.return_value.scalars.return_value.all.return_value = mock_chars
+            mock_sessionmaker.return_value.execute.return_value.\
+                scalars.return_value.all.return_value = mock_chars
         
         # Get result multiple times
         results = []

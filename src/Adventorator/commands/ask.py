@@ -10,7 +10,8 @@ from Adventorator.action_validation.logging_utils import log_event
 from Adventorator.ask_nlu import parse_and_tag
 from Adventorator.commanding import Invocation, Option, slash_command
 from Adventorator.metrics import inc_counter, observe_histogram
-from Adventorator.schemas import AffordanceTag, AskReport, IntentFrame
+from Adventorator.schemas import AffordanceTag, IntentFrame
+from Adventorator.kb.adapter import get_kb_adapter  # import at module scope for test patching
 
 log = structlog.get_logger()
 
@@ -128,7 +129,7 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
         intent = IntentFrame(action=_infer_action(user_msg), actor_ref=None, target_ref=None)
         tags = [AffordanceTag(key=f"action.{intent.action}", confidence=1.0)]
 
-    _report = AskReport(raw_text=user_msg, intent=intent, tags=tags)
+    # Internal AskReport emission is deferred in this phase to avoid schema coupling here
 
     # Optional KB lookup for entity resolution (Phase 3)
     kb_resolutions = []
@@ -137,8 +138,6 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
         and getattr(settings, "features_improbability_drive", False)
     ):
         try:
-            from Adventorator.kb.adapter import get_kb_adapter
-            
             # Extract potential entity terms from tags and intent
             entity_terms = []
             if intent.target_ref:
@@ -226,7 +225,7 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
             # Add KB resolution info if available
             if kb_resolutions:
                 kb_summary = []
-                for i, res in enumerate(kb_resolutions[:3]):  # Show first 3
+                for res in kb_resolutions[:3]:  # Show first 3
                     if res.canonical_id:
                         kb_summary.append(f"{res.canonical_id}")
                     elif res.candidates:

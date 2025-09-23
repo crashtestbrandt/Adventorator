@@ -65,7 +65,8 @@ class TestIdempotencyKeyV2Determinism:
         
         key1 = compute_idempotency_key_v2(**kwargs)
         
-        # Create same call with different parameter order (dict iteration is deterministic in Python 3.7+)
+    # Create same call with different parameter order
+    # (dict iteration is deterministic in Python 3.7+)
         key2 = compute_idempotency_key_v2(
             tool_name="spell_checker",
             plan_id="plan-456",
@@ -112,8 +113,9 @@ class TestIdempotencyKeyV2CompositionOrder:
     def test_composition_order_mismatch_detection(self):
         """Test can detect if internal order doesn't match specification.
         
-        The acceptance criteria specify:
-        SHA256(plan_id || campaign_id || event_type || tool_name || ruleset_version || canonical(args_json))[:16]
+    The acceptance criteria specify:
+    SHA256(plan_id || campaign_id || event_type || tool_name || ruleset_version ||
+    canonical(args_json))[:16]
         """
         args = {
             "plan_id": "test-plan",

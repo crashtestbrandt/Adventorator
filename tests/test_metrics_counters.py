@@ -158,7 +158,9 @@ async def test_event_apply_latency_timing(db):
     
     # Should have latency histogram entries
     latency_keys = [k for k in counters.keys() if k.startswith("histo.event.apply.latency_ms")]
-    assert len(latency_keys) > 0, f"Expected latency histogram entries, got: {list(counters.keys())}"
+    assert len(latency_keys) > 0, (
+        f"Expected latency histogram entries, got: {list(counters.keys())}"
+    )
     
     # Should have count and sum
     assert "histo.event.apply.latency_ms.count" in counters
