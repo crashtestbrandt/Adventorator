@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """Standalone collision test demonstration for idempotency key v2."""
 
-import sys
 import os
-import hashlib
-import json
-from typing import Mapping, Any
+import sys
 
 # Import the standalone implementation
 sys.path.insert(0, os.path.dirname(__file__))
-from test_idempotency_standalone import compute_idempotency_key_v2_standalone
 import random
 import string
+
+from test_idempotency_standalone import compute_idempotency_key_v2_standalone
 
 
 def generate_random_string(rng, min_len=1, max_len=50):
@@ -58,7 +56,7 @@ def run_collision_test(iterations=1000):
         else:
             keys.add(key)
     
-    print(f"\n=== COLLISION TEST RESULTS ===")
+    print("\n=== COLLISION TEST RESULTS ===")
     print(f"Total iterations: {iterations:,}")
     print(f"Unique keys: {len(keys):,}")
     print(f"Collisions: {collisions}")

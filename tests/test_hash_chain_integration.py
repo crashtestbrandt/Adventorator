@@ -7,7 +7,7 @@ verification API from STORY-CDA-CORE-001C.
 import pytest
 
 from Adventorator import repos
-from Adventorator.events.envelope import verify_hash_chain, HashChainMismatchError
+from Adventorator.events.envelope import verify_hash_chain
 from Adventorator.metrics import get_counter, reset_counters
 
 

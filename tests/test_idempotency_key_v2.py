@@ -1,6 +1,7 @@
 """Tests for idempotency key v2 implementation (STORY-CDA-CORE-001D)."""
 
 import hashlib
+
 from Adventorator.events.envelope import compute_idempotency_key_v2
 
 
