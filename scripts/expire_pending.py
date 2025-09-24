@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-from Adventorator.db import session_scope
 from Adventorator import repos
+from Adventorator.db import session_scope
 
 
 async def main() -> int:

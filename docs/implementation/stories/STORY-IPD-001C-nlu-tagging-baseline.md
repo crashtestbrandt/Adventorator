@@ -71,7 +71,7 @@ Implemented components and their locations:
 	- Runtime models (Pydantic): `src/Adventorator/schemas.py` (`AskReport`, `IntentFrame`, `AffordanceTag`).
 	- Schema parity test: `tests/ask/test_contract_parity_with_json_artifact.py`.
 - Seed ontology and governance:
-	- `contracts/ontology/seed.json` (version `0.1`), used by the parser; aligns with Story E placement.
+	- `contracts/ontology/seed-v0_1.json` (version `0.1`), used by the parser; aligns with Story E placement.
 - Feature flags and gating (per ADR-0005 and Epic config mapping):
 	- Settings loader: `src/Adventorator/config.py` (`features_improbability_drive`, `features_ask`, sub-flags incl. `features_ask_nlu_rule_based`, `features_ask_nlu_debug`).
 	- Example toggles: `config.toml` under `[features]` and `[features.ask]`.

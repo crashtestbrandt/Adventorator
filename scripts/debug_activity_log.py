@@ -17,9 +17,9 @@ from typing import Any
 
 from sqlalchemy import select
 
+from Adventorator import models
 from Adventorator.config import load_settings
 from Adventorator.db import session_scope
-from Adventorator import models
 
 
 def human_row(obj: Any) -> dict[str, Any]:

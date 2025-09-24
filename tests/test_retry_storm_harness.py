@@ -15,21 +15,18 @@ from Adventorator.events.envelope import (
 
 class RetryStormSimulator:
     """Simulates rapid retry attempts for idempotency testing."""
-    
+
     def __init__(self, db_session):
         self.db = db_session
         self.retry_count = 0
         self.successful_inserts = 0
         self.idempotent_reuses = 0
-        
+
     async def simulate_event_creation_attempt(
-        self, 
-        campaign_id: int,
-        idempotency_key: bytes,
-        event_data: dict[str, Any]
+        self, campaign_id: int, idempotency_key: bytes, event_data: dict[str, Any]
     ) -> tuple[bool, Any]:
         """Attempt to create an event, handling idempotency conflicts.
-        
+
         Returns:
             (success: bool, event_or_existing)
         """
@@ -38,9 +35,9 @@ class RetryStormSimulator:
 
         from Adventorator import models
         from Adventorator.db import get_sessionmaker
-        
+
         self.retry_count += 1
-        
+
         # For concurrent testing, each attempt should have its own session
         # to properly simulate real-world retry scenarios
         sessionmaker = get_sessionmaker()
@@ -49,41 +46,39 @@ class RetryStormSimulator:
                 # Check if event already exists with this idempotency key
                 stmt = select(models.Event).where(
                     models.Event.campaign_id == campaign_id,
-                    models.Event.idempotency_key == idempotency_key
+                    models.Event.idempotency_key == idempotency_key,
                 )
                 existing = await session.scalar(stmt)
-                
+
                 if existing:
                     self.idempotent_reuses += 1
                     return True, existing
-                
+
                 # Try to create new event
                 event = models.Event(
-                    campaign_id=campaign_id,
-                    idempotency_key=idempotency_key,
-                    **event_data
+                    campaign_id=campaign_id, idempotency_key=idempotency_key, **event_data
                 )
-                
+
                 session.add(event)
                 await session.commit()
-                
+
                 self.successful_inserts += 1
                 return True, event
-                
+
             except (IntegrityError, OperationalError) as e:
                 # Race condition - another attempt won
                 await session.rollback()
-                
+
                 # Small delay to let the winning transaction complete
                 await asyncio.sleep(0.001)
-                
+
                 # Fetch the winning event from a fresh query
                 stmt = select(models.Event).where(
                     models.Event.campaign_id == campaign_id,
-                    models.Event.idempotency_key == idempotency_key
+                    models.Event.idempotency_key == idempotency_key,
                 )
                 existing = await session.scalar(stmt)
-                
+
                 if existing:
                     self.idempotent_reuses += 1
                     return True, existing
@@ -103,23 +98,24 @@ class RetryStormSimulator:
 async def test_retry_storm_single_winner(db):
     """Test that rapid retries of same operation result in single event."""
     from Adventorator import repos
-    
+
     # Setup test campaign and scene
     campaign = await repos.get_or_create_campaign(db, 9999, name="Retry Storm Campaign")
     scene = await repos.ensure_scene(db, campaign.id, 8888)
-    
+
     # Create genesis event
     from Adventorator.events.envelope import GenesisEvent
+
     genesis = GenesisEvent(campaign_id=campaign.id, scene_id=scene.id).instantiate()
     db.add(genesis)
     await db.flush()
-    
+
     # Define the operation that will be retried
     plan_id = "retry-storm-plan-123"
     tool_name = "dice_roll"
     ruleset_version = "dnd5e-v1.0"
     args_json = {"sides": 20, "count": 1, "modifier": 3}
-    
+
     # Compute idempotency key
     idempotency_key = compute_idempotency_key_v2(
         plan_id=plan_id,
@@ -129,7 +125,7 @@ async def test_retry_storm_single_winner(db):
         ruleset_version=ruleset_version,
         args_json=args_json,
     )
-    
+
     # Common event data
     payload = {"result": 15, "details": "d20 roll + 3"}
     event_data = {
@@ -148,58 +144,54 @@ async def test_retry_storm_single_winner(db):
         "payload": payload,
         "migrator_applied_from": None,
     }
-    
+
     # Simulate rapid retry storm (minimum 10 as per acceptance criteria)
     simulator = RetryStormSimulator(db)
     retry_attempts = 15  # Exceed minimum requirement
-    
+
     # Execute retries rapidly
     tasks = []
     for _i in range(retry_attempts):
-        task = simulator.simulate_event_creation_attempt(
-            campaign.id, idempotency_key, event_data
-        )
+        task = simulator.simulate_event_creation_attempt(campaign.id, idempotency_key, event_data)
         tasks.append(task)
-    
+
     # Execute all attempts concurrently to maximize race conditions
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     # Verify results - at least one should succeed
     successful_results = [r for r in results if not isinstance(r, Exception) and r[0]]
     assert len(successful_results) >= 1, "At least one attempt should succeed"
-    
+
     # The rest may fail due to SQLite concurrency limitations - that's expected
     failed_results = [r for r in results if isinstance(r, Exception) or not r[0]]
     print(f"Successful attempts: {len(successful_results)}, Failed attempts: {len(failed_results)}")
-    
+
     # Verify only one event was actually persisted
     from sqlalchemy import func, select
 
     from Adventorator import models
-    
+
     count_stmt = select(func.count(models.Event.id)).where(
-        models.Event.campaign_id == campaign.id,
-        models.Event.idempotency_key == idempotency_key
+        models.Event.campaign_id == campaign.id, models.Event.idempotency_key == idempotency_key
     )
     event_count = await db.scalar(count_stmt)
     assert event_count == 1, f"Expected exactly 1 event, got {event_count}"
-    
+
     # Verify the event has correct data
     event_stmt = select(models.Event).where(
-        models.Event.campaign_id == campaign.id,
-        models.Event.idempotency_key == idempotency_key
+        models.Event.campaign_id == campaign.id, models.Event.idempotency_key == idempotency_key
     )
     event = await db.scalar(event_stmt)
     assert event is not None
     assert event.payload == payload
     assert event.plan_id == plan_id
-    
+
     print(
         f"✓ Retry storm test passed: {event_count} event persisted from {retry_attempts} attempts"
     )
-    
+
     # Note: We don't assert all retries succeed because with SQLite concurrency,
-    # some attempts may fail due to locking. The key test is idempotency - 
+    # some attempts may fail due to locking. The key test is idempotency -
     # only one event should be persisted regardless of retry attempts.
 
 
@@ -207,16 +199,17 @@ async def test_retry_storm_single_winner(db):
 async def test_retry_storm_different_operations_different_events(db):
     """Test that different operations create different events even under retry storm."""
     from Adventorator import repos
-    
+
     # Setup
     campaign = await repos.get_or_create_campaign(db, 8888, name="Multi-Op Campaign")
     scene = await repos.ensure_scene(db, campaign.id, 7777)
-    
+
     from Adventorator.events.envelope import GenesisEvent
+
     genesis = GenesisEvent(campaign_id=campaign.id, scene_id=scene.id).instantiate()
     db.add(genesis)
     await db.flush()
-    
+
     # Define two different operations
     operations = [
         {
@@ -226,13 +219,13 @@ async def test_retry_storm_different_operations_different_events(db):
             "payload": {"result": 15},
         },
         {
-            "plan_id": "plan-B", 
+            "plan_id": "plan-B",
             "tool_name": "spell_check",
             "args_json": {"spell": "fireball", "level": 3},
             "payload": {"result": "valid"},
         },
     ]
-    
+
     # Create retry storms for both operations simultaneously
     tasks = []
     for op_idx, op in enumerate(operations):
@@ -244,7 +237,7 @@ async def test_retry_storm_different_operations_different_events(db):
             ruleset_version="dnd5e-v1.0",
             args_json=op["args_json"],
         )
-        
+
         event_data = {
             "scene_id": scene.id,
             "replay_ordinal": genesis.replay_ordinal + 1 + op_idx,
@@ -261,7 +254,7 @@ async def test_retry_storm_different_operations_different_events(db):
             "payload": op["payload"],
             "migrator_applied_from": None,
         }
-        
+
         # 5 retries per operation
         simulator = RetryStormSimulator(db)
         for _retry in range(5):
@@ -269,44 +262,44 @@ async def test_retry_storm_different_operations_different_events(db):
                 campaign.id, idempotency_key, event_data
             )
             tasks.append(task)
-    
+
     # Execute all retries concurrently
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    # Verify at least some succeeded  
+
+    # Verify at least some succeeded
     successful_results = [r for r in results if not isinstance(r, Exception) and r[0]]
     assert len(successful_results) >= 2, "At least one retry per operation should succeed"
-    
+
     # Verify exactly 2 unique events were created (one per operation)
     from sqlalchemy import func, select
 
     from Adventorator import models
-    
+
     count_stmt = select(func.count(models.Event.id)).where(
-        models.Event.campaign_id == campaign.id,
-        models.Event.type == "tool.execute"
+        models.Event.campaign_id == campaign.id, models.Event.type == "tool.execute"
     )
     event_count = await db.scalar(count_stmt)
-    
+
     assert event_count == 2, f"Expected 2 events (one per operation), found {event_count}"
 
 
-@pytest.mark.asyncio 
+@pytest.mark.asyncio
 async def test_retry_storm_performance_baseline(db):
     """Measure retry storm handling performance for observability."""
     import time
 
     from Adventorator import repos
-    
+
     # Setup
     campaign = await repos.get_or_create_campaign(db, 7777, name="Perf Test Campaign")
     scene = await repos.ensure_scene(db, campaign.id, 6666)
-    
+
     from Adventorator.events.envelope import GenesisEvent
+
     genesis = GenesisEvent(campaign_id=campaign.id, scene_id=scene.id).instantiate()
     db.add(genesis)
     await db.flush()
-    
+
     # Define operation
     idempotency_key = compute_idempotency_key_v2(
         plan_id="perf-test-plan",
@@ -316,7 +309,7 @@ async def test_retry_storm_performance_baseline(db):
         ruleset_version="test-v1.0",
         args_json={"test": "performance"},
     )
-    
+
     event_data = {
         "scene_id": scene.id,
         "replay_ordinal": genesis.replay_ordinal + 1,
@@ -333,48 +326,45 @@ async def test_retry_storm_performance_baseline(db):
         "payload": {"test": True},
         "migrator_applied_from": None,
     }
-    
+
     # Time the retry storm
     simulator = RetryStormSimulator(db)
     retry_count = 25  # Higher count for performance test
-    
+
     start_time = time.time()
-    
+
     tasks = []
     for _i in range(retry_count):
-        task = simulator.simulate_event_creation_attempt(
-            campaign.id, idempotency_key, event_data
-        )
+        task = simulator.simulate_event_creation_attempt(campaign.id, idempotency_key, event_data)
         tasks.append(task)
-    
+
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     end_time = time.time()
     elapsed_ms = (end_time - start_time) * 1000
-    
+
     # Verify correctness
     successful_results = [r for r in results if not isinstance(r, Exception) and r[0]]
     assert len(successful_results) >= 1, "At least one attempt should succeed"
-    
+
     # Verify only one event was persisted
     from sqlalchemy import func, select
 
     from Adventorator import models
-    
+
     count_stmt = select(func.count(models.Event.id)).where(
-        models.Event.campaign_id == campaign.id,
-        models.Event.idempotency_key == idempotency_key
+        models.Event.campaign_id == campaign.id, models.Event.idempotency_key == idempotency_key
     )
     event_count = await db.scalar(count_stmt)
     assert event_count == 1, f"Expected 1 event, found {event_count}"
-    
+
     # Log performance metrics for observability
     avg_retry_time_ms = elapsed_ms / retry_count
-    
+
     print(f"Retry storm performance: {retry_count} retries in {elapsed_ms:.2f}ms")
     print(f"Average time per retry: {avg_retry_time_ms:.2f}ms")
     print(f"Successful attempts: {len(successful_results)}/{retry_count}")
     print(f"Events persisted: {event_count}")
-    
+
     # Performance assertion - should complete quickly
     assert elapsed_ms < 5000, f"Retry storm took too long: {elapsed_ms}ms"

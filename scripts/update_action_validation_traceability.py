@@ -9,6 +9,7 @@ Usage:
 Without --write it prints the prospective table.
 """
 from __future__ import annotations
+
 import argparse
 import json
 import re

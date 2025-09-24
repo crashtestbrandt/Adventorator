@@ -1,6 +1,7 @@
+import string
+
 from hypothesis import given
 from hypothesis import strategies as st
-import string
 
 from Adventorator.ask_nlu import parse_and_tag
 from Adventorator.schemas import AskReport

@@ -10,7 +10,7 @@ This document describes the initial deterministic rules used to parse `/ask` mes
 - Unknown tokens: surfaced as `unknown:<token>` tags.
 
 Locations:
-- Ontology seed: `contracts/ontology/seed.json`
+- Ontology seed: `contracts/ontology/seed-v0_1.json`
 - Tests/fixtures: `tests/fixtures/ask/`
 
 Dev logging:

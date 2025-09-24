@@ -62,9 +62,8 @@ def setup_logging(settings: Settings | None = None) -> None:
         file_lvl_name = getattr(settings, "logging_file", None)
     # In test runs, force-disable file logging unless explicitly opted in to avoid
     # Windows file locking and noisy IO that slow down tests.
-    if (
-        os.getenv("ADVENTORATOR_DISABLE_FILE_LOGS") == "1"
-        or (os.getenv("PYTEST_CURRENT_TEST") and os.getenv("ADVENTORATOR_TEST_ENABLE_FILE_LOGS") != "1")
+    if os.getenv("ADVENTORATOR_DISABLE_FILE_LOGS") == "1" or (
+        os.getenv("PYTEST_CURRENT_TEST") and os.getenv("ADVENTORATOR_TEST_ENABLE_FILE_LOGS") != "1"
     ):
         file_lvl_name = "NONE"
     if file_lvl_name is None:

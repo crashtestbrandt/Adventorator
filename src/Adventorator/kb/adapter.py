@@ -22,6 +22,7 @@ from Adventorator.metrics import inc_counter
 @dataclass(frozen=True)
 class Candidate:
     """A potential entity match with ID and label."""
+
     id: str
     label: str
 
@@ -29,6 +30,7 @@ class Candidate:
 @dataclass(frozen=True)
 class KBResolution:
     """Result of KB entity resolution with canonical ID and alternatives."""
+
     canonical_id: str | None
     candidates: list[Candidate]
     reason: str | None
@@ -64,9 +66,7 @@ class _KBCache:
         now = time.time()
 
         # Evict expired entries first
-        expired_keys = [
-            k for k, (ts, _) in self._cache.items() if now - ts > self._ttl_s
-        ]
+        expired_keys = [k for k, (ts, _) in self._cache.items() if now - ts > self._ttl_s]
         for k in expired_keys:
             del self._cache[k]
             inc_counter("kb.cache.evicted")
@@ -171,9 +171,7 @@ class KBAdapter:
             return []
 
         # Respect max_terms limit
-        actual_max_terms = (
-            max_terms if max_terms is not None else self._max_terms_per_call
-        )
+        actual_max_terms = max_terms if max_terms is not None else self._max_terms_per_call
         limited_terms = terms[:actual_max_terms]
 
         # Use provided timeout or default
@@ -227,7 +225,7 @@ class KBAdapter:
         # Handle any exceptions in individual results
         final_results: list[KBResolution] = []
         for result in results:
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 final_results.append(
                     KBResolution(
                         canonical_id=None,
@@ -237,7 +235,8 @@ class KBAdapter:
                     )
                 )
             else:
-                final_results.append(result)
+                # mypy: result is KBResolution here
+                final_results.append(result)  # type: ignore[arg-type]
 
         return final_results
 
@@ -252,9 +251,9 @@ class KBAdapter:
         if asyncio.iscoroutine(sm_ctx):  # e.g., AsyncMock returning a coroutine
             sm_ctx = await sm_ctx
         async with sm_ctx as session:
-            assert isinstance(session, AsyncSession) or hasattr(
-                session, "execute"
-            ), "Session must be an AsyncSession-like object"
+            assert isinstance(session, AsyncSession) or hasattr(session, "execute"), (
+                "Session must be an AsyncSession-like object"
+            )
 
             # Look up in character names first (most likely canonical entities)
             char_query = (
@@ -289,24 +288,19 @@ class KBAdapter:
                     .limit(remaining)
                 )
                 campaign_result = await session.execute(campaign_query)
-                scalars_obj = campaign_result.scalars()
-                if asyncio.iscoroutine(scalars_obj):
-                    scalars_obj = await scalars_obj
-                all_obj = scalars_obj.all()
-                if asyncio.iscoroutine(all_obj):
-                    campaigns = await all_obj
+                camp_scalars = campaign_result.scalars()
+                if asyncio.iscoroutine(camp_scalars):
+                    camp_scalars = await camp_scalars
+                camp_all = camp_scalars.all()
+                if asyncio.iscoroutine(camp_all):
+                    campaigns = await camp_all
                 else:
-                    campaigns = all_obj
+                    campaigns = camp_all
 
                 for campaign in campaigns:
-                    candidates.append(
-                        Candidate(id=f"campaign:{campaign.id}", label=campaign.name)
-                    )
+                    candidates.append(Candidate(id=f"campaign:{campaign.id}", label=campaign.name))
                     # First exact match becomes canonical if none found yet
-                    if (
-                        canonical_id is None
-                        and campaign.name.lower() == normalized_term
-                    ):
+                    if canonical_id is None and campaign.name.lower() == normalized_term:
                         canonical_id = f"campaign:{campaign.id}"
 
         # Sort candidates by relevance (exact matches first, then alphabetical)
@@ -355,13 +349,12 @@ async def resolve_entity(
 
 
 async def bulk_resolve(
-    terms: list[str], *,
+    terms: list[str],
+    *,
     limit: int = 5,
     timeout_s: float | None = None,
     max_terms: int | None = None,
 ) -> list[KBResolution]:
     """Convenience function for bulk entity resolution."""
     adapter = get_kb_adapter()
-    return await adapter.bulk_resolve(
-        terms, limit=limit, timeout_s=timeout_s, max_terms=max_terms
-    )
+    return await adapter.bulk_resolve(terms, limit=limit, timeout_s=timeout_s, max_terms=max_terms)

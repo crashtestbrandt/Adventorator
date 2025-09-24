@@ -14,13 +14,17 @@ Prerequisites:
 from __future__ import annotations
 
 import asyncio
-import os
 import inspect
 import json
 import multiprocessing
+import os
+
+# Ensure src is on the path to import Adventorator modules
+import sys
 import time
 from collections import deque
 from enum import Enum
+from pathlib import Path
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
 from urllib.parse import urlparse
@@ -32,10 +36,6 @@ import nacl.signing
 import uvicorn
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
-
-# Ensure src is on the path to import Adventorator modules
-import sys
-from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
