@@ -12,7 +12,7 @@
     }
   ],
   "content_index": {
-    "entities/npc.json": "7d478136a27ad013caa5a225cbc4629998bb38b29c133b5c11a87803ceb7a1e6",
+    "entities/npc.json": "5880ea2569507faba1384c11a4edb144c07c7aed0d342ba345ec52c96f3c0d8e",
     "edges/relationship.json": "5a8c82953a5a4c283b95ccf5c7c962a55044ef7fed99e442d185b6f5e9714ae7",
     "lore/intro.md": "f4a8d34f4ae1b6d0d850e9cdcbae5bb09b7a0b388fc0e1a2c4e962a510fe0e7c",
     "ontologies/tags.json": "bdecfa6109eefe0f40779a513e044cad5520df1782914c5c76d8e3026ce8a016"
