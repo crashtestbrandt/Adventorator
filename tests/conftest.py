@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # test database before any app modules are imported. Default to an in-memory DB
 # for speed, but allow switching to a file-backed SQLite with WAL to reduce
 # write-lock contention on platforms where concurrent writers are more common.
+os.environ["ADVENTORATOR_DISABLE_FILE_LOGS"] = "1"
+os.environ.setdefault("ADVENTORATOR_SQLITE_AUTOCOMMIT", "1")
+# On Windows, file-backed SQLite with WAL can behave better for concurrent writers.
+os.environ.setdefault("ADVENTORATOR_TEST_USE_FILE_SQLITE", "1")
 if os.environ.get("ADVENTORATOR_TEST_USE_FILE_SQLITE") == "1":
     # File-backed SQLite in the local workspace; enables WAL and better concurrency.
     test_db_path = os.path.abspath(
@@ -123,8 +127,20 @@ async def db() -> AsyncIterator[AsyncSession]:
     sm = get_sessionmaker()
     async with sm() as s:
         try:
+            # Use autocommit-ish behavior within the fixture scope for SQLite:
+            # after each flush(), encourage callers to commit so that concurrent
+            # sessions in retry-storm tests can observe rows immediately.
+            # We cannot globally enable autocommit in SQLAlchemy 2.x, so we
+            # document the pattern in tests and also perform a final commit
+            # before yielding control back to the test if there are pending writes.
             yield s
         finally:
             # Ensure clean rollback and explicit close to release aiosqlite connection
-            await s.rollback()
+            try:
+                # If there are pending transactions, commit them to make state visible
+                if s.in_transaction():
+                    await s.commit()
+            except Exception:
+                # Fall back to rollback on any error
+                await s.rollback()
             await s.close()

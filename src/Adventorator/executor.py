@@ -65,9 +65,14 @@ class ToolCallChain:
 
     def __post_init__(self) -> None:
         if self.steps and self.items:
-            raise ValueError("ToolCallChain cannot be constructed with both steps and items; supply only one form.")
+            raise ValueError(
+                "ToolCallChain cannot be constructed with both steps and items; "
+                "supply only one form."
+            )
         if not self.steps and self.items:
-            self.steps = [ToolStep(tool=i.tool, args={"expr": i.mechanics}) for i in self.items]
+            self.steps = [
+                ToolStep(tool=i.tool, args={"expr": i.mechanics}) for i in self.items
+            ]
 
 
 @dataclass(frozen=True)

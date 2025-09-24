@@ -56,6 +56,10 @@ def get_engine() -> AsyncEngine:
                 or "file::memory:?cache=shared" in DATABASE_URL
             ):
                 connect_args["uri"] = True
+            # Optional autocommit to ensure cross-session visibility in tests
+            if os.environ.get("ADVENTORATOR_SQLITE_AUTOCOMMIT") == "1":
+                # aiosqlite uses None for autocommit
+                connect_args["isolation_level"] = None
             kwargs.update(connect_args=connect_args)
             # Critical for in-memory DBs: share a single connection so schema persists
             if ":memory:" in DATABASE_URL or "file::memory:?cache=shared" in DATABASE_URL:

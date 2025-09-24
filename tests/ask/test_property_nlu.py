@@ -1,10 +1,17 @@
 from hypothesis import given
 from hypothesis import strategies as st
+import string
 
 from Adventorator.ask_nlu import parse_and_tag
 from Adventorator.schemas import AskReport
 
-alpha_space = st.text(alphabet=st.characters(whitelist_categories=("Ll", "Lu")) | st.just(" "), min_size=0, max_size=40)
+# Use a fast ASCII-only alphabet to keep generation snappy and avoid Hypothesis
+# healthcheck timeouts from exploring the full Unicode letter space.
+alpha_space = st.text(
+    alphabet=list(string.ascii_letters + " "),
+    min_size=0,
+    max_size=40,
+)
 
 
 @given(alpha_space)

@@ -60,9 +60,20 @@ def setup_logging(settings: Settings | None = None) -> None:
     file_lvl_name = None
     if settings is not None:
         file_lvl_name = getattr(settings, "logging_file", None)
+    # In test runs, force-disable file logging unless explicitly opted in to avoid
+    # Windows file locking and noisy IO that slow down tests.
+    if (
+        os.getenv("ADVENTORATOR_DISABLE_FILE_LOGS") == "1"
+        or (os.getenv("PYTEST_CURRENT_TEST") and os.getenv("ADVENTORATOR_TEST_ENABLE_FILE_LOGS") != "1")
+    ):
+        file_lvl_name = "NONE"
     if file_lvl_name is None:
         # Fallback to legacy boolean
-        to_file = True if settings is None else getattr(settings, "logging_to_file", True)
+        # Default to False in tests to avoid Windows file locking & rotation issues
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            to_file = False
+        else:
+            to_file = False if settings is None else getattr(settings, "logging_to_file", True)
         file_lvl_name = level_name if to_file else "NONE"
     if (file_lvl_name or "").upper() != "NONE":
         path = settings.logging_file_path if settings is not None else "logs/adventorator.jsonl"
@@ -72,6 +83,7 @@ def setup_logging(settings: Settings | None = None) -> None:
             path,
             maxBytes=(settings.logging_max_bytes if settings else 5_000_000),
             backupCount=(settings.logging_backup_count if settings else 5),
+            delay=True,
         )
         fh.setLevel(getattr(logging, file_lvl_name.upper(), level))
         fh.setFormatter(processor_formatter)
@@ -85,6 +97,19 @@ def setup_logging(settings: Settings | None = None) -> None:
         lg = logging.getLogger(name)
         lg.handlers = []
         lg.propagate = True
+
+    # Reduce noisy library loggers that impact performance during tests/dev
+    # Even if root level is DEBUG, keep DB driver/engine chatter at WARNING.
+    for noisy in (
+        "aiosqlite",
+        "sqlalchemy",
+        "sqlalchemy.engine",
+        "sqlalchemy.pool",
+        "sqlalchemy.dialects",
+    ):
+        nlg = logging.getLogger(noisy)
+        nlg.setLevel(logging.WARNING)
+        nlg.propagate = True
 
     # Configure structlog to emit into stdlib; ProcessorFormatter renders final JSON
     structlog.configure(

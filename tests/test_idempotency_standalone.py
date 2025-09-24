@@ -145,7 +145,8 @@ def test_null_handling():
     assert len(key1) == 16, "Null values should still produce 16-byte key"
     assert len(key2) == 16, "Empty values should still produce 16-byte key"
     
-    # Note: key1 and key2 should be different since None->'' for strings but None->b'{}' for args_json->{}
+    # Note: key1 and key2 should be different since None->'' for strings
+    # but None->b'{}' for args_json->{}
     print(f"Key with None values: {key1.hex()}")
     print(f"Key with empty values: {key2.hex()}")
     

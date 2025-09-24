@@ -1,8 +1,10 @@
 """Test KB timeout and bounds enforcement."""
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
+
+import pytest
+
 from Adventorator.kb.adapter import KBAdapter
 from Adventorator.metrics import get_counter, reset_counters
 
@@ -62,7 +64,8 @@ async def test_max_candidates_limit(mock_sessionmaker):
         mock_char.id = i
         mock_char.name = f"TestChar{i}"
         mock_chars.append(mock_char)
-    mock_sessionmaker.return_value.execute.return_value.scalars.return_value.all.return_value = mock_chars
+    mock_sessionmaker.return_value.execute.return_value.\
+        scalars.return_value.all.return_value = mock_chars
     
     # Request more than max_candidates
     result = await adapter.resolve_entity("test", limit=5)
@@ -136,7 +139,7 @@ async def test_custom_timeout_parameter(mock_sessionmaker):
     assert result.reason.startswith("Timeout after")
     
     # Should succeed with longer custom timeout
-    result2 = await adapter.resolve_entity("test", timeout_s=0.2)
+    await adapter.resolve_entity("test", timeout_s=0.2)
     # This might still timeout due to cache, but the point is custom timeout is used
 
 

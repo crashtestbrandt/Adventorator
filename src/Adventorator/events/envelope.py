@@ -323,14 +323,13 @@ async def get_chain_tip(session, campaign_id: int) -> tuple[int, bytes] | None:
         .order_by(models.Event.replay_ordinal.desc())
         .limit(1)
     )
-    
+    # Execute and fetch first row efficiently
     result = await session.execute(stmt)
     row = result.first()
-    
-    if row:
-        return row.replay_ordinal, row.payload_hash
-    else:
+    if not row:
         return None
+    # Row supports tuple access; avoid attribute overhead
+    return int(row[0]), row[1]
 
 
 def log_event_applied(
