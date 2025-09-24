@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adventorator.dev/contracts/events/seed/entity-created.v1.json",
+  "title": "Entity Created Seed Event v1",
+  "description": "Synthetic event emitted when an entity is ingested during package import",
+  "type": "object",
+  "required": ["stable_id", "kind", "name", "tags", "affordances", "provenance"],
+  "properties": {
+    "stable_id": {
+      "type": "string",
+      "description": "Globally unique identifier for this entity",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "kind": {
+      "type": "string",
+      "description": "Entity type classification",
+      "enum": ["npc", "location", "item", "organization", "creature"]
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name for the entity",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "tags": {
+      "type": "array",
+      "description": "Semantic tags for categorization and filtering",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "uniqueItems": true
+    },
+    "affordances": {
+      "type": "array",
+      "description": "Available actions/interactions with this entity",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "uniqueItems": true
+    },
+    "traits": {
+      "type": "array",
+      "description": "Optional descriptive traits",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "uniqueItems": true
+    },
+    "props": {
+      "type": "object",
+      "description": "Additional entity-specific properties",
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Import provenance metadata",
+      "required": ["package_id", "source_path", "file_hash"],
+      "properties": {
+        "package_id": {
+          "type": "string",
+          "description": "ULID of the source package"
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Relative path within the package"
+        },
+        "file_hash": {
+          "type": "string",
+          "description": "SHA-256 hash of the source file (hex encoded)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

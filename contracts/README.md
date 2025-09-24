@@ -23,6 +23,16 @@ See STORY-CDA-IMPORT-002A for manifest validation requirements and `src/Adventor
 
 Synthetic seed events are defined under `events/seed/` with schemas for:
 - `manifest-validated.v1.json` - Emitted after successful manifest validation
+- `entity-created.v1.json` - Emitted when entities are ingested (STORY-CDA-IMPORT-002B)
+
+## Entity Schemas (NEW - STORY-CDA-IMPORT-002B)
+
+Entity definitions for campaign packages are validated against `entities/entity.v1.json`:
+- Required fields: `stable_id`, `kind`, `name`, `tags`, `affordances`
+- Optional fields: `traits`, `props` 
+- Supported kinds: `npc`, `location`, `item`, `organization`, `creature`
+- ULID format for `stable_id` ensuring global uniqueness
+- Provenance tracking via SHA-256 file hashes
 
 ## Ontology Seed
 
@@ -33,3 +43,11 @@ The ontology (planner / action-validation tag taxonomy) is versioned under `onto
 - Extend via additional version folders (`v2/`) rather than mutating prior versions; deprecate tags via docs and downstream migration stories.
 
 Validator script: `python scripts/validate_prompts_and_contracts.py --only-contracts`.
+
+## Recent Updates (STORY-CDA-IMPORT-002B)
+
+- Added `entities/entity.v1.json` schema for campaign entity definitions
+- Added `events/seed/entity-created.v1.json` schema for entity ingestion events
+- Both schemas include comprehensive provenance metadata per ADR-0011
+- Deterministic ordering support for reproducible imports
+- Collision detection with hash-based idempotency checking
