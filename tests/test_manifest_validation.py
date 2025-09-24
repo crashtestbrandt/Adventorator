@@ -1,5 +1,6 @@
 """Tests for manifest validation and hashing (STORY-CDA-IMPORT-002A)."""
 
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -80,6 +81,76 @@ class TestManifestValidation:
             errors = validate_content_hashes(manifest, package_root)
             assert len(errors) == 1
             assert "Missing file: missing.txt" in errors[0]
+
+    def test_validate_content_hashes_path_traversal_prevention(self):
+        """Test that path traversal attacks are prevented."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_root = Path(tmpdir)
+            
+            # Create a file outside the package directory
+            outside_file = Path(tmpdir).parent / "secret.txt"
+            outside_file.write_text("secret data")
+            
+            # Attempt path traversal
+            manifest = {
+                "content_index": {
+                    "../secret.txt": "some_hash"
+                }
+            }
+            
+            errors = validate_content_hashes(manifest, package_root)
+            assert len(errors) == 1
+            assert "Security violation" in errors[0]
+            assert "../secret.txt" in errors[0]
+            assert "attempts to access files outside package directory" in errors[0]
+
+    def test_validate_content_hashes_complex_path_traversal_prevention(self):
+        """Test that complex path traversal attacks are prevented."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_root = Path(tmpdir)
+            
+            # Test various path traversal attempts
+            traversal_attempts = [
+                "../../etc/passwd",
+                "../../../root/.ssh/id_rsa", 
+                "subdir/../../../sensitive.txt",
+                "legitimate/../../breakout.txt"
+            ]
+            
+            manifest = {
+                "content_index": {path: "dummy_hash" for path in traversal_attempts}
+            }
+            
+            errors = validate_content_hashes(manifest, package_root)
+            
+            # All traversal attempts should be caught
+            assert len(errors) == len(traversal_attempts)
+            for error in errors:
+                assert "Security violation" in error
+                assert "attempts to access files outside package directory" in error
+
+    def test_validate_content_hashes_legitimate_subdirectories_allowed(self):
+        """Test that legitimate subdirectories within package are allowed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_root = Path(tmpdir)
+            
+            # Create legitimate subdirectories and files
+            subdir = package_root / "entities"
+            subdir.mkdir()
+            test_file = subdir / "test.json"
+            test_content = b'{"test": "content"}'
+            test_file.write_bytes(test_content)
+            
+            expected_hash = hashlib.sha256(test_content).hexdigest()
+            
+            manifest = {
+                "content_index": {
+                    "entities/test.json": expected_hash
+                }
+            }
+            
+            errors = validate_content_hashes(manifest, package_root)
+            assert len(errors) == 0, f"Legitimate subdirectory access failed: {errors}"
 
     def test_compute_manifest_hash_deterministic(self):
         """Test that manifest hashing is deterministic."""

@@ -75,8 +75,19 @@ def validate_content_hashes(manifest: dict[str, Any], package_root: Path) -> lis
     errors: list[str] = []
     content_index = manifest.get("content_index", {})
     
+    # Resolve package_root to absolute path for security checks
+    package_root_resolved = package_root.resolve()
+    
     for file_path, expected_hash in content_index.items():
-        full_path = package_root / file_path
+        # Construct and resolve the full path
+        full_path = (package_root / file_path).resolve()
+        
+        # Security check: ensure the resolved path is within package_root
+        try:
+            full_path.relative_to(package_root_resolved)
+        except ValueError:
+            errors.append(f"Security violation: {file_path} attempts to access files outside package directory")
+            continue
         
         if not full_path.exists():
             errors.append(f"Missing file: {file_path}")
