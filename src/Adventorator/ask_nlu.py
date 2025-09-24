@@ -68,12 +68,12 @@ class _Ontology:
 
     @staticmethod
     def load() -> _Ontology:
-        """Load the seed ontology from contracts/ontology/seed.json.
+        """Load the seed ontology from contracts/ontology/seed-v0_1.json.
 
         The file is intentionally small and offline. If not present, a minimal
         built-in fallback is used so tests remain deterministic.
         """
-        path = Path("contracts/ontology/seed.json")
+        path = Path("contracts/ontology/seed-v0_1.json")
         if path.exists():
             data = json.loads(path.read_text(encoding="utf-8"))
         else:

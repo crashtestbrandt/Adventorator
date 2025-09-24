@@ -712,7 +712,7 @@ async def append_event(
 ) -> models.Event:
     # Start timing for latency histogram
     start_time_ms = time.time() * 1000
-    
+
     # Per-campaign lock map to increase parallelism across campaigns while
     # retaining deterministic intra-campaign ordering.
     # Normalize actor id (character name when numeric id maps to character)
@@ -788,12 +788,12 @@ async def append_event(
         await _flush_retry(s)
     inc_counter("events.append.ok")  # legacy naming kept
     inc_counter("events.applied")  # HR-004 new canonical counter
-    
+
     # Record latency histogram for observability (STORY-CDA-CORE-001E)
     end_time_ms = time.time() * 1000
     latency_ms = int(end_time_ms - start_time_ms)
     observe_histogram("event.apply.latency_ms", latency_ms)
-    
+
     # Structured log for observability (HR-003): include identifiers & hash prefixes
     try:  # Best-effort: logging must not break persistence path
         from Adventorator.action_validation.logging_utils import (
@@ -823,11 +823,11 @@ async def get_campaign_events_for_verification(
     s: AsyncSession, *, campaign_id: int
 ) -> list[models.Event]:
     """Retrieve all events for a campaign ordered by replay_ordinal for hash chain verification.
-    
+
     Args:
         s: Database session
         campaign_id: Campaign ID to retrieve events for
-        
+
     Returns:
         List of Event instances ordered by replay_ordinal
     """
@@ -840,15 +840,13 @@ async def get_campaign_events_for_verification(
     return list(result.scalars().all())
 
 
-async def get_chain_tip(
-    s: AsyncSession, *, campaign_id: int
-) -> tuple[int, bytes] | None:
+async def get_chain_tip(s: AsyncSession, *, campaign_id: int) -> tuple[int, bytes] | None:
     """Get the chain tip for a campaign (last replay_ordinal, payload_hash).
-    
+
     Args:
         s: Database session
         campaign_id: Campaign ID to get tip for
-        
+
     Returns:
         Tuple of (replay_ordinal, payload_hash) for the last event, or None if no events exist
     """

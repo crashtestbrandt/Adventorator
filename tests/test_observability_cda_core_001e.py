@@ -20,35 +20,35 @@ from Adventorator.metrics import get_counter, reset_counters
 async def test_chain_tip_accessor_empty_campaign(db):
     """Test chain tip accessor returns None for empty campaign."""
     from Adventorator import repos
-    
+
     # Create campaign but no events
     campaign = await repos.get_or_create_campaign(db, 1234, name="Empty Campaign")
-    
+
     # Should return None for empty chain
     tip = await get_chain_tip(db, campaign.id)
     assert tip is None
 
 
-@pytest.mark.asyncio 
+@pytest.mark.asyncio
 async def test_chain_tip_accessor_with_events(db):
     """Test chain tip accessor returns latest event info."""
     from Adventorator import repos
-    
+
     # Setup campaign and scene
     campaign = await repos.get_or_create_campaign(db, 1235, name="Chain Tip Campaign")
     scene = await repos.ensure_scene(db, campaign.id, 5678)
-    
+
     # Create genesis event
     genesis = GenesisEvent(campaign_id=campaign.id, scene_id=scene.id).instantiate()
     db.add(genesis)
     await db.flush()
-    
+
     # Check tip after genesis
     tip = await get_chain_tip(db, campaign.id)
     assert tip is not None
     assert tip[0] == 0  # replay_ordinal
     assert tip[1] == genesis.payload_hash
-    
+
     # Add another event
     payload = {"action": "test", "result": 42}
     event_data = {
@@ -76,12 +76,13 @@ async def test_chain_tip_accessor_with_events(db):
         "payload": payload,
         "migrator_applied_from": None,
     }
-    
+
     from Adventorator import models
+
     event = models.Event(**event_data)
     db.add(event)
     await db.flush()
-    
+
     # Check tip after second event
     tip = await get_chain_tip(db, campaign.id)
     assert tip is not None
@@ -92,7 +93,7 @@ async def test_chain_tip_accessor_with_events(db):
 def test_log_event_applied_metrics_and_structure(caplog):
     """Test event application logging increments metrics and logs structure."""
     reset_counters()
-    
+
     # Test event application logging
     log_event_applied(
         event_id=123,
@@ -105,11 +106,11 @@ def test_log_event_applied_metrics_and_structure(caplog):
         execution_request_id="req-abc",
         latency_ms=15.5,
     )
-    
+
     # Check metrics
     assert get_counter("events.applied") == 1
     assert get_counter("event.apply.latency_ms") == 15  # int conversion
-    
+
     # Check log structure (would need to verify in real logging setup)
     # This is a simplified test - in practice would check structured log output
 
@@ -117,14 +118,14 @@ def test_log_event_applied_metrics_and_structure(caplog):
 def test_log_idempotent_reuse_metrics():
     """Test idempotent reuse logging increments correct metric."""
     reset_counters()
-    
+
     log_idempotent_reuse(
         event_id=999,
         campaign_id=888,
         idempotency_key=b"reuse_key_test123",
         plan_id="reuse-plan",
     )
-    
+
     # Check metric incremented
     assert get_counter("events.idempotent_reuse") == 1
 
@@ -132,21 +133,22 @@ def test_log_idempotent_reuse_metrics():
 def test_observability_metric_names():
     """Test that all required observability metrics are available."""
     reset_counters()
-    
+
     # Test all required metrics from acceptance criteria
     required_metrics = [
         "events.applied",
-        "events.conflict", 
+        "events.conflict",
         "events.idempotent_reuse",
-        "events.hash_mismatch", 
+        "events.hash_mismatch",
         "event.apply.latency_ms",
     ]
-    
+
     # Simulate incrementing all metrics
     from Adventorator.metrics import inc_counter
+
     for metric in required_metrics:
         inc_counter(metric)
-    
+
     # Verify all metrics are tracked
     for metric in required_metrics:
         assert get_counter(metric) == 1
@@ -158,16 +160,16 @@ async def test_chain_tip_performance_baseline(db):
     import time
 
     from Adventorator import repos
-    
+
     # Setup
     campaign = await repos.get_or_create_campaign(db, 9876, name="Perf Campaign")
     scene = await repos.ensure_scene(db, campaign.id, 5432)
-    
+
     # Create several events
     genesis = GenesisEvent(campaign_id=campaign.id, scene_id=scene.id).instantiate()
     db.add(genesis)
     await db.flush()
-    
+
     # Add 10 more events
     prev_hash = genesis.payload_hash
     for i in range(1, 11):
@@ -197,29 +199,30 @@ async def test_chain_tip_performance_baseline(db):
             "payload": payload,
             "migrator_applied_from": None,
         }
-        
+
         from Adventorator import models
+
         event = models.Event(**event_data)
         db.add(event)
         prev_hash = event.payload_hash
-    
+
     await db.flush()
-    
+
     # Measure chain tip access performance
     start_time = time.time()
-    
+
     # Call chain tip multiple times
     for _ in range(100):
         tip = await get_chain_tip(db, campaign.id)
         assert tip is not None
         assert tip[0] == 10  # Should be the last event
-    
+
     end_time = time.time()
     elapsed_ms = (end_time - start_time) * 1000
     avg_time_ms = elapsed_ms / 100
-    
+
     print(f"Chain tip access: 100 calls in {elapsed_ms:.2f}ms")
     print(f"Average time per call: {avg_time_ms:.2f}ms")
-    
+
     # Performance assertion - should be fast
     assert avg_time_ms < 5.0, f"Chain tip access too slow: {avg_time_ms:.2f}ms per call"

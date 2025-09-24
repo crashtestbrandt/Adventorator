@@ -9,9 +9,9 @@ from pydantic import Field
 from Adventorator.action_validation.logging_utils import log_event
 from Adventorator.ask_nlu import parse_and_tag
 from Adventorator.commanding import Invocation, Option, slash_command
+from Adventorator.kb.adapter import get_kb_adapter  # import at module scope for test patching
 from Adventorator.metrics import inc_counter, observe_histogram
 from Adventorator.schemas import AffordanceTag, IntentFrame
-from Adventorator.kb.adapter import get_kb_adapter  # import at module scope for test patching
 
 log = structlog.get_logger()
 
@@ -133,16 +133,15 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
 
     # Optional KB lookup for entity resolution (Phase 3)
     kb_resolutions = []
-    if (
-        getattr(settings, "features_ask_kb_lookup", False)
-        and getattr(settings, "features_improbability_drive", False)
+    if getattr(settings, "features_ask_kb_lookup", False) and getattr(
+        settings, "features_improbability_drive", False
     ):
         try:
             # Extract potential entity terms from tags and intent
             entity_terms = []
             if intent.target_ref:
                 entity_terms.append(intent.target_ref)
-            
+
             # Extract entity-like tags (excluding action tags)
             for tag in tags:
                 if (
@@ -152,7 +151,7 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
                     and tag.value not in entity_terms
                 ):
                     entity_terms.append(tag.value)
-            
+
             if entity_terms:
                 # Get KB adapter with settings
                 kb_config = getattr(settings, "ask_kb", None)
@@ -165,18 +164,21 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
                         "cache_max_size": getattr(kb_config, "cache_max_size", 1024),
                         "max_terms_per_call": getattr(kb_config, "max_terms_per_call", 20),
                     }
-                
+
                 kb_adapter = get_kb_adapter(**kb_kwargs)
                 kb_resolutions = await kb_adapter.bulk_resolve(
                     entity_terms,
-                    limit=kb_kwargs.get("max_candidates", 5),
+                    limit=int(kb_kwargs.get("max_candidates", 5)),
                     timeout_s=kb_kwargs.get("timeout_s", 0.05),
-                    max_terms=kb_kwargs.get("max_terms_per_call", 20),
+                    max_terms=int(kb_kwargs.get("max_terms_per_call", 20)),
                 )
-                
-                log_event("ask", "kb_lookup", 
-                         terms_count=len(entity_terms), 
-                         resolutions_count=len(kb_resolutions))
+
+                log_event(
+                    "ask",
+                    "kb_lookup",
+                    terms_count=len(entity_terms),
+                    resolutions_count=len(kb_resolutions),
+                )
         except Exception as e:
             # Never fail user flow due to KB lookup errors
             log.warning("kb.lookup.integration_error", error=str(e))
@@ -209,6 +211,7 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
         try:
             # Summarize action tags distinctly from other tags
             action_tags = [t.key.split(".", 1)[1] for t in tags if t.key.startswith("action.")]
+
             # Render tags as key or key=value
             def _fmt_tag(t: AffordanceTag) -> str:
                 return f"{t.key}={t.value}" if getattr(t, "value", None) else t.key
@@ -221,7 +224,7 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
                 f"modifiers={intent.modifiers or []} ; "
                 f"tags=[{tag_preview}]"
             )
-            
+
             # Add KB resolution info if available
             if kb_resolutions:
                 kb_summary = []
@@ -233,9 +236,9 @@ async def ask_cmd(inv: Invocation, opts: AskOpts):
                     else:
                         kb_summary.append("no match")
                 if len(kb_resolutions) > 3:
-                    kb_summary.append(f"... +{len(kb_resolutions)-3} more")
+                    kb_summary.append(f"... +{len(kb_resolutions) - 3} more")
                 dbg += f" ; kb=[{', '.join(kb_summary)}]"
-            
+
             # Keep message compact and ephemeral
             await inv.responder.send(dbg[:1800], ephemeral=True)
         except Exception:

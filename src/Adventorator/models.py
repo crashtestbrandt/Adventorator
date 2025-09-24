@@ -359,16 +359,14 @@ event.listen(
 event.listen(
     Event.__table__,
     "before_drop",
-    DDL(
-        "DROP TRIGGER IF EXISTS " + _PG_REPLAY_TRIGGER + " ON events;"
-    ).execute_if(dialect="postgresql"),
+    DDL("DROP TRIGGER IF EXISTS " + _PG_REPLAY_TRIGGER + " ON events;").execute_if(
+        dialect="postgresql"
+    ),
 )
 event.listen(
     Event.__table__,
     "before_drop",
-    DDL(
-        "DROP FUNCTION IF EXISTS " + _PG_REPLAY_FN + "();"
-    ).execute_if(dialect="postgresql"),
+    DDL("DROP FUNCTION IF EXISTS " + _PG_REPLAY_FN + "();").execute_if(dialect="postgresql"),
 )
 
 event.listen(
@@ -394,10 +392,8 @@ event.listen(
 CREATE TRIGGER events_replay_ordinal_gap
 BEFORE INSERT ON events
 FOR EACH ROW
--- Allow inserting at or beyond the next expected ordinal to tolerate
--- concurrent writers where preceding rows may be uncommitted/hidden.
--- Still prevents going backwards (i.e., inserting a lower ordinal).
-WHEN NEW.replay_ordinal < (
+-- Enforce dense sequence: next ordinal must be exactly MAX(replay_ordinal) + 1
+WHEN NEW.replay_ordinal <> (
     SELECT COALESCE(MAX(replay_ordinal), -1) + 1
     FROM events
     WHERE campaign_id = NEW.campaign_id

@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import os
 from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
 from sqlalchemy.ext.asyncio import (
@@ -50,7 +51,8 @@ def get_engine() -> AsyncEngine:
         if DATABASE_URL.startswith("sqlite+aiosqlite://"):
             # SQLite ignores pool_size; keep it minimal and avoid pre_ping
             # If using special file::memory:?cache=shared URI, enable uri flag
-            connect_args = {"timeout": 30}
+            # Use a broad type here since aiosqlite accepts values like None
+            connect_args: dict[str, Any] = {"timeout": 30}
             if (
                 DATABASE_URL.endswith("file::memory:?cache=shared")
                 or "file::memory:?cache=shared" in DATABASE_URL

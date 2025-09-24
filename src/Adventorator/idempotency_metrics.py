@@ -15,7 +15,7 @@ def log_idempotency_reuse(
     plan_id: str | None = None,
 ) -> None:
     """Log idempotency key reuse for observability.
-    
+
     This provides structured logging for when an existing event is returned
     instead of creating a new one, enabling observability of retry collapse.
     """
@@ -27,7 +27,7 @@ def log_idempotency_reuse(
             "event_id": event_id,
             "tool_name": tool_name,
             "plan_id": plan_id,
-        }
+        },
     )
 
 
@@ -38,7 +38,7 @@ def log_idempotency_collision(
     collision_inputs: dict[str, Any],
 ) -> None:
     """Log potential idempotency collision for investigation.
-    
+
     This would be called if we detect unexpected collision patterns
     during the shadow computation period.
     """
@@ -49,21 +49,21 @@ def log_idempotency_collision(
             "idempotency_key_hex": idempotency_key.hex(),
             "original_event_id": original_event_id,
             "collision_inputs": collision_inputs,
-        }
+        },
     )
 
 
 def increment_metric(metric_name: str, value: int = 1, tags: dict[str, str] | None = None) -> None:
     """Metric increment function integrating with the Adventorator metrics system.
-    
+
     Integrates with the existing metrics.py module for consistent metric handling.
     """
     # Import here to avoid circular imports
     from Adventorator.metrics import inc_counter
-    
+
     # Use the actual metrics system
     inc_counter(metric_name, value)
-    
+
     # Also log for debugging/observability
     logger.info(
         f"metric.{metric_name}",
@@ -71,7 +71,7 @@ def increment_metric(metric_name: str, value: int = 1, tags: dict[str, str] | No
             "metric_name": metric_name,
             "value": value,
             "tags": tags or {},
-        }
+        },
     )
 
 
@@ -87,7 +87,7 @@ def record_idempotent_reuse(tool_name: str | None = None) -> None:
 
 
 def record_collision_detected(tool_name: str | None = None) -> None:
-    """Record collision detection metric.""" 
+    """Record collision detection metric."""
     tags = {"tool_name": tool_name} if tool_name else {}
     increment_metric(METRIC_EVENTS_COLLISION, tags=tags)
 
@@ -95,26 +95,26 @@ def record_collision_detected(tool_name: str | None = None) -> None:
 # Example usage in executor prototype
 def example_executor_integration():
     """Example of how metrics would be integrated in the executor."""
-    
+
     # In the executor when reusing an existing event:
     log_idempotency_reuse(
         campaign_id=12345,
-        idempotency_key=b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10',
+        idempotency_key=b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10",
         event_id=67890,
         tool_name="dice_roll",
-        plan_id="plan-abc123"
+        plan_id="plan-abc123",
     )
     record_idempotent_reuse(tool_name="dice_roll")
-    
+
     # If collision is ever detected (should be rare):
     log_idempotency_collision(
         campaign_id=12345,
-        idempotency_key=b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10',
+        idempotency_key=b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10",
         original_event_id=67890,
         collision_inputs={
             "plan_id": "different-plan",
             "tool_name": "different_tool",
             # ...
-        }
+        },
     )
     record_collision_detected(tool_name="dice_roll")

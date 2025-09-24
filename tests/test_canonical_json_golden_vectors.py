@@ -25,13 +25,13 @@ class TestGoldenVectors:
         # Compute current results
         canonical_bytes = canonical_json_bytes(payload)
         hash_bytes = compute_canonical_hash(payload)
-        
+
         # Check against stored canonical bytes
         canonical_file = golden_dir / f"{vector_name}.canonical"
         if canonical_file.exists():
             expected_bytes = canonical_file.read_bytes()
             assert canonical_bytes == expected_bytes, f"Canonical bytes mismatch for {vector_name}"
-        
+
         # Check against stored hash
         hash_file = golden_dir / f"{vector_name}.sha256"
         if hash_file.exists():
@@ -42,9 +42,10 @@ class TestGoldenVectors:
         """Empty object (genesis payload compatibility)."""
         payload = {}
         self._test_golden_vector(golden_dir, "01_empty_object", payload)
-        
+
         # Extra validation - should match genesis hash
         from Adventorator.events.envelope import GENESIS_PAYLOAD_HASH
+
         hash_bytes = compute_canonical_hash(payload)
         assert hash_bytes == GENESIS_PAYLOAD_HASH
 
@@ -52,7 +53,7 @@ class TestGoldenVectors:
         """Simple key ordering test."""
         payload = {"z": 1, "a": 2, "m": 3}
         self._test_golden_vector(golden_dir, "02_simple_keys", payload)
-        
+
         # Verify canonical output format
         result = canonical_json_bytes(payload)
         assert result == b'{"a":2,"m":3,"z":1}'
@@ -67,13 +68,10 @@ class TestGoldenVectors:
         payload = {
             "keep": "value",
             "remove": None,
-            "nested": {
-                "keep_nested": "val",
-                "remove_nested": None
-            }
+            "nested": {"keep_nested": "val", "remove_nested": None},
         }
         self._test_golden_vector(golden_dir, "04_null_elision", payload)
-        
+
         # Verify null fields are omitted
         result = canonical_json_bytes(payload)
         assert b"remove" not in result
@@ -81,35 +79,28 @@ class TestGoldenVectors:
 
     def test_vector_05_nested_objects(self, golden_dir):
         """Nested object key ordering test."""
-        payload = {
-            "outer_z": {"inner_b": 1, "inner_a": 2},
-            "outer_a": {"inner_z": 3, "inner_m": 4}
-        }
+        payload = {"outer_z": {"inner_b": 1, "inner_a": 2}, "outer_a": {"inner_z": 3, "inner_m": 4}}
         self._test_golden_vector(golden_dir, "05_nested_objects", payload)
 
     def test_vector_06_arrays_preserved(self, golden_dir):
         """Array order preservation with null elements."""
         payload = {"mixed": [1, None, "string", {"nested": "object"}]}
         self._test_golden_vector(golden_dir, "06_arrays_preserved", payload)
-        
+
         # Verify null in array is preserved
         result = canonical_json_bytes(payload)
         assert b"null" in result
 
     def test_vector_07_edge_integers(self, golden_dir):
         """Edge case integer values."""
-        payload = {
-            "max_int64": 9223372036854775807,
-            "min_int64": -9223372036854775808,
-            "zero": 0
-        }
+        payload = {"max_int64": 9223372036854775807, "min_int64": -9223372036854775808, "zero": 0}
         self._test_golden_vector(golden_dir, "07_edge_integers", payload)
 
     def test_vector_08_boolean_values(self, golden_dir):
         """Boolean value canonicalization."""
         payload = {"true_val": True, "false_val": False, "number": 42}
         self._test_golden_vector(golden_dir, "08_boolean_values", payload)
-        
+
         # Verify lowercase boolean representation
         result = canonical_json_bytes(payload)
         assert b"true" in result
@@ -120,14 +111,11 @@ class TestGoldenVectors:
     def test_vector_09_complex_mixed(self, golden_dir):
         """Complex structure with mixed types."""
         payload = {
-            "users": [
-                {"name": "Alice", "active": True},
-                {"name": "Bob", "active": False}
-            ],
+            "users": [{"name": "Alice", "active": True}, {"name": "Bob", "active": False}],
             "metadata": {
                 "version": 1,
-                "created": None  # Should be elided
-            }
+                "created": None,  # Should be elided
+            },
         }
         self._test_golden_vector(golden_dir, "09_complex_mixed", payload)
 
@@ -135,18 +123,10 @@ class TestGoldenVectors:
         """Large nested structure."""
         payload = {
             "campaigns": {
-                "123": {
-                    "players": ["Alice", "Bob"],
-                    "status": "active"
-                },
-                "456": {
-                    "players": ["Charlie"],
-                    "status": "pending"
-                }
+                "123": {"players": ["Alice", "Bob"], "status": "active"},
+                "456": {"players": ["Charlie"], "status": "pending"},
             },
-            "system": {
-                "version": 2
-            }
+            "system": {"version": 2},
         }
         self._test_golden_vector(golden_dir, "10_large_structure", payload)
 
@@ -154,18 +134,18 @@ class TestGoldenVectors:
         """Verify all golden vectors produce deterministic results across multiple runs."""
         vector_files = list(golden_dir.glob("*.json"))
         assert len(vector_files) >= 10, "Should have at least 10 golden vectors"
-        
+
         for json_file in vector_files:
             with open(json_file) as f:
                 payload = json.load(f)
-            
+
             # Run multiple times to ensure determinism
             results = []
             hashes = []
             for _ in range(3):
                 results.append(canonical_json_bytes(payload))
                 hashes.append(compute_canonical_hash(payload))
-            
+
             # All results should be identical
             assert all(r == results[0] for r in results), (
                 f"Non-deterministic output for {json_file.name}"
@@ -178,10 +158,10 @@ class TestGoldenVectors:
         """Verify all stored hashes are valid SHA-256 hashes."""
         hash_files = list(golden_dir.glob("*.sha256"))
         assert len(hash_files) >= 10, "Should have at least 10 hash files"
-        
+
         for hash_file in hash_files:
             hash_hex = hash_file.read_text().strip()
-            
+
             # Should be valid hex string of correct length
             assert len(hash_hex) == 64, f"Invalid hash length in {hash_file.name}"
             try:
@@ -195,16 +175,16 @@ class TestGoldenVectors:
         payload = {
             "zzz": {"nnn": 1, "aaa": 2},
             "aaa": {"zzz": 3, "mmm": 4},
-            "mmm": ["z", "a", {"zzz": 5, "aaa": 6}]
+            "mmm": ["z", "a", {"zzz": 5, "aaa": 6}],
         }
-        
+
         result = canonical_json_bytes(payload)
         decoded = json.loads(result.decode())
-        
+
         # Verify top-level keys are sorted
         keys = list(decoded.keys())
         assert keys == sorted(keys)
-        
+
         # Verify nested object keys are sorted
         for value in decoded.values():
             if isinstance(value, dict):
@@ -214,19 +194,19 @@ class TestGoldenVectors:
     def test_unicode_regression(self):
         """Regression test for Unicode normalization."""
         import unicodedata
-        
+
         # Create payload with mixed Unicode forms
         composed = "café"
         decomposed = unicodedata.normalize("NFD", composed)
-        
+
         payload1 = {"key": composed}
         payload2 = {"key": decomposed}
-        
+
         # Should produce identical results
         result1 = canonical_json_bytes(payload1)
         result2 = canonical_json_bytes(payload2)
         hash1 = compute_canonical_hash(payload1)
         hash2 = compute_canonical_hash(payload2)
-        
+
         assert result1 == result2
         assert hash1 == hash2

@@ -33,13 +33,13 @@ def _normalize_unicode(value: str) -> str:
 
 def _validate_number(value: int | float) -> int:
     """Validate numeric value meets integer-only policy.
-    
+
     Args:
         value: Number to validate
-        
+
     Returns:
         The validated integer value
-        
+
     Raises:
         CanonicalJSONError: If value is float, NaN, infinity, or outside signed 64-bit range
     """
@@ -63,7 +63,7 @@ def _validate_number(value: int | float) -> int:
                 "Convert to integer, use fixed-point representation (multiply by 100), "
                 "or store as string for non-semantic fields."
             )
-    
+
     if isinstance(value, int):
         # Check signed 64-bit range: -2^63 to 2^63-1
         if value < -9223372036854775808 or value > 9223372036854775807:
@@ -72,23 +72,23 @@ def _validate_number(value: int | float) -> int:
                 "Large integers must be stored as strings in non-semantic fields."
             )
         return value
-    
+
     raise CanonicalJSONError(f"Unexpected numeric type: {type(value)}")
 
 
 def _canonicalize_value(value: Any) -> Any:
     """Recursively canonicalize a JSON value per ADR-0007 rules.
-    
+
     Args:
         value: JSON-compatible value to canonicalize
-        
+
     Returns:
         Canonicalized value with:
         - Unicode strings normalized to NFC
         - Numbers validated as integers within 64-bit range
         - Null values removed from objects
         - Object keys sorted lexicographically
-        
+
     Raises:
         CanonicalJSONError: If value violates canonical constraints
     """
@@ -122,10 +122,10 @@ def _canonicalize_value(value: Any) -> Any:
 
 def canonical_json_bytes(payload: Mapping[str, Any] | None) -> bytes:
     """Encode payload as canonical JSON bytes per ADR-0007.
-    
+
     Args:
         payload: Dictionary to encode, or None (treated as empty dict)
-        
+
     Returns:
         UTF-8 encoded canonical JSON bytes with:
         - Keys sorted lexicographically
@@ -133,16 +133,16 @@ def canonical_json_bytes(payload: Mapping[str, Any] | None) -> bytes:
         - Null fields omitted
         - Compact separators (no whitespace)
         - Integer-only numbers
-        
+
     Raises:
         CanonicalJSONError: If payload contains invalid types or values
     """
     if payload is None:
         payload = {}
-    
+
     # Canonicalize the entire payload structure
     canonical_payload = _canonicalize_value(payload)
-    
+
     # Encode with deterministic settings
     json_str = json.dumps(
         canonical_payload,
@@ -151,20 +151,20 @@ def canonical_json_bytes(payload: Mapping[str, Any] | None) -> bytes:
         sort_keys=True,  # Lexicographic key ordering
         allow_nan=False,  # Reject NaN/Infinity (redundant with validation)
     )
-    
+
     # Normalize the entire JSON string and encode as UTF-8
     return _normalize_unicode(json_str).encode("utf-8")
 
 
 def compute_canonical_hash(payload: Mapping[str, Any] | None) -> bytes:
     """Compute SHA-256 hash of canonical JSON representation.
-    
+
     Args:
         payload: Dictionary to hash, or None (treated as empty dict)
-        
+
     Returns:
         32-byte SHA-256 digest of canonical JSON encoding
-        
+
     Raises:
         CanonicalJSONError: If payload contains invalid types or values
     """
@@ -174,6 +174,6 @@ def compute_canonical_hash(payload: Mapping[str, Any] | None) -> bytes:
 
 __all__ = [
     "CanonicalJSONError",
-    "canonical_json_bytes", 
+    "canonical_json_bytes",
     "compute_canonical_hash",
 ]

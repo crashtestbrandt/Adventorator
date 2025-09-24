@@ -104,6 +104,7 @@ def observe_histogram(name: str, value: int, *, buckets: list[int] | None = None
 
 # Convenience functions for STORY-CDA-CORE-001E event metrics
 
+
 def record_event_conflict() -> None:
     """Record an event conflict (placeholder until executor implementation)."""
     inc_counter("events.conflict")

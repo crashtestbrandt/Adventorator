@@ -33,7 +33,7 @@ def canonical_json_bytes(payload: Mapping[str, Any] | None) -> bytes:
     This function now uses the full canonical encoder implementing:
     - UTF-8 NFC Unicode normalization
     - Lexicographic key ordering
-    - Null field elision  
+    - Null field elision
     - Integer-only numeric policy (rejects floats/NaN)
     - Compact separators
 
@@ -142,7 +142,7 @@ def compute_idempotency_key_v2(
     """Derive a deterministic 16-byte idempotency key per STORY-CDA-CORE-001D.
 
     Implements the ADR-specified composition for true retry collapse:
-    SHA256(plan_id || campaign_id || event_type || tool_name || 
+    SHA256(plan_id || campaign_id || event_type || tool_name ||
            ruleset_version || canonical(args_json))[:16]
 
     This composition excludes replay_ordinal and execution_request_id to enable
@@ -151,7 +151,7 @@ def compute_idempotency_key_v2(
 
     Args:
         plan_id: Unique plan identifier (nullable for non-planned events)
-        campaign_id: Campaign identifier  
+        campaign_id: Campaign identifier
         event_type: Event type string
         tool_name: Name of the tool being executed (nullable)
         ruleset_version: Version of ruleset being used (nullable)
@@ -162,13 +162,13 @@ def compute_idempotency_key_v2(
     """
     # Length-prefixed binary framing to avoid delimiter collision ambiguity.
     # Order follows acceptance criteria specification.
-    
+
     # Special handling for args_json to distinguish None from empty dict
     if args_json is None:
         args_bytes = b"<null>"  # Sentinel value for None
     else:
         args_bytes = canonical_json_bytes(args_json)
-    
+
     components: list[tuple[str, bytes]] = [
         ("plan_id", (plan_id or "").encode("utf-8")),
         ("campaign_id", str(campaign_id).encode("utf-8")),
@@ -219,7 +219,7 @@ class GenesisEvent:
 
 class HashChainMismatchError(Exception):
     """Raised when hash chain verification detects corruption."""
-    
+
     def __init__(self, ordinal: int, expected_hash: bytes, actual_hash: bytes):
         self.ordinal = ordinal
         self.expected_hash = expected_hash
@@ -232,34 +232,34 @@ class HashChainMismatchError(Exception):
 
 def verify_hash_chain(events: list) -> dict[str, Any]:
     """Verify hash chain integrity for a list of events.
-    
+
     Args:
         events: List of Event model instances ordered by replay_ordinal
-        
+
     Returns:
         dict: Verification summary with counts and status
-        
+
     Raises:
         HashChainMismatchError: When a hash mismatch is detected
     """
     from Adventorator.action_validation.logging_utils import log_event
     from Adventorator.metrics import inc_counter
-    
+
     if not events:
         return {"verified_count": 0, "status": "success", "chain_length": 0}
-    
+
     # Sort by replay_ordinal to ensure proper chain traversal
     events = sorted(events, key=lambda e: e.replay_ordinal)
-    
+
     expected_prev_hash = GENESIS_PREV_EVENT_HASH
     verified_count = 0
-    
+
     for event in events:
         # Check that prev_event_hash matches expected value
         if event.prev_event_hash != expected_prev_hash:
             # Log structured mismatch event
             log_event(
-                "event", 
+                "event",
                 "chain_mismatch",
                 campaign_id=event.campaign_id,
                 replay_ordinal=event.replay_ordinal,
@@ -267,17 +267,17 @@ def verify_hash_chain(events: list) -> dict[str, Any]:
                 actual_hash=event.prev_event_hash.hex()[:16],
                 event_type=event.type,
             )
-            
-            # Increment mismatch metric  
+
+            # Increment mismatch metric
             inc_counter("events.hash_mismatch")
-            
+
             # Raise exception with details
             raise HashChainMismatchError(
                 ordinal=event.replay_ordinal,
                 expected_hash=expected_prev_hash,
-                actual_hash=event.prev_event_hash
+                actual_hash=event.prev_event_hash,
             )
-        
+
         # Compute the envelope hash of this event for the next iteration
         expected_prev_hash = compute_envelope_hash(
             campaign_id=event.campaign_id,
@@ -291,23 +291,19 @@ def verify_hash_chain(events: list) -> dict[str, Any]:
             payload_hash=event.payload_hash,
             idempotency_key=event.idempotency_key,
         )
-        
+
         verified_count += 1
-    
-    return {
-        "verified_count": verified_count,
-        "status": "success", 
-        "chain_length": len(events)
-    }
+
+    return {"verified_count": verified_count, "status": "success", "chain_length": len(events)}
 
 
 async def get_chain_tip(session, campaign_id: int) -> tuple[int, bytes] | None:
     """Get the current chain tip for a campaign.
-    
+
     Args:
         session: Database session
         campaign_id: Campaign identifier
-        
+
     Returns:
         tuple: (replay_ordinal, payload_hash) of the latest event,
                or None if no events exist
@@ -315,7 +311,7 @@ async def get_chain_tip(session, campaign_id: int) -> tuple[int, bytes] | None:
     from sqlalchemy import select
 
     from Adventorator import models
-    
+
     # Get the event with the highest replay_ordinal for this campaign
     stmt = (
         select(models.Event.replay_ordinal, models.Event.payload_hash)
@@ -345,13 +341,13 @@ def log_event_applied(
     latency_ms: float | None = None,
 ) -> None:
     """Log structured event application with required metadata.
-    
+
     This emits the structured log format specified in the acceptance criteria
     for STORY-CDA-CORE-001E observability.
     """
     from Adventorator.action_validation.logging_utils import log_event
     from Adventorator.metrics import inc_counter
-    
+
     # Required structured log fields per acceptance criteria
     log_data = {
         "event_id": event_id,
@@ -361,7 +357,7 @@ def log_event_applied(
         "event_type": event_type,
         "campaign_id": campaign_id,
     }
-    
+
     # Optional fields
     if plan_id:
         log_data["plan_id"] = plan_id
@@ -369,13 +365,13 @@ def log_event_applied(
         log_data["execution_request_id"] = execution_request_id
     if latency_ms is not None:
         log_data["latency_ms"] = latency_ms
-    
+
     # Log structured event
     log_event("event", "applied", **log_data)
-    
+
     # Increment metrics
     inc_counter("events.applied")
-    
+
     if latency_ms is not None:
         # Record latency in histogram (simplified - just record the value)
         # In a real system this would use proper histogram buckets
@@ -392,7 +388,7 @@ def log_idempotent_reuse(
     """Log when an event creation was skipped due to idempotency."""
     from Adventorator.action_validation.logging_utils import log_event
     from Adventorator.metrics import inc_counter
-    
+
     log_event(
         "event",
         "idempotent_reuse",
@@ -401,7 +397,7 @@ def log_idempotent_reuse(
         idempotency_key_hex=idempotency_key.hex(),
         plan_id=plan_id,
     )
-    
+
     inc_counter("events.idempotent_reuse")
 
 

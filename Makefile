@@ -45,6 +45,14 @@ tunnel-dev-dns:
 test:
 	. .venv/bin/activate && pytest
 
+.PHONY: smoke
+smoke:
+	pytest -m smoke -q
+
+.PHONY: seed-encounter
+seed-encounter:
+	PYTHONPATH=./src python scripts/seed_encounter.py
+
 lint:
 	. .venv/bin/activate && ruff check src tests
 

@@ -70,9 +70,7 @@ class ToolCallChain:
                 "supply only one form."
             )
         if not self.steps and self.items:
-            self.steps = [
-                ToolStep(tool=i.tool, args={"expr": i.mechanics}) for i in self.items
-            ]
+            self.steps = [ToolStep(tool=i.tool, args={"expr": i.mechanics}) for i in self.items]
 
 
 @dataclass(frozen=True)

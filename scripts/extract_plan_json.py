@@ -15,10 +15,8 @@ Exit codes:
 """
 from __future__ import annotations
 
-import re
-import sys
 import json
-from typing import Any
+import sys
 
 try:
     import orjson  # type: ignore

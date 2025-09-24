@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
-import argparse
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -107,8 +107,10 @@ def validate_contracts() -> list[str]:
             except json.JSONDecodeError as exc:
                 errors.append(f"{path}: invalid JSON - {exc}")
                 continue
-            if "openapi" not in data:
-                errors.append(f"{path}: expected 'openapi' field for API contracts")
+            # Only enforce OpenAPI schema for HTTP API contracts
+            rel_parts = path.relative_to(contracts_dir).parts
+            if "http" in rel_parts and "openapi" not in data:
+                errors.append(f"{path}: expected 'openapi' field for API contracts under contracts/http")
         else:
             # YAML support deferred; ensure placeholder files are obvious.
             text = path.read_text(encoding="utf-8")

@@ -52,6 +52,9 @@ Dependencies:
   - prettytable: For displaying command status in a table format.
 """
 
+import argparse
+import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -59,9 +62,6 @@ from pathlib import Path
 import httpx
 import orjson
 from dotenv import load_dotenv
-import argparse
-import asyncio
-import json
 from prettytable import PrettyTable
 
 # Load environment variables from .env.local (preferred) or fallback to legacy .env
@@ -98,7 +98,6 @@ from pydantic.fields import FieldInfo
 from Adventorator.command_loader import load_all_commands
 from Adventorator.commanding import all_commands
 from Adventorator.config import load_settings
-import asyncio
 
 # Discord API constants
 CMD_CHAT_INPUT = 1
