@@ -22,23 +22,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from Adventorator.canonical_json import canonical_json_bytes
 from Adventorator.manifest_validation import ManifestValidationError, validate_manifest
+from Adventorator.metrics import inc_counter as metrics_inc_counter
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
 def inc_counter(metric_name: str, value: int = 1, **tags) -> None:
-    """Increment a counter metric (placeholder implementation).
+    """Increment a counter metric with actual metrics system.
     
     Args:
         metric_name: Name of the metric to increment
         value: Value to increment by (default 1)
-        **tags: Additional tags for the metric
+        **tags: Additional tags for the metric (logged for context)
     """
-    # Placeholder - actual implementation would integrate with metrics system
-    logger.debug(f"Metric {metric_name} incremented by {value} with tags {tags}")
+    # Use actual metrics system
+    metrics_inc_counter(metric_name, value)
+    # Log tags for context since metrics system doesn't support tags yet
+    if tags:
+        logger.debug(f"Metric {metric_name} incremented by {value} with tags {tags}")
 
 
 def emit_structured_log(event: str, **fields) -> None:
@@ -211,7 +214,8 @@ class EntityPhase:
                 normalized_content = unicodedata.normalize("NFC", content)
                 entity_data = json.loads(normalized_content)
                 
-                # Validate required fields
+                # Validate against JSON schema first, then basic fields
+                validate_entity_schema(entity_data)
                 self._validate_entity_schema(entity_data, rel_path)
                 
                 # Compute file hash
@@ -248,17 +252,38 @@ class EntityPhase:
             e["provenance"]["source_path"]
         ))
         
-        # Check for stable_id collisions
+        # Check for stable_id collisions and filter duplicates
         try:
-            self._check_stable_id_collisions(parsed_entities)
+            filtered_entities, entities_skipped_idempotent = self._check_stable_id_collisions(parsed_entities)
         except EntityCollisionError as exc:
             collisions_detected = 1
             inc_counter("importer.collision", value=1, package_id=package_id)
             raise exc
         
-        # Count entities and emit metrics
-        entity_count = len(parsed_entities)
+        # Create ImportLog entries for each entity
+        import_log_entries = []
+        for i, entity in enumerate(filtered_entities):
+            import_log_entry = {
+                "sequence_no": i + 1,
+                "phase": "entity",
+                "object_type": entity["kind"],
+                "stable_id": entity["stable_id"],
+                "file_hash": entity["provenance"]["file_hash"],
+                "action": "created",
+                "manifest_hash": manifest.get("manifest_hash", "unknown"),
+                "timestamp": datetime.now(timezone.utc)
+            }
+            import_log_entries.append(import_log_entry)
+        
+        # Emit metrics with actual counts
+        entity_count = len(filtered_entities)
         inc_counter("importer.entities.created", value=entity_count, package_id=package_id)
+        if entities_skipped_idempotent > 0:
+            inc_counter("importer.entities.skipped_idempotent", value=entities_skipped_idempotent, package_id=package_id)
+        
+        # Store ImportLog entries (would be persisted to database in real implementation)
+        for entity in filtered_entities:
+            entity["import_log_entries"] = import_log_entries
         
         # Log summary
         emit_structured_log(
@@ -269,7 +294,7 @@ class EntityPhase:
             entities_skipped_idempotent=entities_skipped_idempotent
         )
         
-        return parsed_entities
+        return filtered_entities
     
     def _validate_entity_schema(self, entity_data: dict[str, Any], source_path: str) -> None:
         """Validate entity data against schema.
@@ -323,16 +348,22 @@ class EntityPhase:
         """
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
     
-    def _check_stable_id_collisions(self, entities: list[dict[str, Any]]) -> None:
-        """Check for stable_id collisions across entities.
+    def _check_stable_id_collisions(self, entities: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+        """Check for stable_id collisions and filter duplicates for idempotent replay.
         
         Args:
             entities: List of parsed entities
+            
+        Returns:
+            Tuple of (filtered_entities, skipped_count)
             
         Raises:
             EntityCollisionError: If collisions are detected
         """
         seen_ids = {}
+        filtered_entities = []
+        skipped_count = 0
+        
         for entity in entities:
             stable_id = entity["stable_id"]
             file_hash = entity["provenance"]["file_hash"]
@@ -345,9 +376,13 @@ class EntityPhase:
                         f"Stable ID collision detected for '{stable_id}': "
                         f"different content in {existing_path} vs {source_path}"
                     )
-                # Same hash = idempotent duplicate, will be handled during persistence
+                # Same hash = idempotent duplicate, skip it
+                skipped_count += 1
             else:
                 seen_ids[stable_id] = (file_hash, source_path)
+                filtered_entities.append(entity)
+        
+        return filtered_entities, skipped_count
     
     def create_seed_events(self, entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Create seed.entity_created events for parsed entities.
@@ -376,6 +411,9 @@ class EntityPhase:
             if "props" in entity:
                 event_payload["props"] = entity["props"]
             
+            # Validate event payload against schema
+            validate_event_payload_schema(event_payload, event_type="entity")
+            
             events.append(event_payload)
         
         return events
@@ -394,15 +432,6 @@ def create_entity_phase(features_importer: bool = False) -> EntityPhase:
 
 
 def create_manifest_phase(features_importer: bool = False) -> ManifestPhase:
-    """Factory function to create manifest phase with feature flag.
-    
-    Args:
-        features_importer: Value of features.importer feature flag
-        
-    Returns:
-        Configured ManifestPhase instance
-    """
-    return ManifestPhase(features_importer_enabled=features_importer)
     """Factory function to create manifest phase with feature flag.
     
     Args:

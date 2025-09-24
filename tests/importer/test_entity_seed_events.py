@@ -195,17 +195,16 @@ class TestEntitySeedEvents:
             
             manifest = {"package_id": "01JAR9WYH41R8TFM6Z0X5E7QKJ"}
             
-            # Should parse both entities without collision error (identical content)
+            # Should parse entities and correctly skip idempotent duplicates
             entities = phase.parse_and_validate_entities(package_root, manifest)
             
-            # Both entities returned - downstream logic will handle deduplication
-            assert len(entities) == 2
-            assert entities[0]["stable_id"] == entities[1]["stable_id"]
-            assert entities[0]["provenance"]["file_hash"] == entities[1]["provenance"]["file_hash"]
+            # Only one entity should be returned (duplicate filtered out)
+            assert len(entities) == 1
+            assert entities[0]["stable_id"] == "01JA6Z7F8NPC00000000000000"
             
-            # Events should be generated for both (downstream handles deduplication)
+            # Events should be generated for only the unique entity
             events = phase.create_seed_events(entities)
-            assert len(events) == 2
+            assert len(events) == 1
 
 
 if __name__ == "__main__":
