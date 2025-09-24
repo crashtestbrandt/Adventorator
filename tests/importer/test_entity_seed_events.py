@@ -191,7 +191,7 @@ class TestEntitySeedEvents:
             for filename in ["entity1.json", "entity2.json"]:
                 entity_file = entities_dir / filename
                 with open(entity_file, "w", encoding="utf-8") as f:
-                    json.dump(entity_data, f, separators=(',', ':'))  # Consistent formatting
+                    json.dump(entity_data, f, separators=(',', ':'))  # Use compact separators to ensure identical JSON output for hash-based duplicate detection
             
             manifest = {"package_id": "01JAR9WYH41R8TFM6Z0X5E7QKJ"}
             
