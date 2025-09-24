@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/package/manifest.v1.json",
+  "title": "Campaign Package Manifest Schema v1",
+  "description": "Schema for package.manifest.json files implementing ADR-0011 provenance requirements",
+  "type": "object",
+  "required": [
+    "package_id",
+    "schema_version", 
+    "engine_contract_range",
+    "dependencies",
+    "content_index",
+    "ruleset_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "package_id": {
+      "type": "string",
+      "pattern": "^[0-9][0-9A-HJKMNP-TV-Z]{25}$",
+      "description": "ULID uniquely identifying this package"
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Manifest schema version for validation"
+    },
+    "engine_contract_range": {
+      "type": "object",
+      "required": ["min", "max"],
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "type": "string",
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+          "description": "Minimum semantic version of compatible engine contracts"
+        },
+        "max": {
+          "type": "string", 
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+          "description": "Maximum semantic version of compatible engine contracts"
+        }
+      },
+      "description": "Compatible engine contract version range"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["package_id", "version"],
+        "additionalProperties": false,
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "pattern": "^[0-9][0-9A-HJKMNP-TV-Z]{25}$",
+            "description": "ULID of dependency package"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+            "description": "Semantic version of dependency"
+          }
+        }
+      },
+      "description": "Array of package dependencies"
+    },
+    "content_index": {
+      "type": "object",
+      "patternProperties": {
+        "^[^/].*$": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "description": "SHA-256 hash of file content"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Mapping from relative file paths to SHA-256 digests"
+    },
+    "ruleset_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "description": "Semantic version of ruleset"
+    },
+    "recommended_flags": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z][a-zA-Z0-9_]*(?:\\.[a-zA-Z][a-zA-Z0-9_]*)*$": {
+          "type": "boolean",
+          "description": "Feature flag recommendation"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional feature flag recommendations"
+    },
+    "signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["algorithm", "key_id", "signature"],
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "enum": ["ed25519"],
+            "description": "Signature algorithm"
+          },
+          "key_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Key identifier for signature verification"
+          },
+          "signature": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]+$",
+            "description": "Hex-encoded signature bytes"
+          }
+        }
+      },
+      "description": "Optional cryptographic signatures (reserved for future use)"
+    }
+  }
+}
