@@ -1,0 +1,26 @@
+{
+  "package_id": "01JAR9WYH41R8TFM6Z0X5E7QKJ",
+  "schema_version": 1,
+  "engine_contract_range": {
+    "min": "1.2.0",
+    "max": "1.2.0"
+  },
+  "dependencies": [
+    {
+      "package_id": "01J0DEPENDENCY0000000000000",
+      "version": "1.0.0"
+    }
+  ],
+  "content_index": {
+    "entities/npc.json": "5880ea2569507faba1384c11a4edb144c07c7aed0d342ba345ec52c96f3c0d8e",
+    "edges/relationship.json": "5a8c82953a5a4c283b95ccf5c7c962a55044ef7fed99e442d185b6f5e9714ae7",
+    "lore/intro.md": "f4a8d34f4ae1b6d0d850e9cdcbae5bb09b7a0b388fc0e1a2c4e962a510fe0e7c",
+    "ontologies/tags.json": "bdecfa6109eefe0f40779a513e044cad5520df1782914c5c76d8e3026ce8a016"
+  },
+  "ruleset_version": "1.2.3",
+  "recommended_flags": {
+    "features.importer.entities": true,
+    "features.importer.edges": true
+  },
+  "signatures": []
+}
