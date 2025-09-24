@@ -9,6 +9,21 @@ Use this directory to manage contract-first assets such as OpenAPI documents, pr
 
 Contracts should be referenced from Stories and Tasks using the new templates so that every change remains tied to the appropriate quality gates.
 
+## Package Manifests
+
+Campaign package manifests are validated against `package/manifest.v1.json` schema implementing:
+- ADR-0011 Package Import Provenance
+- ADR-0006 Event Envelope & Hash Chain  
+- ADR-0007 Canonical JSON Policy
+- ARCH-CDA-001 Campaign Data Architecture
+
+See STORY-CDA-IMPORT-002A for manifest validation requirements and `src/Adventorator/manifest_validation.py` for implementation.
+
+## Event Schemas
+
+Synthetic seed events are defined under `events/seed/` with schemas for:
+- `manifest-validated.v1.json` - Emitted after successful manifest validation
+
 ## Ontology Seed
 
 The ontology (planner / action-validation tag taxonomy) is versioned under `ontology/v1/seed.json`.
