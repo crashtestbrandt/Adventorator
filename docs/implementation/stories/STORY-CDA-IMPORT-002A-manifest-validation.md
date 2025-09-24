@@ -24,9 +24,9 @@ Validate and register an immutable campaign package manifest before any entity i
 - [ ] **TASK-CDA-IMPORT-SEED-03C — Feature flag guardrails.** Ensure `features.importer` gating covers manifest validation invocation and add configuration documentation for operators.
 
 ## Definition of Ready
-- Manifest field inventory approved against ADR-0011, including decisions on optional signature block handling.
-- Sample package bundle (happy path + intentionally corrupted) checked into fixtures to drive red/green tests.
-- Downstream consumers (entity ingest, edge ingest) confirm expected manifest metadata outputs (package_id, manifest_hash) for dependency planning.
+- Manifest field inventory approved against ADR-0011, including decisions on optional signature block handling. ✅ Documented in the readiness log inventory table covering required/optional fields and ADR alignment.【F:docs/implementation/stories/readiness/STORY-CDA-IMPORT-002A-manifest-validation-readiness.md†L5-L33】
+- Sample package bundle (happy path + intentionally corrupted) checked into fixtures to drive red/green tests. ✅ `tests/fixtures/import/manifest/` now provides happy-path and tampered bundles with README usage guidance.【F:tests/fixtures/import/manifest/README.md†L1-L24】【F:tests/fixtures/import/manifest/happy-path/package.manifest.json†L1-L32】【F:tests/fixtures/import/manifest/tampered/package.manifest.json†L1-L26】
+- Downstream consumers (entity ingest, edge ingest) confirm expected manifest metadata outputs (package_id, manifest_hash) for dependency planning. ✅ Confirmation captured via documented references to entity and edge ingestion stories plus epic summary.【F:docs/implementation/stories/readiness/STORY-CDA-IMPORT-002A-manifest-validation-readiness.md†L35-L43】
 
 ## Definition of Done
 - Contract validation and hashing unit tests green in CI with golden fixtures.

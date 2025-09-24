@@ -1,0 +1,10 @@
+{
+  "stable_id": "01JA6Z7F8EDGE0000000000000",
+  "type": "adjacent_to",
+  "src_ref": "01JA6Z7F8NPC00000000000000",
+  "dst_ref": "01JA6Z7F8NPC00000000000000",
+  "validity": {
+    "start_event_id": null,
+    "end_event_id": null
+  }
+}
