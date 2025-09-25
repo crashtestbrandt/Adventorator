@@ -1,0 +1,51 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2025-10-02T12:00:00Z",
+  "affordances": [
+    {
+      "slug": "affordance.attack.basic_melee",
+      "label": "Basic melee attack",
+      "tags": ["action.attack", "target.goblin"],
+      "requires": ["condition.surprised"],
+      "gating": {
+        "requires_unlock": false,
+        "min_tier": 0
+      },
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/affordances.json",
+        "content_sha256": "9bb3f5622aebf82b3eb4a9c94da8241812d5208d5b34fabe661fbf07d35ed9c1"
+      }
+    },
+    {
+      "slug": "affordance.attack.arcane_blast",
+      "label": "Arcane blast",
+      "tags": ["action.cast_spell", "target.goblin"],
+      "requires": [],
+      "gating": {
+        "requires_unlock": true,
+        "min_tier": 2
+      },
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/affordances.json",
+        "content_sha256": "119a61a3b05c6c0e6039492c8ab5b8a8c0e5ef135dbd6429259e4cb9ea274c3a"
+      }
+    },
+    {
+      "slug": "affordance.utility.unlock_door",
+      "label": "Unlock the sealed door",
+      "tags": ["action.cast_spell", "target.door"],
+      "requires": ["lore.artifact_emerald_eye"],
+      "gating": {
+        "requires_unlock": true,
+        "min_tier": 3
+      },
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/affordances.json",
+        "content_sha256": "8f08a58454f3fa9a0842ca403a53a8566482b87b78fb8ae1bff3db0ca74e9345"
+      }
+    }
+  ]
+}

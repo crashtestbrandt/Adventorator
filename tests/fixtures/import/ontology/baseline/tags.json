@@ -1,0 +1,108 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2025-10-02T12:00:00Z",
+  "tags": [
+    {
+      "slug": "action.attack",
+      "category": "action",
+      "label": "Attack",
+      "synonyms": ["attack", "strike", "swing"],
+      "audience": "player",
+      "gating": {
+        "requires_unlock": false,
+        "min_tier": 0
+      },
+      "embedding_hint": "offense",
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/tags.json",
+        "content_sha256": "1f5ec1a2217dbe6f8535ae6d126845995f0b815859d2ed8c343f660f6c5a8b1a"
+      }
+    },
+    {
+      "slug": "action.cast_spell",
+      "category": "action",
+      "label": "Cast Spell",
+      "synonyms": ["cast", "spell"],
+      "audience": "player",
+      "gating": {
+        "requires_unlock": true,
+        "min_tier": 2
+      },
+      "embedding_hint": "magic",
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/tags.json",
+        "content_sha256": "8c377db7c7436a97f4ad7d5c2171a9f03ad52b2dd77484c20ca5b2a5b60ec523"
+      }
+    },
+    {
+      "slug": "target.goblin",
+      "category": "target",
+      "label": "Goblin",
+      "synonyms": ["goblin", "gobo"],
+      "audience": "player",
+      "gating": {
+        "requires_unlock": false,
+        "min_tier": 0
+      },
+      "embedding_hint": "creature",
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/tags.json",
+        "content_sha256": "b5f2aa927a4a0aa13cf5b5c12f3fe764fb7537d08c5381f36c1c1aa2a8df3a12"
+      }
+    },
+    {
+      "slug": "target.door",
+      "category": "target",
+      "label": "Door",
+      "synonyms": ["door", "gate"],
+      "audience": "player",
+      "gating": {
+        "requires_unlock": false,
+        "min_tier": 0
+      },
+      "embedding_hint": "object",
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/tags.json",
+        "content_sha256": "2b403813d6b77b32f2404c0858cbd1fd872800fd47df9322a7ddc17dfb1a2801"
+      }
+    },
+    {
+      "slug": "condition.surprised",
+      "category": "condition",
+      "label": "Surprised",
+      "synonyms": ["surprised", "caught_off_guard"],
+      "audience": "gm",
+      "gating": {
+        "requires_unlock": false,
+        "min_tier": 0
+      },
+      "embedding_hint": "status",
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/tags.json",
+        "content_sha256": "ce18e2be72d24a7d0fb4227bd7abc650e586f3556f16a18bba8dc0b8dcb739f9"
+      }
+    },
+    {
+      "slug": "lore.artifact_emerald_eye",
+      "category": "lore",
+      "label": "Emerald Eye Artifact",
+      "synonyms": ["emerald eye", "ancient jewel"],
+      "audience": "player",
+      "gating": {
+        "requires_unlock": true,
+        "min_tier": 3
+      },
+      "embedding_hint": "lore",
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/tags.json",
+        "content_sha256": "6e9ab7e6f5ce61454dd6b6e87650249d17a5f5d3abecfa53d65d87b7c395f4d1"
+      }
+    }
+  ]
+}

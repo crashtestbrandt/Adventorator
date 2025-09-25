@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2025-10-02T12:05:00Z",
+  "tags": [
+    {
+      "slug": "action.attack",
+      "category": "action",
+      "label": "Attack",
+      "synonyms": ["attack", "strike", "swing"],
+      "audience": "player",
+      "gating": {
+        "requires_unlock": false,
+        "min_tier": 0
+      },
+      "embedding_hint": "offense",
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/tags.json",
+        "content_sha256": "1f5ec1a2217dbe6f8535ae6d126845995f0b815859d2ed8c343f660f6c5a8b1a"
+      }
+    }
+  ]
+}

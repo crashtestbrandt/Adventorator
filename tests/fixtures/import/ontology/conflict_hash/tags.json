@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2025-10-02T12:10:00Z",
+  "tags": [
+    {
+      "slug": "action.attack",
+      "category": "action",
+      "label": "Aggressive Strike",
+      "synonyms": ["attack", "strike", "smite"],
+      "audience": "player",
+      "gating": {
+        "requires_unlock": false,
+        "min_tier": 0
+      },
+      "embedding_hint": "offense",
+      "provenance": {
+        "source_package": "coppervale-demo",
+        "source_path": "ontology/tags.json",
+        "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  ]
+}
