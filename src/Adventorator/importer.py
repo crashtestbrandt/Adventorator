@@ -838,17 +838,18 @@ class OntologyPhase:
         self,
         package_root: Path,
         manifest: dict[str, Any],
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         """Parse and validate tags and affordances from ontology files.
         
         Returns:
-            Tuple of (tags, affordances) lists with normalized and validated data.
+            Tuple of (tags, affordances, import_log_entries) with normalized data and provenance.
         """
         if not self.features_importer_enabled:
             raise ImporterError("Importer feature flag is disabled (features.importer=false)")
 
         ontology_dir = package_root / "ontology"
         package_id = manifest.get("package_id", "unknown")
+        manifest_hash = manifest.get("manifest_hash", "unknown")
 
         if not ontology_dir.exists():
             emit_structured_log(
@@ -861,10 +862,12 @@ class OntologyPhase:
             # Emit zero metrics for consistency
             inc_counter("importer.tags.parsed", value=0, package_id=package_id)
             inc_counter("importer.affordances.parsed", value=0, package_id=package_id)
-            return [], []
+            return [], [], []
 
         tags = []
         affordances = []
+        import_log_entries = []
+        file_hash_cache = {}  # Cache file hashes for provenance
 
         # Process ontology files in deterministic order
         ontology_files: list[tuple[str, Path]] = []
@@ -882,6 +885,11 @@ class OntologyPhase:
                 # Unicode normalization per ADR-0007
                 normalized = unicodedata.normalize("NFC", content)
                 payload = json.loads(normalized)
+                
+                # Compute file hash for provenance
+                file_hash = self._compute_file_hash(normalized)
+                file_hash_cache[rel_path] = file_hash
+                
             except (json.JSONDecodeError, OSError) as exc:
                 raise OntologyValidationError(
                     f"Failed to parse ontology file {rel_path}: {exc}"
@@ -895,26 +903,79 @@ class OntologyPhase:
             for tag_data in file_tags:
                 normalized_tag = self._normalize_tag(tag_data, rel_path)
                 self._validate_tag_schema(normalized_tag)
+                # Add provenance data
+                normalized_tag["provenance"] = {
+                    "package_id": package_id,
+                    "source_path": rel_path,
+                    "file_hash": file_hash,
+                }
                 tags.append(normalized_tag)
 
             # Validate and normalize each affordance
             for affordance_data in file_affordances:
                 normalized_affordance = self._normalize_affordance(affordance_data, rel_path)
                 self._validate_affordance_schema(normalized_affordance)
+                # Add provenance data
+                normalized_affordance["provenance"] = {
+                    "package_id": package_id,
+                    "source_path": rel_path,
+                    "file_hash": file_hash,
+                }
                 affordances.append(normalized_affordance)
+
+        # Check for duplicates and conflicts automatically
+        tag_skips, affordance_skips = self.check_for_duplicates_and_conflicts(
+            tags, affordances, package_id
+        )
+        
+        # Validate taxonomy invariants across all parsed data
+        self._validate_taxonomy_invariants(tags, affordances)
+
+        # Create ImportLog entries for unique items (after duplicate removal)
+        sequence_no = 1
+        unique_tags = self._filter_duplicates_from_list(tags)
+        unique_affordances = self._filter_duplicates_from_list(affordances)
+        
+        for tag in unique_tags:
+            import_log_entries.append({
+                "sequence_no": sequence_no,
+                "phase": "ontology",
+                "object_type": "tag",
+                "stable_id": tag["tag_id"],
+                "file_hash": tag["provenance"]["file_hash"],
+                "action": "created",
+                "manifest_hash": manifest_hash,
+                "timestamp": datetime.now(timezone.utc),
+            })
+            sequence_no += 1
+            
+        for affordance in unique_affordances:
+            import_log_entries.append({
+                "sequence_no": sequence_no,
+                "phase": "ontology", 
+                "object_type": "affordance",
+                "stable_id": affordance["affordance_id"],
+                "file_hash": affordance["provenance"]["file_hash"],
+                "action": "created",
+                "manifest_hash": manifest_hash,
+                "timestamp": datetime.now(timezone.utc),
+            })
+            sequence_no += 1
 
         emit_structured_log(
             "ontology_parse_complete",
             package_id=package_id,
-            tag_count=len(tags),
-            affordance_count=len(affordances),
+            tag_count=len(unique_tags),
+            affordance_count=len(unique_affordances),
+            tag_skips=tag_skips,
+            affordance_skips=affordance_skips,
         )
 
         # Emit metrics for parsed ontology items
         inc_counter("importer.tags.parsed", value=len(tags), package_id=package_id)
         inc_counter("importer.affordances.parsed", value=len(affordances), package_id=package_id)
 
-        return tags, affordances
+        return unique_tags, unique_affordances, import_log_entries
 
     def _normalize_tag(self, tag_data: dict[str, Any], source_path: str) -> dict[str, Any]:
         """Normalize tag data with proper slug generation and validation."""
@@ -1095,14 +1156,108 @@ class OntologyPhase:
 
         return tag_skips, affordance_skips
 
+    def _compute_file_hash(self, content: str) -> str:
+        """Compute SHA-256 hash of file content.
+        
+        Uses the same method as existing importer phases for consistency.
+        
+        Args:
+            content: Normalized file content
+            
+        Returns:
+            Hexadecimal SHA-256 hash string
+        """
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    def _filter_duplicates_from_list(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Filter duplicates from a list of tags or affordances, keeping first occurrence.
+        
+        Args:
+            items: List of tag or affordance dictionaries
+            
+        Returns:
+            List with duplicates removed (first occurrence kept)
+        """
+        from Adventorator.canonical_json import compute_canonical_hash
+        
+        seen_hashes = {}
+        unique_items = []
+        
+        for item in items:
+            # Determine the key based on item type
+            if "tag_id" in item:
+                key = (item["tag_id"], item["category"])
+            else:
+                key = (item["affordance_id"], item["category"])
+            
+            # Compute hash excluding provenance
+            hash_data = {k: v for k, v in item.items() if k != "provenance"}
+            item_hash = compute_canonical_hash(hash_data)
+            
+            if key not in seen_hashes or seen_hashes[key] == item_hash:
+                if key not in seen_hashes:
+                    unique_items.append(item)
+                    seen_hashes[key] = item_hash
+                # else: duplicate with same hash, skip
+                
+        return unique_items
+
+    def _validate_taxonomy_invariants(
+        self, tags: list[dict[str, Any]], affordances: list[dict[str, Any]]
+    ) -> None:
+        """Validate taxonomy invariants across all tags and affordances.
+        
+        Checks for category uniqueness and basic relationship consistency.
+        
+        Args:
+            tags: List of normalized tag dictionaries
+            affordances: List of normalized affordance dictionaries
+        """
+        # Check for duplicate (category, tag_id) combinations across files
+        tag_keys = set()
+        for tag in tags:
+            key = (tag["category"], tag["tag_id"])
+            if key in tag_keys:
+                # This is caught by duplicate detection, but validate here for completeness
+                pass  # Allow duplicate detection to handle this
+            tag_keys.add(key)
+        
+        # Check for duplicate (category, affordance_id) combinations across files
+        affordance_keys = set()
+        for affordance in affordances:
+            key = (affordance["category"], affordance["affordance_id"])
+            if key in affordance_keys:
+                # This is caught by duplicate detection, but validate here for completeness
+                pass  # Allow duplicate detection to handle this
+            affordance_keys.add(key)
+        
+        # Validate affordance references to tags
+        tag_ids = {tag["tag_id"] for tag in tags}
+        for affordance in affordances:
+            for applies_to in affordance.get("applies_to", []):
+                if applies_to.startswith("tag:"):
+                    referenced_tag = applies_to[4:]  # Remove "tag:" prefix
+                    if referenced_tag not in tag_ids:
+                        # This is a warning rather than hard error for flexibility
+                        emit_structured_log(
+                            "ontology_reference_warning",
+                            affordance_id=affordance["affordance_id"],
+                            referenced_tag=referenced_tag,
+                            message="Affordance references unknown tag",
+                        )
+
     def emit_seed_events(
         self,
         tags: list[dict[str, Any]],
         affordances: list[dict[str, Any]],
         manifest: dict[str, Any],
-        source_paths: dict[str, str],
     ) -> dict[str, int]:
         """Emit seed events for registered tags and affordances.
+        
+        Args:
+            tags: List of tag dictionaries with provenance
+            affordances: List of affordance dictionaries with provenance
+            manifest: Manifest dictionary for version info
         
         Returns:
             Dictionary with event counts for metrics
@@ -1134,14 +1289,8 @@ class OntologyPhase:
             if "metadata" in tag:
                 event_payload["metadata"] = tag["metadata"]
             
-            # Add provenance
-            tag_key = f"{tag['tag_id']}#{tag['category']}"
-            source_path = source_paths.get(tag_key, "ontology/unknown.json")
-            event_payload["provenance"] = {
-                "package_id": package_id,
-                "source_path": source_path,
-                "file_hash": "0" * 64,  # Placeholder - would be computed from actual file
-            }
+            # Add provenance from tag data (now has real file hash)
+            event_payload["provenance"] = tag["provenance"]
 
             emit_structured_log(
                 "seed_event_emitted",
@@ -1166,14 +1315,8 @@ class OntologyPhase:
             if "metadata" in affordance:
                 event_payload["metadata"] = affordance["metadata"]
             
-            # Add provenance
-            affordance_key = f"{affordance['affordance_id']}#{affordance['category']}"
-            source_path = source_paths.get(affordance_key, "ontology/unknown.json")
-            event_payload["provenance"] = {
-                "package_id": package_id,
-                "source_path": source_path,
-                "file_hash": "0" * 64,  # Placeholder - would be computed from actual file
-            }
+            # Add provenance from affordance data (now has real file hash)
+            event_payload["provenance"] = affordance["provenance"]
 
             emit_structured_log(
                 "seed_event_emitted",

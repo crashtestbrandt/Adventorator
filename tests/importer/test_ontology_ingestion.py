@@ -65,7 +65,7 @@ class TestOntologyIngestion:
                             "effect": "Allows melee attack rolls",
                             "improbability_drive": {
                                 "intent_frame": "attack",
-                                "confidence": 0.97
+                                "confidence": 97
                             }
                         }
                     }
@@ -77,10 +77,11 @@ class TestOntologyIngestion:
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
 
             assert len(tags) == 1
             assert len(affordances) == 1
+            assert len(import_log_entries) == 2  # One for tag, one for affordance
             
             # Verify tag was normalized properly
             tag = tags[0]
@@ -88,12 +89,27 @@ class TestOntologyIngestion:
             assert tag["category"] == "action"
             assert tag["slug"] == "attack"
             assert tag["synonyms"] == ["attack", "strike", "swing"]  # Normalized to lowercase
+            assert "provenance" in tag
+            assert tag["provenance"]["package_id"] == "test-package-001"
+            assert tag["provenance"]["source_path"] == "ontology/test.json"
+            assert len(tag["provenance"]["file_hash"]) == 64  # SHA-256 hex string
             
             # Verify affordance was normalized properly
             affordance = affordances[0]
             assert affordance["affordance_id"] == "affordance.attack.allowed"
             assert affordance["category"] == "combat"
             assert affordance["slug"] == "attack-allowed"
+            assert "provenance" in affordance
+            
+            # Verify ImportLog entries
+            tag_log = next(entry for entry in import_log_entries if entry["object_type"] == "tag")
+            assert tag_log["phase"] == "ontology"
+            assert tag_log["stable_id"] == "action.attack"
+            assert tag_log["action"] == "created"
+            
+            affordance_log = next(entry for entry in import_log_entries if entry["object_type"] == "affordance")
+            assert affordance_log["phase"] == "ontology"
+            assert affordance_log["stable_id"] == "affordance.attack.allowed"
 
     def test_no_ontology_directory(self):
         """Test handling of packages without ontology directory."""
@@ -103,10 +119,11 @@ class TestOntologyIngestion:
             package_root = Path(temp_dir)
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
 
             assert len(tags) == 0
             assert len(affordances) == 0
+            assert len(import_log_entries) == 0
 
     def test_duplicate_identical_tags(self):
         """Test idempotent handling of duplicate identical tags."""
@@ -153,18 +170,13 @@ class TestOntologyIngestion:
             ontology_file.write_text(json.dumps(ontology_data, indent=2))
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
 
-            # Should get 2 tags from parser (before duplicate check)
-            assert len(tags) == 2
+            # Should get 2 tags from parser (before duplicate removal)
+            # Note: duplicates are now automatically handled within parse_and_validate_ontology
+            assert len(tags) == 1  # Duplicates removed automatically
             assert len(affordances) == 0
-
-            # Check duplicate handling
-            tag_skips, affordance_skips = phase.check_for_duplicates_and_conflicts(
-                tags, affordances, "test-package-001"
-            )
-            assert tag_skips == 1  # One duplicate should be skipped
-            assert affordance_skips == 0
+            assert len(import_log_entries) == 1  # Only unique items logged
 
     def test_conflicting_tags_fail(self):
         """Test that conflicting tag definitions cause hard failure."""
@@ -211,15 +223,10 @@ class TestOntologyIngestion:
             ontology_file.write_text(json.dumps(ontology_data, indent=2))
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
 
-            # Should get 2 tags from parser (before conflict check)
-            assert len(tags) == 2
-            assert len(affordances) == 0
-
-            # Check that conflicts cause failure
+            # Should raise exception during parsing due to automatic conflict detection
             with pytest.raises(OntologyValidationError) as exc_info:
-                phase.check_for_duplicates_and_conflicts(tags, affordances, "test-package-001")
+                phase.parse_and_validate_ontology(package_root, manifest)
             
             assert "Conflicting tag definition" in str(exc_info.value)
             assert "action.attack" in str(exc_info.value)
@@ -277,7 +284,7 @@ class TestOntologyIngestion:
             (ontology_dir / "a_combat.json").write_text(json.dumps(ontology_data_2, indent=2))
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
 
             assert len(tags) == 2
             # Should be ordered by filename (a_combat.json before z_magic.json)
@@ -302,6 +309,11 @@ class TestOntologyIngestion:
                 },
                 "metadata": {
                     "description": "Direct offensive action."
+                },
+                "provenance": {
+                    "package_id": "test-package-001",
+                    "source_path": "ontology/combat.json",
+                    "file_hash": "abc123"  # Example hash
                 }
             }
         ]
@@ -316,17 +328,18 @@ class TestOntologyIngestion:
                     "audience": "player",
                     "requires_feature": None,
                     "ruleset_version": "v2.7"
+                },
+                "provenance": {
+                    "package_id": "test-package-001", 
+                    "source_path": "ontology/combat.json",
+                    "file_hash": "def456"  # Example hash
                 }
             }
         ]
 
         manifest = {"package_id": "test-package-001", "version": "1.0.0"}
-        source_paths = {
-            "action.attack#action": "ontology/combat.json",
-            "affordance.attack.allowed#combat": "ontology/combat.json"
-        }
 
-        event_counts = phase.emit_seed_events(tags, affordances, manifest, source_paths)
+        event_counts = phase.emit_seed_events(tags, affordances, manifest)
 
         assert event_counts["tag_events"] == 1
         assert event_counts["affordance_events"] == 1

@@ -116,10 +116,11 @@ class TestOntologyIntegration:
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
             # Step 1: Parse and validate
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
             
             assert len(tags) == 3
             assert len(affordances) == 2
+            assert len(import_log_entries) == 5  # 3 tags + 2 affordances
             
             # Verify tags are normalized
             attack_tag = next(t for t in tags if t["tag_id"] == "action.attack")
@@ -130,24 +131,10 @@ class TestOntologyIntegration:
             spell_tag = next(t for t in tags if t["tag_id"] == "action.cast_spell")
             assert spell_tag["slug"] == "cast-spell"  # Normalized with hyphens
             
-            # Step 2: Check for duplicates/conflicts
-            tag_skips, affordance_skips = phase.check_for_duplicates_and_conflicts(
-                tags, affordances, "test-package-001"
-            )
-            assert tag_skips == 0
-            assert affordance_skips == 0
+            # Step 2: Duplicate checking is automatic now - no separate step needed
             
-            # Step 3: Emit seed events
-            source_paths = {
-                f"{tag['tag_id']}#{tag['category']}": "ontology/complete.json"
-                for tag in tags
-            }
-            source_paths.update({
-                f"{affordance['affordance_id']}#{affordance['category']}": "ontology/complete.json" 
-                for affordance in affordances
-            })
-            
-            event_counts = phase.emit_seed_events(tags, affordances, manifest, source_paths)
+            # Step 3: Emit seed events (no longer needs source_paths parameter) 
+            event_counts = phase.emit_seed_events(tags, affordances, manifest)
             
             assert event_counts["tag_events"] == 3
             assert event_counts["affordance_events"] == 2
@@ -224,23 +211,23 @@ class TestOntologyIntegration:
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            # Parse ontology
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
+            # Parse ontology (duplicates handled automatically)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
             
-            assert len(tags) == 3  # attack appears twice, move appears once
+            # Should get unique tags only (duplicates automatically removed)
+            assert len(tags) == 2  # attack (unique), move (unique)
             assert len(affordances) == 0
+            assert len(import_log_entries) == 2  # Only unique items logged
 
-            # Check for duplicates
-            tag_skips, affordance_skips = phase.check_for_duplicates_and_conflicts(
-                tags, affordances, "test-package-001"
-            )
-            assert tag_skips == 1  # One duplicate attack tag
-            assert affordance_skips == 0
+            # Verify tags were processed correctly
+            tag_ids = [tag["tag_id"] for tag in tags]
+            assert "action.attack" in tag_ids
+            assert "action.move" in tag_ids
 
-            # Verify metrics were called
+            # Verify metrics were called (parsing metrics called before duplicate removal)
             mock_inc_counter.assert_any_call(
                 "importer.tags.parsed", 
-                value=3, 
+                value=3,  # Original count before duplicate removal
                 package_id="test-package-001"
             )
             mock_inc_counter.assert_any_call(
@@ -320,8 +307,8 @@ class TestOntologyIntegration:
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
             # Parse twice and compare results
-            tags_1, _ = phase.parse_and_validate_ontology(package_root, manifest)
-            tags_2, _ = phase.parse_and_validate_ontology(package_root, manifest)
+            tags_1, _, _ = phase.parse_and_validate_ontology(package_root, manifest)
+            tags_2, _, _ = phase.parse_and_validate_ontology(package_root, manifest)
 
             assert len(tags_1) == 3
             assert len(tags_2) == 3
@@ -349,7 +336,12 @@ class TestOntologyIntegration:
                 "display_name": "Zebra",
                 "synonyms": ["zebra"],
                 "audience": ["player"],
-                "gating": {"ruleset_version": "v2.7", "requires_feature": None}
+                "gating": {"ruleset_version": "v2.7", "requires_feature": None},
+                "provenance": {
+                    "package_id": "test-package-001",
+                    "source_path": "ontology/test.json",
+                    "file_hash": "z" * 64
+                }
             },
             {
                 "tag_id": "action.apple",
@@ -358,7 +350,12 @@ class TestOntologyIntegration:
                 "display_name": "Apple",
                 "synonyms": ["apple"],
                 "audience": ["player"],
-                "gating": {"ruleset_version": "v2.7", "requires_feature": None}
+                "gating": {"ruleset_version": "v2.7", "requires_feature": None},
+                "provenance": {
+                    "package_id": "test-package-001",
+                    "source_path": "ontology/test.json",
+                    "file_hash": "a" * 64
+                }
             },
             {
                 "tag_id": "target.alpha",
@@ -367,17 +364,21 @@ class TestOntologyIntegration:
                 "display_name": "Alpha",
                 "synonyms": ["alpha"],
                 "audience": ["player"],
-                "gating": {"ruleset_version": "v2.7", "requires_feature": None}
+                "gating": {"ruleset_version": "v2.7", "requires_feature": None},
+                "provenance": {
+                    "package_id": "test-package-001",
+                    "source_path": "ontology/test.json",
+                    "file_hash": "a" * 64
+                }
             }
         ]
 
         affordances = []
 
         manifest = {"package_id": "test-package-001", "version": "1.0.0"}
-        source_paths = {f"{t['tag_id']}#{t['category']}": "ontology/test.json" for t in tags}
 
         with patch("Adventorator.importer.emit_structured_log") as mock_emit:
-            phase.emit_seed_events(tags, affordances, manifest, source_paths)
+            phase.emit_seed_events(tags, affordances, manifest)
 
             # Get all the seed event calls
             seed_calls = [

@@ -70,7 +70,7 @@ class TestOntologyMetrics:
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
 
             # Verify metrics were called
             mock_inc_counter.assert_any_call(
@@ -89,49 +89,67 @@ class TestOntologyMetrics:
         """Test that idempotent skip metrics are emitted correctly."""
         phase = OntologyPhase(features_importer_enabled=True)
 
-        # Create duplicate tags
-        tags = [
-            {
-                "tag_id": "action.attack",
-                "category": "action",
-                "slug": "attack",
-                "display_name": "Attack",
-                "synonyms": ["attack", "strike"],
-                "audience": ["player", "gm"],
-                "gating": {
-                    "ruleset_version": "v2.7",
-                    "requires_feature": None
-                }
-            },
-            {
-                "tag_id": "action.attack",
-                "category": "action",
-                "slug": "attack",
-                "display_name": "Attack",
-                "synonyms": ["attack", "strike"],
-                "audience": ["player", "gm"],
-                "gating": {
-                    "ruleset_version": "v2.7",
-                    "requires_feature": None
-                }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_root = Path(temp_dir)
+            ontology_dir = package_root / "ontology"
+            ontology_dir.mkdir()
+
+            # Create duplicate tags that should be skipped automatically
+            ontology_data = {
+                "version": "1.0.0",
+                "tags": [
+                    {
+                        "tag_id": "action.attack",
+                        "category": "action",
+                        "slug": "attack",
+                        "display_name": "Attack",
+                        "synonyms": ["attack", "strike"],
+                        "audience": ["player", "gm"],
+                        "gating": {
+                            "ruleset_version": "v2.7",
+                            "requires_feature": None
+                        }
+                    },
+                    {
+                        "tag_id": "action.attack",  # Duplicate
+                        "category": "action",
+                        "slug": "attack",
+                        "display_name": "Attack",
+                        "synonyms": ["attack", "strike"],
+                        "audience": ["player", "gm"],
+                        "gating": {
+                            "ruleset_version": "v2.7",
+                            "requires_feature": None
+                        }
+                    }
+                ],
+                "affordances": []
             }
-        ]
 
-        affordances = []
+            ontology_file = ontology_dir / "duplicate.json"
+            ontology_file.write_text(json.dumps(ontology_data, indent=2))
 
-        tag_skips, affordance_skips = phase.check_for_duplicates_and_conflicts(
-            tags, affordances, "test-package-001"
-        )
+            manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-        assert tag_skips == 1
-        assert affordance_skips == 0
+            # Parse should handle duplicates automatically and emit skip metrics
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
 
-        # Verify idempotent skip metric was called
-        mock_inc_counter.assert_any_call(
-            "importer.tags.skipped_idempotent", 
-            value=1, 
-            package_id="test-package-001"
-        )
+            # Should get only unique items back
+            assert len(tags) == 1  # Duplicate removed
+            assert len(affordances) == 0
+            assert len(import_log_entries) == 1  # Only unique item logged
+
+            # Verify metrics were called including skip metrics
+            mock_inc_counter.assert_any_call(
+                "importer.tags.parsed", 
+                value=2,  # Both tags parsed initially
+                package_id="test-package-001"
+            )
+            mock_inc_counter.assert_any_call(
+                "importer.tags.skipped_idempotent", 
+                value=1,  # One duplicate skipped
+                package_id="test-package-001"
+            )
 
     @patch("Adventorator.importer.inc_counter")
     def test_registration_metrics(self, mock_inc_counter: MagicMock):
@@ -149,6 +167,11 @@ class TestOntologyMetrics:
                 "gating": {
                     "ruleset_version": "v2.7",
                     "requires_feature": None
+                },
+                "provenance": {
+                    "package_id": "test-package-001",
+                    "source_path": "ontology/combat.json",
+                    "file_hash": "abc123def456" * 4  # 64-char hex
                 }
             }
         ]
@@ -163,17 +186,18 @@ class TestOntologyMetrics:
                     "audience": "player",
                     "requires_feature": None,
                     "ruleset_version": "v2.7"
+                },
+                "provenance": {
+                    "package_id": "test-package-001",
+                    "source_path": "ontology/combat.json",
+                    "file_hash": "def456abc123" * 4  # 64-char hex
                 }
             }
         ]
 
         manifest = {"package_id": "test-package-001", "version": "1.0.0"}
-        source_paths = {
-            "action.attack#action": "ontology/combat.json",
-            "affordance.attack.allowed#combat": "ontology/combat.json"
-        }
 
-        event_counts = phase.emit_seed_events(tags, affordances, manifest, source_paths)
+        event_counts = phase.emit_seed_events(tags, affordances, manifest)
 
         assert event_counts["tag_events"] == 1
         assert event_counts["affordance_events"] == 1
@@ -199,10 +223,11 @@ class TestOntologyMetrics:
             package_root = Path(temp_dir)
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            tags, affordances = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
 
             assert len(tags) == 0
             assert len(affordances) == 0
+            assert len(import_log_entries) == 0
 
             # Verify zero metrics were called
             mock_inc_counter.assert_any_call(
