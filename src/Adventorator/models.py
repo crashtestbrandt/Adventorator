@@ -480,6 +480,7 @@ class Combatant(Base):
 
 class Entity(Base):
     """Imported entity definitions with provenance tracking."""
+
     __tablename__ = "entities"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -510,6 +511,7 @@ class Entity(Base):
 
 class ImportLog(Base):
     """Audit trail for package import operations."""
+
     __tablename__ = "import_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
