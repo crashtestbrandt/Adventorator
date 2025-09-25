@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adventorator.dev/contracts/edges/edge.v1.json",
+  "title": "Edge Definition v1",
+  "description": "Schema for campaign edge definitions connecting entities within a package",
+  "type": "object",
+  "required": [
+    "stable_id",
+    "type",
+    "src_ref",
+    "dst_ref",
+    "attributes"
+  ],
+  "properties": {
+    "stable_id": {
+      "type": "string",
+      "description": "Globally unique identifier for this edge",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "type": {
+      "type": "string",
+      "description": "Edge relationship type as defined in the taxonomy",
+      "enum": [
+        "npc.resides_in.location",
+        "organization.controls.location"
+      ]
+    },
+    "src_ref": {
+      "type": "string",
+      "description": "Stable ID of the source entity",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "dst_ref": {
+      "type": "string",
+      "description": "Stable ID of the destination entity",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Edge-specific attributes required by the taxonomy",
+      "additionalProperties": {
+        "anyOf": [
+          {"type": "string"},
+          {"type": "number"},
+          {"type": "boolean"},
+          {"type": "null"}
+        ]
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "description": "Optional free-form annotations for analytics or tooling",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "validity": {
+      "type": "object",
+      "description": "Temporal validity metadata for this edge",
+      "required": ["start_event_id"],
+      "properties": {
+        "start_event_id": {
+          "type": "string",
+          "description": "Event ID that establishes when the edge becomes valid",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "end_event_id": {
+          "description": "Event ID when the edge stops being valid; null for open-ended",
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

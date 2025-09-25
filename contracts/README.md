@@ -24,6 +24,7 @@ See STORY-CDA-IMPORT-002A for manifest validation requirements and `src/Adventor
 Synthetic seed events are defined under `events/seed/` with schemas for:
 - `manifest-validated.v1.json` - Emitted after successful manifest validation
 - `entity-created.v1.json` - Emitted when entities are ingested (STORY-CDA-IMPORT-002B)
+- `edge-created.v1.json` - Emitted when edges are ingested (STORY-CDA-IMPORT-002C)
 
 ## Entity Schemas (NEW - STORY-CDA-IMPORT-002B)
 
@@ -51,3 +52,9 @@ Validator script: `python scripts/validate_prompts_and_contracts.py --only-contr
 - Both schemas include comprehensive provenance metadata per ADR-0011
 - Deterministic ordering support for reproducible imports
 - Collision detection with hash-based idempotency checking
+
+## Edge Schemas (NEW - STORY-CDA-IMPORT-002C)
+
+- Added `edges/edge.v1.json` schema enforcing allowed edge relationship types, referential identifiers, and temporal validity structure.
+- Added `events/seed/edge-created.v1.json` schema for synthetic edge ingestion events with provenance metadata.
+- Edge taxonomy lives in `edges/edge-type-taxonomy.json`; importer validation enforces required attributes per relationship type.

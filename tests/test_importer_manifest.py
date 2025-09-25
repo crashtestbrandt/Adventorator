@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from Adventorator.importer import ImporterError, ManifestPhase, create_manifest_phase, validate_event_payload_schema
+from Adventorator.importer import (
+    ImporterError,
+    ManifestPhase,
+    create_manifest_phase,
+    validate_event_payload_schema,
+)
 
 
 class TestManifestPhase:
@@ -24,7 +29,7 @@ class TestManifestPhase:
         """Test that validation fails when feature flag is disabled."""
         phase = ManifestPhase(features_importer_enabled=False)
         manifest_path = Path("tests/fixtures/import/manifest/happy-path/package.manifest.json")
-        
+
         with pytest.raises(ImporterError, match="Importer feature flag is disabled"):
             phase.validate_and_register(manifest_path)
 
@@ -32,31 +37,31 @@ class TestManifestPhase:
         """Test successful manifest validation and registration."""
         phase = ManifestPhase(features_importer_enabled=True)
         manifest_path = Path("tests/fixtures/import/manifest/happy-path/package.manifest.json")
-        
+
         result = phase.validate_and_register(manifest_path)
-        
+
         # Check structure
         assert "manifest" in result
         assert "manifest_hash" in result
         assert "event_payload" in result
         assert "import_log_entry" in result
-        
+
         # Check manifest data
         manifest = result["manifest"]
         assert manifest["package_id"] == "01JAR9WYH41R8TFM6Z0X5E7QKJ"
         assert manifest["schema_version"] == 1
-        
+
         # Check manifest hash
         manifest_hash = result["manifest_hash"]
         assert len(manifest_hash) == 64  # SHA-256 hex
-        
+
         # Check event payload
         event_payload = result["event_payload"]
         assert event_payload["package_id"] == manifest["package_id"]
         assert event_payload["manifest_hash"] == manifest_hash
         assert event_payload["schema_version"] == manifest["schema_version"]
         assert event_payload["ruleset_version"] == manifest["ruleset_version"]
-        
+
         # Check import log entry
         log_entry = result["import_log_entry"]
         assert log_entry["phase"] == "manifest"
@@ -70,23 +75,23 @@ class TestManifestPhase:
         """Test that tampered manifest validation fails."""
         phase = ManifestPhase(features_importer_enabled=True)
         manifest_path = Path("tests/fixtures/import/manifest/tampered/package.manifest.json")
-        
+
         with pytest.raises(ImporterError, match="Manifest validation failed"):
             phase.validate_and_register(manifest_path)
 
     def test_emit_seed_event(self):
         """Test synthetic event emission."""
         phase = ManifestPhase(features_importer_enabled=True)
-        
+
         event_payload = {
             "package_id": "01JAR9WYH41R8TFM6Z0X5E7QKJ",
             "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             "schema_version": 1,
-            "ruleset_version": "1.2.3"
+            "ruleset_version": "1.2.3",
         }
-        
+
         event_envelope = phase.emit_seed_event(event_payload)
-        
+
         assert event_envelope["event_type"] == "seed.manifest.validated"
         assert event_envelope["payload"] == event_payload
         assert "timestamp" in event_envelope
@@ -98,7 +103,7 @@ class TestManifestPhase:
         """Test handling of nonexistent manifest file."""
         phase = ManifestPhase(features_importer_enabled=True)
         nonexistent_path = Path("/tmp/nonexistent-manifest.json")
-        
+
         with pytest.raises(ImporterError, match="Manifest validation failed"):
             phase.validate_and_register(nonexistent_path)
 
@@ -112,9 +117,9 @@ class TestEventPayloadValidation:
             "package_id": "01JAR9WYH41R8TFM6Z0X5E7QKJ",
             "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             "schema_version": 1,
-            "ruleset_version": "1.2.3"
+            "ruleset_version": "1.2.3",
         }
-        
+
         # Should not raise an exception (may skip if jsonschema not available)
         validate_event_payload_schema(payload)
 
@@ -124,13 +129,13 @@ class TestEventPayloadValidation:
             "package_id": "01JAR9WYH41R8TFM6Z0X5E7QKJ",
             # Missing other required fields
         }
-        
+
         # This test may pass if jsonschema is not available
         try:
             import jsonschema  # noqa: F401
         except ImportError:
             pytest.skip("jsonschema not available")
-        
+
         with pytest.raises(ImporterError, match="Event payload validation failed"):
             validate_event_payload_schema(payload)
 
@@ -138,17 +143,17 @@ class TestEventPayloadValidation:
         """Test validation fails for invalid ULID format."""
         payload = {
             "package_id": "not-a-valid-ulid",
-            "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", 
+            "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             "schema_version": 1,
-            "ruleset_version": "1.2.3"
+            "ruleset_version": "1.2.3",
         }
-        
+
         # This test may pass if jsonschema is not available
         try:
             import jsonschema  # noqa: F401
         except ImportError:
             pytest.skip("jsonschema not available")
-        
+
         with pytest.raises(ImporterError, match="Event payload validation failed"):
             validate_event_payload_schema(payload)
 
@@ -160,16 +165,16 @@ class TestIntegrationFlow:
         """Test complete flow from validation to event emission."""
         phase = ManifestPhase(features_importer_enabled=True)
         manifest_path = Path("tests/fixtures/import/manifest/happy-path/package.manifest.json")
-        
+
         # Step 1: Validate and register
         result = phase.validate_and_register(manifest_path)
-        
+
         # Step 2: Validate event payload schema
         validate_event_payload_schema(result["event_payload"])
-        
+
         # Step 3: Emit synthetic event
         event_envelope = phase.emit_seed_event(result["event_payload"])
-        
+
         # Verify complete flow
         assert event_envelope["event_type"] == "seed.manifest.validated"
         assert event_envelope["payload"]["package_id"] == result["manifest"]["package_id"]
@@ -179,11 +184,11 @@ class TestIntegrationFlow:
         """Test that same manifest produces same hash for replay determinism."""
         phase = ManifestPhase(features_importer_enabled=True)
         manifest_path = Path("tests/fixtures/import/manifest/happy-path/package.manifest.json")
-        
+
         # Run validation twice
         result1 = phase.validate_and_register(manifest_path)
         result2 = phase.validate_and_register(manifest_path)
-        
+
         # Should produce identical results for replay determinism
         assert result1["manifest_hash"] == result2["manifest_hash"]
         assert result1["event_payload"] == result2["event_payload"]
