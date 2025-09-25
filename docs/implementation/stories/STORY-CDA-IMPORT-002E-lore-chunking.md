@@ -24,9 +24,9 @@ Process lore markdown files with front-matter metadata, chunk content determinis
 - [ ] **TASK-CDA-IMPORT-AUD-15B — Feature flag gating.** Introduce/validate optional embedding metadata flag; tests assert disabled state ignores embedding field while still hashing consistently.
 
 ## Definition of Ready
-- Front-matter schema reviewed with narrative design + retrieval stakeholders.
-- Reference lore files (simple + complex) curated for testing, including non-ASCII characters.
-- Decision on optional embedding metadata flag documented (name, default state).
+- Front-matter schema reviewed with narrative design + retrieval stakeholders (see readiness review summary for attendee sign-off and schema field confirmations).【F:docs/implementation/stories/readiness/STORY-CDA-IMPORT-002E-front-matter-review.md†L1-L35】
+- Reference lore files (simple + complex) curated for testing, including non-ASCII characters, available under `tests/fixtures/import/lore/` with README guidance.【F:tests/fixtures/import/lore/README.md†L1-L24】【F:tests/fixtures/import/lore/simple/moonlight-tavern.md†L1-L21】【F:tests/fixtures/import/lore/complex/clockwork-archive.md†L1-L35】
+- Decision on optional embedding metadata flag documented (`features.importer_embeddings`, default `false`).【F:docs/implementation/stories/readiness/STORY-CDA-IMPORT-002E-embedding-flag-decision.md†L1-L24】
 
 ## Definition of Done
 - Chunker implementation + tests merged with deterministic ordering and Unicode normalization coverage.
