@@ -1,0 +1,12 @@
+{
+  "stable_id": "01JAR9WYH41R8TFM6Z0X5E7ORG",
+  "kind": "organization",
+  "name": "Archivist Guild",
+  "tags": ["organization", "knowledge"],
+  "affordances": ["appoint", "audit", "charter"],
+  "traits": ["hierarchical", "disciplined"],
+  "props": {
+    "headquarters": "Temporal Archive Atrium",
+    "founded": "2987"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "npc.resides_in.location": {
+    "description": "NPC lives or is stationed at a specific location.",
+    "required_attributes": [
+      "relationship_context"
+    ],
+    "optional_attributes": [
+      "duty_schedule"
+    ],
+    "validity_required": false
+  },
+  "organization.controls.location": {
+    "description": "Organization exerts operational control over a location.",
+    "required_attributes": [
+      "charter_clause",
+      "oversight"
+    ],
+    "optional_attributes": [],
+    "validity_required": true
+  }
+}
