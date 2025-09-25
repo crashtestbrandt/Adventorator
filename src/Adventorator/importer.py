@@ -495,12 +495,11 @@ class EdgePhase:
             except (json.JSONDecodeError, OSError) as exc:
                 raise EdgeValidationError(f"Failed to parse edge file {rel_path}: {exc}") from exc
 
+            suffix_template = "#{}"
             if isinstance(payload, list):
                 records = payload
-                suffix_template = "#{}"
             elif isinstance(payload, dict):
                 records = [payload]
-                suffix_template = "#{}"
             else:
                 raise EdgeValidationError(
                     f"Edge file {rel_path} must contain an object or array of edge definitions"
