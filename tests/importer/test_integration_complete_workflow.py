@@ -119,7 +119,7 @@ class TestCompleteImportWorkflow:
                 assert len(manifest_hash) == 64  # SHA-256 hex
 
             except Exception as e:
-                # Manifest validation may fail due to fixture simplifications
+                # Manifest validation may fail due to missing dependencies or other fixture simplifications
                 print(f"⚠ Manifest validation failed (expected): {e}")
                 validated_manifest = manifest_data
 
