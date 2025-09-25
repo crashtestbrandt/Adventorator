@@ -1,0 +1,99 @@
+{
+  "version": "1.0.0",
+  "source": {
+    "package": "wanderhome-campaign",
+    "revision": "2025-02-14",
+    "provenance": {
+      "manifest_path": "packages/wanderhome/package.manifest.json",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "tags": [
+    {
+      "tag_id": "action.attack",
+      "category": "action",
+      "slug": "attack",
+      "display_name": "Attack",
+      "synonyms": ["attack", "strike", "swing"],
+      "audience": ["player", "gm"],
+      "gating": {
+        "ruleset_version": "v2.7",
+        "requires_feature": null
+      },
+      "metadata": {
+        "description": "Direct offensive action.",
+        "canonical_affordance": "affordance.attack.allowed"
+      }
+    },
+    {
+      "tag_id": "action.cast_spell",
+      "category": "action",
+      "slug": "cast-spell",
+      "display_name": "Cast Spell",
+      "synonyms": ["cast", "spell", "cast spell"],
+      "audience": ["player"],
+      "gating": {
+        "ruleset_version": "v2.7",
+        "requires_feature": "magic-enabled"
+      },
+      "metadata": {
+        "description": "Casts a prepared spell.",
+        "canonical_affordance": "affordance.magic.spellcasting"
+      }
+    },
+    {
+      "tag_id": "target.door",
+      "category": "target",
+      "slug": "door",
+      "display_name": "Door",
+      "synonyms": ["door", "gate"],
+      "audience": ["player", "gm"],
+      "gating": {
+        "ruleset_version": "v2.7",
+        "requires_feature": null
+      },
+      "metadata": {
+        "description": "Door targets within the dungeon map.",
+        "canonical_affordance": "affordance.environment.openable"
+      }
+    }
+  ],
+  "affordances": [
+    {
+      "affordance_id": "affordance.attack.allowed",
+      "category": "combat",
+      "slug": "attack-allowed",
+      "applies_to": ["tag:action.attack"],
+      "gating": {
+        "audience": "player",
+        "requires_feature": null,
+        "ruleset_version": "v2.7"
+      },
+      "metadata": {
+        "effect": "Allows melee attack rolls",
+        "improbability_drive": {
+          "intent_frame": "attack",
+          "confidence": 0.97
+        }
+      }
+    },
+    {
+      "affordance_id": "affordance.environment.openable",
+      "category": "environment",
+      "slug": "environment-openable",
+      "applies_to": ["tag:target.door"],
+      "gating": {
+        "audience": "gm",
+        "requires_feature": null,
+        "ruleset_version": "v2.7"
+      },
+      "metadata": {
+        "effect": "Door can be opened or closed",
+        "improbability_drive": {
+          "intent_frame": "manipulate",
+          "confidence": 0.88
+        }
+      }
+    }
+  ]
+}
