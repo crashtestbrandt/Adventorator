@@ -66,9 +66,8 @@ class TestManifestValidation:
         errors = validate_content_hashes(manifest, package_root)
         # Should detect hash mismatch for entities/npc.json
         assert len(errors) > 0, "Expected hash validation errors for tampered fixture"
-        assert any("entities/npc.json" in error for error in errors), (
-            f"Expected npc.json hash error, got: {errors}"
-        )
+        expected_error_message = f"Expected npc.json hash error, got: {errors}"
+        assert any("entities/npc.json" in error for error in errors), expected_error_message
 
     def test_validate_content_hashes_missing_file(self):
         """Test content hash validation detects missing files."""

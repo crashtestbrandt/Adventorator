@@ -46,7 +46,7 @@ class TestEntitySeedEvents:
 
             # Write entities with intentionally different filename order
             filenames = ["z_bob.json", "a_gate.json", "m_alice.json"]
-            for entity_data, filename in zip(entities_data, filenames, strict=False):
+            for entity_data, filename in zip(entities_data, filenames, strict=True):
                 entity_file = entities_dir / filename
                 with open(entity_file, "w", encoding="utf-8") as f:
                     json.dump(entity_data, f)
@@ -193,9 +193,9 @@ class TestEntitySeedEvents:
             for filename in ["entity1.json", "entity2.json"]:
                 entity_file = entities_dir / filename
                 with open(entity_file, "w", encoding="utf-8") as f:
+                    # Use compact separators to ensure identical JSON output.
+                    # This keeps hash-based duplicate detection deterministic.
                     json.dump(entity_data, f, separators=(",", ":"))
-                # Use compact separators to ensure identical JSON output.
-                # This keeps hash-based duplicate detection deterministic.
 
             manifest = {"package_id": "01JAR9WYH41R8TFM6Z0X5E7QKJ"}
 

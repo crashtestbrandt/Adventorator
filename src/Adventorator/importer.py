@@ -524,14 +524,8 @@ class EdgePhase:
                 for attr in required_attrs:
                     if attr not in attributes:
                         raise EdgeValidationError(
-                            (
-                                "Edge {stable_id} missing required attribute "
-                                "'{attr}' for type {edge_type}"
-                            ).format(
-                                stable_id=record.get("stable_id"),
-                                attr=attr,
-                                edge_type=edge_type,
-                            )
+                            f"Edge {record.get('stable_id')} missing required attribute "
+                            f"'{attr}' for type {edge_type}"
                         )
 
                 validity_required = taxonomy_entry.get("validity_required", False)
@@ -549,11 +543,11 @@ class EdgePhase:
                         )
                     end_event = validity.get("end_event_id")
                     if isinstance(end_event, str) and end_event < start_event:
-                        raise EdgeValidationError(
-                            "Edge {stable_id} end_event_id must not precede start_event_id".format(
-                                stable_id=record.get("stable_id")
-                            )
+                        message = (
+                            f"Edge {record.get('stable_id')} end_event_id must not precede "
+                            "start_event_id"
                         )
+                        raise EdgeValidationError(message)
 
                 src_ref = record.get("src_ref")
                 dst_ref = record.get("dst_ref")
@@ -562,11 +556,11 @@ class EdgePhase:
                 ]
                 if missing_refs:
                     missing_display = ", ".join(missing_refs)
-                    raise EdgeValidationError(
-                        ("Edge {stable_id} missing entity reference(s): {missing}").format(
-                            stable_id=record.get("stable_id"), missing=missing_display
-                        )
+                    message = (
+                        f"Edge {record.get('stable_id')} missing entity reference(s): "
+                        f"{missing_display}"
                     )
+                    raise EdgeValidationError(message)
 
                 canonical_payload = json.dumps(
                     record, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -659,11 +653,11 @@ class EdgePhase:
         for edge in edges:
             provenance = edge.get("provenance")
             if provenance is None:
-                raise ValueError(
-                    (
-                        "Edge {stable_id} missing provenance metadata required for event emission"
-                    ).format(stable_id=edge.get("stable_id"))
+                message = (
+                    f"Edge {edge.get('stable_id')} missing provenance metadata required "
+                    "for event emission"
                 )
+                raise ValueError(message)
 
             payload: dict[str, Any] = {
                 "stable_id": edge["stable_id"],
