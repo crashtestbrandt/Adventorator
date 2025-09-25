@@ -24,9 +24,9 @@ Ingest relationship definitions (`edges/*.json`) that connect previously loaded 
 - [ ] **TASK-CDA-IMPORT-LOG-09B — Transaction rollback coverage.** Write integration test demonstrating failure on missing reference causes entire edge phase rollback (no partial ImportLog or events).
 
 ## Definition of Ready
-- Entity ingestion outputs (stable_id registry, provenance mapping) accessible as dependency for edge parser.
-- Edge type taxonomy agreed with rules team; mapping from type to required attributes documented.
-- Fixtures representing multi-phase packages (entities + edges) ready for tests.
+- [x] Entity ingestion outputs (stable_id registry, provenance mapping) accessible as dependency for edge parser. Documented in [edge ingestion readiness evidence](../import/edge-ingestion-readiness.md) and exercised by [`tests/importer/test_edge_readiness.py`](../../../tests/importer/test_edge_readiness.py).
+- [x] Edge type taxonomy agreed with rules team; mapping from type to required attributes documented in [`edge-type-taxonomy.md`](../import/edge-type-taxonomy.md) with machine-readable source [`contracts/edges/edge-type-taxonomy.json`](../../../contracts/edges/edge-type-taxonomy.json).
+- [x] Fixtures representing multi-phase packages (entities + edges) ready for tests, provided under [`tests/fixtures/import/edge_package`](../../../tests/fixtures/import/edge_package/README.md) and validated by the readiness test suite.
 
 ## Definition of Done
 - Contracts validated in CI; fixtures demonstrate both success and failure cases.

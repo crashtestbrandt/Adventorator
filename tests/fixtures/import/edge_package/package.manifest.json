@@ -1,0 +1,16 @@
+{
+  "package_id": "01JAR9WYH41R8TFM6Z0X5E7EDGE",
+  "schema_version": 1,
+  "engine_contract_range": {
+    "min": "1.2.0",
+    "max": "1.2.0"
+  },
+  "dependencies": [],
+  "content_index": {},
+  "ruleset_version": "1.2.3",
+  "recommended_flags": {
+    "features.importer.entities": true,
+    "features.importer.edges": true
+  },
+  "signatures": []
+}
