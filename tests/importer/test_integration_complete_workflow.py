@@ -229,9 +229,18 @@ class TestCompleteImportWorkflow:
             package_root = Path(temp_dir)
             manifest = {"package_id": "01JAR9WYH41R8TFM6Z0X5E7QKJ"}
 
-            # Both phases should respect feature flag
+            # All phases should respect feature flag
+            manifest_phase = ManifestPhase(features_importer_enabled=False)
             entity_phase = EntityPhase(features_importer_enabled=False)
             edge_phase = EdgePhase(features_importer_enabled=False)
+
+            try:
+                manifest_phase.validate_and_register(
+                    package_root / "package.manifest.json", package_root
+                )
+                raise AssertionError("Manifest phase should not run when feature flag disabled")
+            except Exception as e:
+                assert "feature flag is disabled" in str(e)
 
             try:
                 entity_phase.parse_and_validate_entities(package_root, manifest)
