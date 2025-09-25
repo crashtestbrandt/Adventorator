@@ -573,7 +573,7 @@ class EdgePhase:
                             f"got {file_hash}"
                         )
 
-                stable_id = record.get("stable_id")
+                # stable_id already retrieved earlier; use existing value
                 if not isinstance(stable_id, str) or not stable_id:
                     raise EdgeValidationError(f"Edge definition in {source_path} missing stable_id")
 
