@@ -66,20 +66,15 @@ class TestManifestValidation:
         errors = validate_content_hashes(manifest, package_root)
         # Should detect hash mismatch for entities/npc.json
         assert len(errors) > 0, "Expected hash validation errors for tampered fixture"
-        expected_error_message = f"Expected npc.json hash error, got: {errors}"
-        assert any("entities/npc.json" in error for error in errors), expected_error_message
+        has_npc_error = any("entities/npc.json" in err for err in errors)
+        assert has_npc_error, f"Expected npc hash error: {errors}"
 
     def test_validate_content_hashes_missing_file(self):
         """Test content hash validation detects missing files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             package_root = Path(tmpdir)
-            manifest = {
-                "content_index": {
-                    "missing.txt": (
-                        "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-                    )
-                }
-            }
+            missing_hash = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+            manifest = {"content_index": {"missing.txt": missing_hash}}
 
             errors = validate_content_hashes(manifest, package_root)
             assert len(errors) == 1
