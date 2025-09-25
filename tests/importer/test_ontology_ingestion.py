@@ -160,7 +160,9 @@ class TestOntologyIngestion:
             assert len(affordances) == 0
 
             # Check duplicate handling
-            tag_skips, affordance_skips = phase.check_for_duplicates_and_conflicts(tags, affordances, "test-package-001")
+            tag_skips, affordance_skips = phase.check_for_duplicates_and_conflicts(
+                tags, affordances, "test-package-001"
+            )
             assert tag_skips == 1  # One duplicate should be skipped
             assert affordance_skips == 0
 

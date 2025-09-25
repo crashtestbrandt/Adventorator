@@ -79,10 +79,10 @@
               "enum": ["attack", "move", "cast", "manipulate", "social", "explore"]
             },
             "confidence": {
-              "type": "number",
-              "description": "Confidence threshold for intent matching",
-              "minimum": 0.0,
-              "maximum": 1.0
+              "type": "integer",
+              "description": "Confidence threshold for intent matching (0-100, representing percentage)",
+              "minimum": 0,
+              "maximum": 100
             }
           },
           "additionalProperties": false

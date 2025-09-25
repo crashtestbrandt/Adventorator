@@ -826,7 +826,10 @@ class OntologyValidationError(Exception):
 
 
 class OntologyPhase:
-    """Handles ontology (tags and affordances) parsing and registration for STORY-CDA-IMPORT-002D."""
+    """Handles ontology (tags and affordances) parsing and registration.
+    
+    Implements STORY-CDA-IMPORT-002D requirements.
+    """
 
     def __init__(self, features_importer_enabled: bool = True):
         self.features_importer_enabled = features_importer_enabled
@@ -880,7 +883,9 @@ class OntologyPhase:
                 normalized = unicodedata.normalize("NFC", content)
                 payload = json.loads(normalized)
             except (json.JSONDecodeError, OSError) as exc:
-                raise OntologyValidationError(f"Failed to parse ontology file {rel_path}: {exc}") from exc
+                raise OntologyValidationError(
+                    f"Failed to parse ontology file {rel_path}: {exc}"
+                ) from exc
 
             # Extract tags and affordances from the payload
             file_tags = payload.get("tags", [])
@@ -922,10 +927,15 @@ class OntologyPhase:
             normalized["slug"] = slug
 
         # Ensure required fields are present
-        required_fields = ["tag_id", "category", "slug", "display_name", "synonyms", "audience", "gating"]
+        required_fields = [
+            "tag_id", "category", "slug", "display_name", 
+            "synonyms", "audience", "gating"
+        ]
         for field in required_fields:
             if field not in normalized:
-                raise OntologyValidationError(f"Missing required field '{field}' in tag from {source_path}")
+                raise OntologyValidationError(
+                    f"Missing required field '{field}' in tag from {source_path}"
+                )
 
         # Normalize synonyms to lowercase
         if "synonyms" in normalized and isinstance(normalized["synonyms"], list):
@@ -933,7 +943,9 @@ class OntologyPhase:
 
         return normalized
 
-    def _normalize_affordance(self, affordance_data: dict[str, Any], source_path: str) -> dict[str, Any]:
+    def _normalize_affordance(
+        self, affordance_data: dict[str, Any], source_path: str
+    ) -> dict[str, Any]:
         """Normalize affordance data with proper slug generation and validation."""
         # Copy to avoid mutating original
         normalized = dict(affordance_data)
@@ -947,7 +959,9 @@ class OntologyPhase:
         required_fields = ["affordance_id", "category", "slug", "applies_to", "gating"]
         for field in required_fields:
             if field not in normalized:
-                raise OntologyValidationError(f"Missing required field '{field}' in affordance from {source_path}")
+                raise OntologyValidationError(
+                    f"Missing required field '{field}' in affordance from {source_path}"
+                )
 
         return normalized
 
@@ -1020,7 +1034,8 @@ class OntologyPhase:
         # Check tags for duplicates/conflicts
         for tag in tags:
             key = (tag["tag_id"], tag["category"])
-            hash_data = {k: v for k, v in tag.items() if k != "provenance"}  # Exclude provenance from hash
+            # Exclude provenance from hash
+            hash_data = {k: v for k, v in tag.items() if k != "provenance"}
             current_hash = compute_canonical_hash(hash_data)
             
             if key in tag_hashes:
@@ -1037,8 +1052,10 @@ class OntologyPhase:
                 else:
                     # Conflicting definition - hard failure
                     raise OntologyValidationError(
-                        f"Conflicting tag definition for {tag['tag_id']} in category {tag['category']}: "
-                        f"existing hash {tag_hashes[key].hex()}, new hash {current_hash.hex()}"
+                        f"Conflicting tag definition for {tag['tag_id']} "
+                        f"in category {tag['category']}: "
+                        f"existing hash {tag_hashes[key].hex()}, "
+                        f"new hash {current_hash.hex()}"
                     )
             else:
                 tag_hashes[key] = current_hash
@@ -1046,14 +1063,19 @@ class OntologyPhase:
         # Check affordances for duplicates/conflicts
         for affordance in affordances:
             key = (affordance["affordance_id"], affordance["category"])
-            hash_data = {k: v for k, v in affordance.items() if k != "provenance"}  # Exclude provenance from hash
+            # Exclude provenance from hash
+            hash_data = {k: v for k, v in affordance.items() if k != "provenance"}
             current_hash = compute_canonical_hash(hash_data)
             
             if key in affordance_hashes:
                 if affordance_hashes[key] == current_hash:
                     # Identical duplicate - idempotent skip
                     affordance_skips += 1
-                    inc_counter("importer.affordances.skipped_idempotent", value=1, package_id=package_id)
+                    inc_counter(
+                        "importer.affordances.skipped_idempotent", 
+                        value=1, 
+                        package_id=package_id
+                    )
                     emit_structured_log(
                         "ontology_duplicate_skip",
                         type="affordance",
@@ -1063,8 +1085,10 @@ class OntologyPhase:
                 else:
                     # Conflicting definition - hard failure
                     raise OntologyValidationError(
-                        f"Conflicting affordance definition for {affordance['affordance_id']} in category {affordance['category']}: "
-                        f"existing hash {affordance_hashes[key].hex()}, new hash {current_hash.hex()}"
+                        f"Conflicting affordance definition for "
+                        f"{affordance['affordance_id']} in category {affordance['category']}: "
+                        f"existing hash {affordance_hashes[key].hex()}, "
+                        f"new hash {current_hash.hex()}"
                     )
             else:
                 affordance_hashes[key] = current_hash

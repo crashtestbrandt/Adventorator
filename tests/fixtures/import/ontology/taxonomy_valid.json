@@ -73,7 +73,7 @@
         "effect": "Allows melee attack rolls",
         "improbability_drive": {
           "intent_frame": "attack",
-          "confidence": 0.97
+          "confidence": 97
         }
       }
     },
@@ -91,7 +91,7 @@
         "effect": "Door can be opened or closed",
         "improbability_drive": {
           "intent_frame": "manipulate",
-          "confidence": 0.88
+          "confidence": 88
         }
       }
     }
