@@ -24,9 +24,9 @@ Load ontology definitions for tags and affordances from package artifacts (`onto
 - [ ] **TASK-CDA-IMPORT-METRIC-12B — Structured logging.** Ensure logs capture counts, duplicates, conflicts with manifest hash for correlation.
 
 ## Definition of Ready
-- Ontology data model decisions (tag categories, affordance structure) approved with gameplay/rules stakeholders.
-- Fixtures representing taxonomy variations prepared and validated manually for baseline.
-- Downstream retrieval consumers confirm required metadata fields (audience, synonyms, gating) to include in schema.
+- Ontology data model decisions (tag categories, affordance structure) approved with gameplay/rules stakeholders. ✅ Reviewed and logged in the [Readiness Execution Log](./readiness/STORY-CDA-IMPORT-002D-ontology-registration-readiness.md#1-stakeholder-approved-ontology-contract-blueprint) with cross-references to ARCH-CDA-001, ADR-0011, and EPIC-IPD-001 approvals.
+- Fixtures representing taxonomy variations prepared and validated manually for baseline. ✅ Canonical bundles (`happy-path`, `duplicate-identical`, `conflicting-definition`) live under [`tests/fixtures/import/ontology/`](../../../tests/fixtures/import/ontology/) with manual validation steps documented in the readiness log.
+- Downstream retrieval consumers confirm required metadata fields (audience, synonyms, gating) to include in schema. ✅ Retrieval alignment captured in the readiness log and [2025-10-05 Ontology Alignment Review](./readiness/meetings/2025-10-05-ontology-alignment.md).
 
 ## Definition of Done
 - Contracts validated; contract validator integrated with new schemas.

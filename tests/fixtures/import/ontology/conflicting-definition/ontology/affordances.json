@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "affordances": [
+    {
+      "slug": "affordance.attack.basic",
+      "display_name": "Basic Melee Attack",
+      "tags": ["interaction.attack.melee"],
+      "audience": {"allow": ["player"]},
+      "ruleset_versions": ["core-rules@1.2.3"],
+      "metadata": {"action_cost": 2},
+      "provenance": {
+        "package_id": "01J5ZQ9GQ4S1A8T4R9ZTP3H2VQ",
+        "source_path": "ontology/affordances.json",
+        "file_hash": "sha256:ff12c7385442ce94062da27641fcd0ec4fb839e8125f70fc291b990e10b08f3f",
+        "import_strategy": "ontology"
+      }
+    },
+    {
+      "slug": "affordance.cast.evocation",
+      "display_name": "Evocation Casting",
+      "tags": ["interaction.cast.evocation"],
+      "audience": {"allow": ["player"]},
+      "ruleset_versions": ["core-rules@1.2.3"],
+      "metadata": {"mana_cost": 3},
+      "provenance": {
+        "package_id": "01J5ZQ9GQ4S1A8T4R9ZTP3H2VQ",
+        "source_path": "ontology/affordances.json",
+        "file_hash": "sha256:ff12c7385442ce94062da27641fcd0ec4fb839e8125f70fc291b990e10b08f3f",
+        "import_strategy": "ontology"
+      }
+    }
+  ]
+}

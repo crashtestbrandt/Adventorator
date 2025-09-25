@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "tags": [
+    {
+      "category": "interaction",
+      "slug": "interaction.attack.melee",
+      "display_name": "Close Quarters Strike",
+      "synonyms": ["smash", "pummel"],
+      "audience": {"allow": ["player", "gm"]},
+      "ruleset_versions": ["core-rules@1.2.3"],
+      "metadata": {"ask_report_key": "interaction.attack.melee"},
+      "provenance": {
+        "package_id": "01J5ZQ9GQ4S1A8T4R9ZTP3H2VQ",
+        "source_path": "ontology/tags.json",
+        "file_hash": "sha256:aa2c1b7f629a864b966cc52c8eb4476dd3a4fba07c04b7f1f9f1d744052f53af",
+        "import_strategy": "ontology"
+      }
+    },
+    {
+      "category": "interaction",
+      "slug": "interaction.cast.evocation",
+      "display_name": "Evocation Spell",
+      "synonyms": ["cast", "spell", "blast"],
+      "audience": {"allow": ["player", "gm"]},
+      "ruleset_versions": ["core-rules@1.2.3"],
+      "metadata": {"ask_report_key": "interaction.cast.evocation"},
+      "provenance": {
+        "package_id": "01J5ZQ9GQ4S1A8T4R9ZTP3H2VQ",
+        "source_path": "ontology/tags.json",
+        "file_hash": "sha256:aa2c1b7f629a864b966cc52c8eb4476dd3a4fba07c04b7f1f9f1d744052f53af",
+        "import_strategy": "ontology"
+      }
+    },
+    {
+      "category": "safety",
+      "slug": "safety.content.fire",
+      "display_name": "Fire Content Warning",
+      "synonyms": ["fire", "burn", "flame"],
+      "audience": {"allow": ["player", "gm", "system"]},
+      "ruleset_versions": ["core-rules@1.2.3"],
+      "metadata": {"ask_report_key": "safety.content.fire"},
+      "provenance": {
+        "package_id": "01J5ZQ9GQ4S1A8T4R9ZTP3H2VQ",
+        "source_path": "ontology/tags.json",
+        "file_hash": "sha256:aa2c1b7f629a864b966cc52c8eb4476dd3a4fba07c04b7f1f9f1d744052f53af",
+        "import_strategy": "ontology"
+      }
+    }
+  ]
+}
