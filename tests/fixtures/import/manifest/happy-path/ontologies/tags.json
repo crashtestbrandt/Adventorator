@@ -1,7 +1,7 @@
 {
   "tags": [
     {
-      "tag_id": "tag.lore.intro",
+      "tag_id": "lore.intro",
       "category": "lore",
       "slug": "lore-intro",
       "display_name": "Lore Intro",
@@ -19,11 +19,11 @@
   ],
   "affordances": [
     {
-      "affordance_id": "affordance.greet",
+      "affordance_id": "affordance.interaction.greet",
       "category": "interaction",
       "slug": "greet",
       "applies_to": [
-        "tag:tag.lore.intro"
+        "tag:lore.intro"
       ],
       "gating": {
         "ruleset_version": "v1.2.3",

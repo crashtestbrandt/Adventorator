@@ -16,7 +16,7 @@
     "category": {
       "type": "string",
       "description": "Tag category classification",
-      "enum": ["action", "target", "modifier", "trait"],
+      "enum": ["action", "target", "modifier", "trait", "lore", "interaction"],
       "minLength": 1,
       "maxLength": 32
     },
@@ -62,7 +62,7 @@
         "ruleset_version": {
           "type": "string",
           "description": "Minimum ruleset version required",
-          "pattern": "^v\\d+\\.\\d+$"
+          "pattern": "^v\\d+\\.\\d+(\\.\\d+)?$"
         },
         "requires_feature": {
           "type": ["string", "null"],

@@ -15,7 +15,7 @@
     "entities/npc.json": "7d478136a27ad013caa5a225cbc4629998bb38b29c133b5c11a87803ceb7a1e6",
     "edges/relationship.json": "204c849aada1eeac9abd23e522250bc66c37f5c39564da739ef0139632359b42",
     "lore/intro.md": "7ff7d46f750f96a4ddc369b116710da383e64f0dd119abf53a205eb29a3c9388",
-    "ontologies/tags.json": "17cef9477e3d81838b005e4d04240fd733defe760e7a645671d56120490a5de6"
+    "ontologies/tags.json": "534c01affa0e98466e2817389189dd3d1cd0ee65982c89d093d47f35b7190977"
   },
   "ruleset_version": "1.2.3",
   "recommended_flags": {

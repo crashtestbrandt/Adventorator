@@ -16,7 +16,7 @@
     "category": {
       "type": "string",
       "description": "Affordance category classification",
-      "enum": ["combat", "environment", "social", "magic", "exploration"],
+      "enum": ["combat", "environment", "social", "magic", "exploration", "interaction"],
       "minLength": 1,
       "maxLength": 32
     },
@@ -50,7 +50,7 @@
         "ruleset_version": {
           "type": "string",
           "description": "Minimum ruleset version required",
-          "pattern": "^v\\d+\\.\\d+$"
+          "pattern": "^v\\d+\\.\\d+(\\.\\d+)?$"
         },
         "requires_feature": {
           "type": ["string", "null"],

@@ -158,49 +158,41 @@ class TestStateFoldVerification:
         if not manifest_path.exists():
             pytest.skip("Golden manifest fixture not available")
             
-        try:
-            manifest_result = manifest_phase.validate_and_register(manifest_path, fixture_root)
+        manifest_result = manifest_phase.validate_and_register(manifest_path, fixture_root)
 
-            context = ImporterRunContext()
-            context.record_manifest(manifest_result)
+        context = ImporterRunContext()
+        context.record_manifest(manifest_result)
 
-            manifest_with_hash = dict(manifest_result["manifest"])
-            manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
+        manifest_with_hash = dict(manifest_result["manifest"])
+        manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
 
-            entity_phase = EntityPhase(features_importer_enabled=True)
-            entities = entity_phase.parse_and_validate_entities(fixture_root, manifest_with_hash)
-            context.record_entities(entities)
+        entity_phase = EntityPhase(features_importer_enabled=True)
+        entities = entity_phase.parse_and_validate_entities(fixture_root, manifest_with_hash)
+        context.record_entities(entities)
 
-            edge_phase = EdgePhase(features_importer_enabled=True)
-            edges = edge_phase.parse_and_validate_edges(fixture_root, manifest_with_hash, entities)
-            context.record_edges(edges)
+        edge_phase = EdgePhase(features_importer_enabled=True)
+        edges = edge_phase.parse_and_validate_edges(fixture_root, manifest_with_hash, entities)
+        context.record_edges(edges)
 
-            ontology_phase = OntologyPhase(features_importer_enabled=True)
-            tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
-                fixture_root, manifest_with_hash
-            )
-            context.record_ontology(tags, affordances, ontology_logs)
+        ontology_phase = OntologyPhase(features_importer_enabled=True)
+        tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
+            fixture_root, manifest_with_hash
+        )
+        context.record_ontology(tags, affordances, ontology_logs)
 
-            lore_phase = LorePhase(features_importer_enabled=True, features_importer_embeddings=True)
-            chunks = lore_phase.parse_and_validate_lore(fixture_root, manifest_with_hash)
-            context.record_lore_chunks(chunks)
+        lore_phase = LorePhase(features_importer_enabled=True, features_importer_embeddings=True)
+        chunks = lore_phase.parse_and_validate_lore(fixture_root, manifest_with_hash)
+        context.record_lore_chunks(chunks)
 
-            # Compute the digest
-            computed_digest = context.compute_state_digest()
-            
-            # Verify digest format
-            assert len(computed_digest) == 64
-            assert all(c in "0123456789abcdef" for c in computed_digest)
-            
-            # Validate against golden fixture
-            assert computed_digest == expected_digest
-            
-        except Exception as e:
-            # Skip if golden fixture has validation issues (pre-existing problem)
-            if "does not match" in str(e) or "ValidationError" in str(e):
-                pytest.skip(f"Golden fixture validation issue (pre-existing): {e}")
-            else:
-                raise
+        # Compute the digest
+        computed_digest = context.compute_state_digest()
+        
+        # Verify digest format
+        assert len(computed_digest) == 64
+        assert all(c in "0123456789abcdef" for c in computed_digest)
+        
+        # Validate against golden fixture
+        assert computed_digest == expected_digest
         
         # If this fails, the golden fixture may need updating or test data adjustment
         # In a real scenario, this would validate against known-good fixture data
@@ -341,63 +333,55 @@ class TestStateFoldVerification:
         
         def run_full_import():
             """Run complete import pipeline and return context + events."""
-            try:
-                manifest_phase = ManifestPhase(features_importer_enabled=True)
-                manifest_result = manifest_phase.validate_and_register(fixture_path, fixture_root)
+            manifest_phase = ManifestPhase(features_importer_enabled=True)
+            manifest_result = manifest_phase.validate_and_register(fixture_path, fixture_root)
 
-                context = ImporterRunContext()
-                context.record_manifest(manifest_result)
+            context = ImporterRunContext()
+            context.record_manifest(manifest_result)
 
-                manifest_with_hash = dict(manifest_result["manifest"])
-                manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
+            manifest_with_hash = dict(manifest_result["manifest"])
+            manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
 
-                # Collect all events from each phase
-                all_events = []
-                
-                # Entity phase
-                entity_phase = EntityPhase(features_importer_enabled=True)
-                entities = entity_phase.parse_and_validate_entities(fixture_root, manifest_with_hash)
-                context.record_entities(entities)
-                entity_events = entity_phase.create_seed_events(entities)
-                all_events.extend(entity_events)
+            # Collect all events from each phase
+            all_events = []
+            
+            # Entity phase
+            entity_phase = EntityPhase(features_importer_enabled=True)
+            entities = entity_phase.parse_and_validate_entities(fixture_root, manifest_with_hash)
+            context.record_entities(entities)
+            entity_events = entity_phase.create_seed_events(entities)
+            all_events.extend(entity_events)
 
-                # Edge phase
-                edge_phase = EdgePhase(features_importer_enabled=True)
-                edges = edge_phase.parse_and_validate_edges(fixture_root, manifest_with_hash, entities)
-                context.record_edges(edges)
-                edge_events = edge_phase.create_seed_events(edges)
-                all_events.extend(edge_events)
+            # Edge phase
+            edge_phase = EdgePhase(features_importer_enabled=True)
+            edges = edge_phase.parse_and_validate_edges(fixture_root, manifest_with_hash, entities)
+            context.record_edges(edges)
+            edge_events = edge_phase.create_seed_events(edges)
+            all_events.extend(edge_events)
 
-                # Ontology phase
-                ontology_phase = OntologyPhase(features_importer_enabled=True)
-                tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
-                    fixture_root, manifest_with_hash
-                )
-                context.record_ontology(tags, affordances, ontology_logs)
-                ontology_event_counts = ontology_phase.emit_seed_events(tags, affordances, manifest_with_hash)
-                # Note: ontology phase returns counts, not actual events, so we track counts
+            # Ontology phase
+            ontology_phase = OntologyPhase(features_importer_enabled=True)
+            tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
+                fixture_root, manifest_with_hash
+            )
+            context.record_ontology(tags, affordances, ontology_logs)
+            ontology_event_counts = ontology_phase.emit_seed_events(tags, affordances, manifest_with_hash)
+            # Note: ontology phase returns counts, not actual events, so we track counts
 
-                # Lore phase
-                lore_phase = LorePhase(features_importer_enabled=True, features_importer_embeddings=True)
-                chunks = lore_phase.parse_and_validate_lore(fixture_root, manifest_with_hash)
-                context.record_lore_chunks(chunks)
-                lore_events = lore_phase.create_seed_events(chunks)
-                all_events.extend(lore_events)
-                
-                # Finalization phase
-                finalization_phase = FinalizationPhase(features_importer_enabled=True)
-                start_time = datetime.now(timezone.utc)
-                finalization_result = finalization_phase.finalize_import(context, start_time)
-                all_events.append(finalization_result["completion_event"])
-                
-                return context, all_events, finalization_result
-                
-            except Exception as e:
-                # Skip if golden fixture has validation issues (pre-existing problem)
-                if "does not match" in str(e) or "ValidationError" in str(e):
-                    pytest.skip(f"Golden fixture validation issue (pre-existing): {e}")
-                else:
-                    raise
+            # Lore phase
+            lore_phase = LorePhase(features_importer_enabled=True, features_importer_embeddings=True)
+            chunks = lore_phase.parse_and_validate_lore(fixture_root, manifest_with_hash)
+            context.record_lore_chunks(chunks)
+            lore_events = lore_phase.create_seed_events(chunks)
+            all_events.extend(lore_events)
+            
+            # Finalization phase
+            finalization_phase = FinalizationPhase(features_importer_enabled=True)
+            start_time = datetime.now(timezone.utc)
+            finalization_result = finalization_phase.finalize_import(context, start_time)
+            all_events.append(finalization_result["completion_event"])
+            
+            return context, all_events, finalization_result
         
         # First run
         context1, events1, result1 = run_full_import()
