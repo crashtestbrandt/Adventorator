@@ -32,10 +32,7 @@ class TestOntologyMetrics:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     },
                     {
                         "tag_id": "target.door",
@@ -44,11 +41,8 @@ class TestOntologyMetrics:
                         "display_name": "Door",
                         "synonyms": ["door", "gate"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
-                    }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
+                    },
                 ],
                 "affordances": [
                     {
@@ -59,10 +53,10 @@ class TestOntologyMetrics:
                         "gating": {
                             "audience": "player",
                             "requires_feature": None,
-                            "ruleset_version": "v2.7"
-                        }
+                            "ruleset_version": "v2.7",
+                        },
                     }
-                ]
+                ],
             }
 
             ontology_file = ontology_dir / "test.json"
@@ -70,18 +64,16 @@ class TestOntologyMetrics:
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
 
             # Verify metrics were called
             mock_inc_counter.assert_any_call(
-                "importer.tags.parsed", 
-                value=2, 
-                package_id="test-package-001"
+                "importer.tags.parsed", value=2, package_id="test-package-001"
             )
             mock_inc_counter.assert_any_call(
-                "importer.affordances.parsed", 
-                value=1, 
-                package_id="test-package-001"
+                "importer.affordances.parsed", value=1, package_id="test-package-001"
             )
 
     @patch("Adventorator.importer.inc_counter")
@@ -105,10 +97,7 @@ class TestOntologyMetrics:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     },
                     {
                         "tag_id": "action.attack",  # Duplicate
@@ -117,13 +106,10 @@ class TestOntologyMetrics:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
-                    }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
+                    },
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             ontology_file = ontology_dir / "duplicate.json"
@@ -132,7 +118,9 @@ class TestOntologyMetrics:
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
             # Parse should handle duplicates automatically and emit skip metrics
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
 
             # Should get only unique items back
             assert len(tags) == 1  # Duplicate removed
@@ -141,14 +129,14 @@ class TestOntologyMetrics:
 
             # Verify metrics were called including skip metrics
             mock_inc_counter.assert_any_call(
-                "importer.tags.parsed", 
+                "importer.tags.parsed",
                 value=2,  # Both tags parsed initially
-                package_id="test-package-001"
+                package_id="test-package-001",
             )
             mock_inc_counter.assert_any_call(
-                "importer.tags.skipped_idempotent", 
+                "importer.tags.skipped_idempotent",
                 value=1,  # One duplicate skipped
-                package_id="test-package-001"
+                package_id="test-package-001",
             )
 
     @patch("Adventorator.importer.inc_counter")
@@ -164,15 +152,12 @@ class TestOntologyMetrics:
                 "display_name": "Attack",
                 "synonyms": ["attack", "strike"],
                 "audience": ["player", "gm"],
-                "gating": {
-                    "ruleset_version": "v2.7",
-                    "requires_feature": None
-                },
+                "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                 "provenance": {
                     "package_id": "test-package-001",
                     "source_path": "ontology/combat.json",
-                    "file_hash": "abc123def456" * 4  # 64-char hex
-                }
+                    "file_hash": "abc123def456" * 4,  # 64-char hex
+                },
             }
         ]
 
@@ -185,13 +170,13 @@ class TestOntologyMetrics:
                 "gating": {
                     "audience": "player",
                     "requires_feature": None,
-                    "ruleset_version": "v2.7"
+                    "ruleset_version": "v2.7",
                 },
                 "provenance": {
                     "package_id": "test-package-001",
                     "source_path": "ontology/combat.json",
-                    "file_hash": "def456abc123" * 4  # 64-char hex
-                }
+                    "file_hash": "def456abc123" * 4,  # 64-char hex
+                },
             }
         ]
 
@@ -204,14 +189,10 @@ class TestOntologyMetrics:
 
         # Verify registration metrics were called
         mock_inc_counter.assert_any_call(
-            "importer.tags.registered", 
-            value=1, 
-            package_id="test-package-001"
+            "importer.tags.registered", value=1, package_id="test-package-001"
         )
         mock_inc_counter.assert_any_call(
-            "importer.affordances.registered", 
-            value=1, 
-            package_id="test-package-001"
+            "importer.affordances.registered", value=1, package_id="test-package-001"
         )
 
     @patch("Adventorator.importer.inc_counter")
@@ -223,7 +204,9 @@ class TestOntologyMetrics:
             package_root = Path(temp_dir)
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
 
             assert len(tags) == 0
             assert len(affordances) == 0
@@ -231,12 +214,8 @@ class TestOntologyMetrics:
 
             # Verify zero metrics were called
             mock_inc_counter.assert_any_call(
-                "importer.tags.parsed", 
-                value=0, 
-                package_id="test-package-001"
+                "importer.tags.parsed", value=0, package_id="test-package-001"
             )
             mock_inc_counter.assert_any_call(
-                "importer.affordances.parsed", 
-                value=0, 
-                package_id="test-package-001"
+                "importer.affordances.parsed", value=0, package_id="test-package-001"
             )
