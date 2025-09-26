@@ -288,7 +288,19 @@ class ImporterRunContext:
             if identity in self._log_identities:
                 continue
             self._log_identities.add(identity)
-            self._import_logs.append(dict(entry))
+            
+            # Create a copy and assign sequence number if not already set
+            entry_dict = dict(entry)
+            if "sequence_no" not in entry_dict or entry_dict["sequence_no"] is None:
+                self._sequence_counter += 1
+                entry_dict["sequence_no"] = self._sequence_counter
+            else:
+                # Update counter to keep track of highest sequence
+                current_seq = entry_dict["sequence_no"]
+                if isinstance(current_seq, int) and current_seq > self._sequence_counter:
+                    self._sequence_counter = current_seq
+            
+            self._import_logs.append(entry_dict)
 
 
 __all__ = ["ImporterRunContext"]

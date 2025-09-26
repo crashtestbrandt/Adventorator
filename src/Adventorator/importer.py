@@ -24,8 +24,12 @@ from pathlib import Path
 from typing import Any
 
 from Adventorator.manifest_validation import ManifestValidationError, validate_manifest
-from Adventorator.metrics import inc_counter as metrics_inc_counter
+from Adventorator.metrics import inc_counter as metrics_inc_counter, get_counter
 from Adventorator.metrics import observe_histogram
+from Adventorator.db import session_scope
+from Adventorator import repos, models
+from Adventorator.importer_context import ImporterRunContext
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -55,6 +59,171 @@ def emit_structured_log(event: str, **fields) -> None:
     """
     log_data = {"event": event, **fields}
     logger.info("Structured log", extra={"structured_data": log_data})
+
+
+def record_idempotent_run(package_id: str, manifest_hash: str) -> None:
+    """Record metrics and logs for idempotent import run.
+    
+    Args:
+        package_id: Package identifier
+        manifest_hash: Manifest hash for correlation
+    """
+    inc_counter("importer.idempotent", package_id=package_id)
+    emit_structured_log(
+        "import_idempotent_run",
+        package_id=package_id,
+        manifest_hash=manifest_hash,
+        outcome="idempotent_skip"
+    )
+
+
+def record_rollback(phase: str, package_id: str, manifest_hash: str, reason: str) -> None:
+    """Record metrics and logs for import rollback.
+    
+    Args:
+        phase: Import phase where rollback occurred
+        package_id: Package identifier
+        manifest_hash: Manifest hash for correlation  
+        reason: Reason for rollback
+    """
+    inc_counter("importer.rollback", package_id=package_id)
+    inc_counter(f"importer.rollback.{phase}", package_id=package_id)
+    emit_structured_log(
+        "import_rollback", 
+        package_id=package_id,
+        manifest_hash=manifest_hash,
+        phase=phase,
+        outcome="rollback",
+        reason=reason
+    )
+
+
+# Database Integration Functions
+async def persist_import_event(
+    session: AsyncSession,
+    campaign_id: int,
+    scene_id: int | None,
+    event_type: str,
+    payload: dict[str, Any],
+    actor_id: str = "importer"
+) -> models.Event:
+    """Persist an import-related event to the database.
+    
+    Args:
+        session: Database session
+        campaign_id: Campaign ID for the import
+        scene_id: Scene ID (optional, for import events)
+        event_type: Type of event (e.g., 'seed.manifest.validated')
+        payload: Event payload data
+        actor_id: Who triggered the event (default: 'importer')
+        
+    Returns:
+        Created Event record
+    """
+    # For import events, we'll create scene-less events linked to campaign
+    if scene_id is None:
+        # Create a temporary execution request ID for import events
+        request_id = f"import-{campaign_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+        
+        # Get the last event to determine replay_ordinal and prev_hash
+        from sqlalchemy import select
+        last_event = await session.execute(
+            select(models.Event)
+            .where(models.Event.campaign_id == campaign_id)
+            .order_by(models.Event.replay_ordinal.desc())
+            .limit(1)
+        )
+        last_event_row = last_event.scalar_one_or_none()
+        
+        if last_event_row is None:
+            replay_ordinal = 0
+            from Adventorator.events import envelope as event_envelope
+            prev_hash = event_envelope.GENESIS_PREV_EVENT_HASH
+        else:
+            replay_ordinal = last_event_row.replay_ordinal + 1
+            from Adventorator.events import envelope as event_envelope
+            prev_hash = event_envelope.compute_envelope_hash(
+                campaign_id=last_event_row.campaign_id,
+                scene_id=last_event_row.scene_id,
+                replay_ordinal=last_event_row.replay_ordinal,
+                event_type=last_event_row.type,
+                event_schema_version=last_event_row.event_schema_version,
+                world_time=last_event_row.world_time,
+                wall_time_utc=last_event_row.wall_time_utc,
+                prev_event_hash=last_event_row.prev_event_hash,
+                payload_hash=last_event_row.payload_hash,
+                idempotency_key=last_event_row.idempotency_key,
+            )
+        
+        payload_hash = event_envelope.compute_payload_hash(payload)
+        idempotency_key = event_envelope.compute_idempotency_key(
+            campaign_id=campaign_id,
+            event_type=event_type,
+            execution_request_id=request_id,
+            plan_id=None,
+            payload=payload,
+            replay_ordinal=replay_ordinal,
+        )
+        
+        event = models.Event(
+            campaign_id=campaign_id,
+            scene_id=scene_id,
+            replay_ordinal=replay_ordinal,
+            actor_id=actor_id,
+            type=event_type,
+            event_schema_version=event_envelope.GENESIS_SCHEMA_VERSION,
+            world_time=replay_ordinal,
+            prev_event_hash=prev_hash,
+            payload_hash=payload_hash,
+            idempotency_key=idempotency_key,
+            execution_request_id=request_id,
+            payload=payload,
+        )
+        
+        session.add(event)
+        await session.flush()  # Get the ID without committing
+        return event
+    else:
+        # Use existing repos.append_event for scene-based events
+        return await repos.append_event(
+            session,
+            scene_id=scene_id,
+            actor_id=actor_id,
+            type=event_type,
+            payload=payload
+        )
+
+
+async def persist_import_log_entry(
+    session: AsyncSession,
+    campaign_id: int,
+    entry: dict[str, Any]
+) -> models.ImportLog:
+    """Persist an ImportLog entry to the database.
+    
+    Args:
+        session: Database session
+        campaign_id: Campaign ID for the import
+        entry: ImportLog entry data
+        
+    Returns:
+        Created ImportLog record
+    """
+    import_log = models.ImportLog(
+        campaign_id=campaign_id,
+        sequence_no=entry["sequence_no"],
+        phase=entry["phase"],
+        object_type=entry["object_type"],
+        stable_id=entry["stable_id"],
+        file_hash=entry["file_hash"],
+        action=entry["action"],
+        manifest_hash=entry.get("manifest_hash", ""),
+        timestamp=entry.get("timestamp", datetime.now(timezone.utc)),
+    )
+    
+    session.add(import_log)
+    await session.flush()  # Get the ID without committing
+    return import_log
 
 
 class ImporterError(Exception):
@@ -95,6 +264,9 @@ class ManifestPhase:
         try:
             manifest, manifest_hash = validate_manifest(manifest_path, package_root)
         except ManifestValidationError as exc:
+            # Record rollback for manifest validation failure  
+            package_id = getattr(exc, 'package_id', 'unknown')
+            record_rollback("manifest", package_id, "unknown", str(exc))
             raise ImporterError(f"Manifest validation failed: {exc}") from exc
 
         # Prepare event payload for seed.manifest.validated
@@ -232,8 +404,13 @@ class EntityPhase:
                 entity_data = json.loads(normalized_content)
 
                 # Validate against JSON schema first, then basic fields
-                validate_entity_schema(entity_data)
-                self._validate_entity_schema(entity_data, rel_path)
+                try:
+                    validate_entity_schema(entity_data)
+                    self._validate_entity_schema(entity_data, rel_path)
+                except EntityValidationError as exc:
+                    # Record rollback for entity schema validation failure
+                    record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
+                    raise
 
                 # Compute file hash
                 file_hash = self._compute_file_hash(normalized_content)
@@ -260,6 +437,8 @@ class EntityPhase:
                 parsed_entities.append(entity_with_provenance)
 
             except (json.JSONDecodeError, OSError) as exc:
+                # Record rollback for entity parsing/validation failure
+                record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
                 raise EntityValidationError(
                     f"Failed to parse entity file {rel_path}: {exc}"
                 ) from exc
@@ -280,13 +459,15 @@ class EntityPhase:
             )
         except EntityCollisionError as exc:
             collisions_detected = 1
-            inc_counter("importer.collision", value=1, package_id=package_id)
+            inc_counter("importer.entities.collisions", value=1, package_id=package_id)
+            # Record rollback metrics and logs
+            record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
             raise exc
 
         # Create ImportLog entries for each entity and assign them individually
         for i, entity in enumerate(filtered_entities):
             import_log_entry = {
-                "sequence_no": i + 1,
+                # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                 "phase": "entity",
                 "object_type": entity["kind"],
                 "stable_id": entity["stable_id"],
@@ -300,7 +481,7 @@ class EntityPhase:
 
         # Emit metrics with actual counts
         entity_count = len(filtered_entities)
-        inc_counter("importer.entities.created", value=entity_count, package_id=package_id)
+        inc_counter("importer.entities.ingested", value=entity_count, package_id=package_id)
         if entities_skipped_idempotent > 0:
             inc_counter(
                 "importer.entities.skipped_idempotent",
@@ -613,7 +794,7 @@ class EdgePhase:
         manifest_hash = manifest.get("manifest_hash", "unknown")
         for index, edge in enumerate(parsed_edges, start=1):
             edge["import_log_entry"] = {
-                "sequence_no": index,
+                # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                 "phase": "edge",
                 "object_type": edge["type"],
                 "stable_id": edge["stable_id"],
@@ -625,7 +806,7 @@ class EdgePhase:
 
         created_count = len(parsed_edges)
         if created_count:
-            inc_counter("importer.edges.created", value=created_count, package_id=package_id)
+            inc_counter("importer.edges.ingested", value=created_count, package_id=package_id)
         if skipped_idempotent:
             inc_counter(
                 "importer.edges.skipped_idempotent",
@@ -949,14 +1130,13 @@ class OntologyPhase:
         self._validate_taxonomy_invariants(tags, affordances)
 
         # Create ImportLog entries for unique items (after duplicate removal)
-        sequence_no = 1
         unique_tags = self._filter_duplicates_from_list(tags)
         unique_affordances = self._filter_duplicates_from_list(affordances)
 
         for tag in unique_tags:
             import_log_entries.append(
                 {
-                    "sequence_no": sequence_no,
+                    # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                     "phase": "ontology",
                     "object_type": "tag",
                     "stable_id": tag["tag_id"],
@@ -966,12 +1146,11 @@ class OntologyPhase:
                     "timestamp": datetime.now(timezone.utc),
                 }
             )
-            sequence_no += 1
 
         for affordance in unique_affordances:
             import_log_entries.append(
                 {
-                    "sequence_no": sequence_no,
+                    # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                     "phase": "ontology",
                     "object_type": "affordance",
                     "stable_id": affordance["affordance_id"],
@@ -981,7 +1160,6 @@ class OntologyPhase:
                     "timestamp": datetime.now(timezone.utc),
                 }
             )
-            sequence_no += 1
 
         emit_structured_log(
             "ontology_parse_complete",
@@ -1482,13 +1660,15 @@ class LorePhase:
             filtered_chunks, chunks_skipped_idempotent = self._check_chunk_id_collisions(chunks)
         except LoreCollisionError as exc:
             collisions_detected = 1
-            inc_counter("importer.collision", value=1, package_id=package_id)
+            inc_counter("importer.lore.collisions", value=1, package_id=package_id)
+            # Record rollback metrics and logs
+            record_rollback("lore", package_id, manifest_hash, str(exc))
             raise exc
 
         # Create ImportLog entries for each chunk and assign them individually
         for i, chunk in enumerate(filtered_chunks):
             import_log_entry = {
-                "sequence_no": i + 1,
+                # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                 "phase": "lore",
                 "object_type": "content_chunk",
                 "stable_id": chunk["chunk_id"],
@@ -1629,6 +1809,21 @@ class FinalizationPhase:
         
         # Compute state digest
         state_digest = context.compute_state_digest()
+        
+        # Check if this was an idempotent re-run by looking at the current run metrics
+        # We'll detect this by seeing if any skipped_idempotent counters were incremented during this run
+        current_entities_skipped = get_counter("importer.entities.skipped_idempotent") 
+        current_edges_skipped = get_counter("importer.edges.skipped_idempotent")
+        current_tags_skipped = get_counter("importer.tags.skipped_idempotent")
+        current_chunks_skipped = get_counter("importer.chunks.skipped_idempotent")
+        
+        # Calculate total skips for this run
+        total_skips = current_entities_skipped + current_edges_skipped + current_tags_skipped + current_chunks_skipped
+        
+        if total_skips > 0:
+            # This appears to be an idempotent re-run
+            record_idempotent_run(context.package_id, context.manifest_hash)
+            # Note: record_idempotent_run already increments importer.idempotent counter
         
         # Ensure required fields are present
         if context.package_id is None:
@@ -1803,6 +1998,355 @@ def create_finalization_phase(features_importer: bool = False) -> FinalizationPh
         Configured FinalizationPhase instance
     """
     return FinalizationPhase(features_importer_enabled=features_importer)
+
+
+async def run_full_import_with_database(
+    package_root: Path,
+    campaign_id: int,
+    *,
+    features_importer: bool = True,
+    features_importer_embeddings: bool = True
+) -> dict[str, Any]:
+    """Run full package import with database integration and idempotent detection.
+    
+    This function integrates the importer phases with the database layer,
+    ensuring that Events and ImportLog entries are actually persisted.
+    Implements proper idempotent behavior by checking for existing imports.
+    
+    Args:
+        package_root: Root directory of the package to import
+        campaign_id: Campaign ID to import into
+        features_importer: Whether importer is enabled
+        features_importer_embeddings: Whether embeddings are enabled
+        
+    Returns:
+        Dictionary containing import results and database state
+        
+    Raises:
+        ImporterError: If import fails
+    """
+    start_time = datetime.now(timezone.utc)
+    
+    async with session_scope() as session:
+        try:
+            # Load and validate manifest first for idempotent detection
+            manifest_path = package_root / "package.manifest.json"
+            if not manifest_path.exists():
+                raise ImporterError(f"Manifest not found: {manifest_path}")
+                
+            with open(manifest_path, encoding="utf-8") as f:
+                manifest_data = json.load(f)
+            
+            package_id = manifest_data.get("package_id")
+            if not package_id:
+                raise ImporterError("Missing package_id in manifest")
+                
+            # Compute manifest hash for idempotent detection
+            manifest_content = json.dumps(manifest_data, sort_keys=True)
+            manifest_hash = hashlib.sha256(manifest_content.encode('utf-8')).hexdigest()
+            
+            # Check for existing import with same manifest hash
+            from sqlalchemy import select
+            existing_events = await session.execute(
+                select(models.Event)
+                .where(models.Event.campaign_id == campaign_id)
+                .where(models.Event.type == "seed.import.complete")
+                .where(models.Event.payload.contains({"manifest_hash": manifest_hash}))
+            )
+            
+            existing_import = existing_events.scalars().first()
+            
+            if existing_import:
+                # This is an idempotent re-run - return existing results without creating new import records (but metrics/logs are still recorded for observability)
+                record_idempotent_run(package_id, manifest_hash)
+                
+                # Get existing import summary from the completion event
+                completion_payload = existing_import.payload
+                existing_state_digest = completion_payload.get("state_digest", "")
+                
+                # Get all events for this import
+                all_events_query = await session.execute(
+                    select(models.Event)
+                    .where(models.Event.campaign_id == campaign_id)
+                    .order_by(models.Event.replay_ordinal)
+                )
+                events = all_events_query.scalars().all()
+                
+                # Get all ImportLog entries for this import
+                import_logs_query = await session.execute(
+                    select(models.ImportLog)
+                    .where(models.ImportLog.campaign_id == campaign_id)
+                    .where(models.ImportLog.manifest_hash == manifest_hash)
+                )
+                import_logs = import_logs_query.scalars().all()
+                
+                # Compute hash chain tip
+                hash_chain_tip = None
+                if events:
+                    from Adventorator.events import envelope as event_envelope
+                    last_event = events[-1]
+                    hash_chain_tip = event_envelope.compute_envelope_hash(
+                        campaign_id=last_event.campaign_id,
+                        scene_id=last_event.scene_id,
+                        replay_ordinal=last_event.replay_ordinal,
+                        event_type=last_event.type,
+                        event_schema_version=last_event.event_schema_version,
+                        world_time=last_event.world_time,
+                        wall_time_utc=last_event.wall_time_utc,
+                        prev_event_hash=last_event.prev_event_hash,
+                        payload_hash=last_event.payload_hash,
+                        idempotency_key=last_event.idempotency_key,
+                    ).hex()
+                
+                emit_structured_log(
+                    "import_idempotent_run",
+                    package_id=package_id,
+                    manifest_hash=manifest_hash,
+                    outcome="idempotent_skip",
+                    events_count=len(events),
+                    import_log_entries=len(import_logs)
+                )
+                
+                return {
+                    "state_digest": existing_state_digest,
+                    "completion_payload": completion_payload,
+                    "completion_event": {"payload": completion_payload},
+                    "import_log_summary": {
+                        "phase": "finalization",
+                        "object_type": "import",
+                        "stable_id": package_id,
+                        "action": "completed",
+                        "manifest_hash": manifest_hash
+                    },
+                    "database_state": {
+                        "events": [
+                            {
+                                "id": e.id,
+                                "replay_ordinal": e.replay_ordinal,
+                                "type": e.type,
+                                "payload": e.payload,
+                                "prev_event_hash": e.prev_event_hash.hex(),
+                                "payload_hash": e.payload_hash.hex(),
+                                "idempotency_key": e.idempotency_key.hex(),
+                            }
+                            for e in events
+                        ],
+                        "import_logs": [
+                            {
+                                "id": il.id,
+                                "sequence_no": il.sequence_no,
+                                "phase": il.phase,
+                                "object_type": il.object_type,
+                                "stable_id": il.stable_id,
+                                "action": il.action,
+                                "file_hash": il.file_hash,
+                                "manifest_hash": il.manifest_hash,
+                            }
+                            for il in import_logs
+                        ],
+                        "hash_chain_tip": hash_chain_tip,
+                        "event_count": len(events),
+                        "import_log_count": len(import_logs),
+                    },
+                    "idempotent_skip": True,
+                    "duration_ms": 0  # No work done for idempotent skip
+                }
+                
+            # Proceed with new import since no existing import was found
+            # Initialize phases
+            manifest_phase = ManifestPhase(features_importer_enabled=features_importer)
+            entity_phase = EntityPhase(features_importer_enabled=features_importer)
+            edge_phase = EdgePhase(features_importer_enabled=features_importer)
+            ontology_phase = OntologyPhase(features_importer_enabled=features_importer)
+            lore_phase = create_lore_phase(features_importer, features_importer_embeddings)
+            finalization_phase = FinalizationPhase(features_importer_enabled=features_importer)
+            
+            context = ImporterRunContext()
+            manifest_path = package_root / "package.manifest.json"
+            
+            # Manifest validation and event emission
+            manifest_result = manifest_phase.validate_and_register(manifest_path, package_root)
+            context.record_manifest(manifest_result)
+            
+            # Emit manifest validation event to database
+            manifest_event = await persist_import_event(
+                session, campaign_id, None,
+                "seed.manifest.validated",
+                manifest_result["event_payload"]
+            )
+            
+            # Persist manifest ImportLog entry
+            manifest_log_entry = manifest_result["import_log_entry"].copy()
+            manifest_log_entry["sequence_no"] = context.next_sequence_number()
+            await persist_import_log_entry(session, campaign_id, manifest_log_entry)
+            
+            # Entity ingestion
+            entities_dir = package_root / "entities"
+            if entities_dir.exists():
+                entity_results = entity_phase.parse_and_validate_entities(package_root, manifest_result["manifest"])
+                context.record_entities(entity_results)
+                
+                # Emit entity events and persist ImportLog entries
+                for entity in entity_results:
+                    if "event_payload" in entity:
+                        await persist_import_event(
+                            session, campaign_id, None,
+                            "seed.entity_created",
+                            entity["event_payload"]
+                        )
+                    
+                    # Persist ImportLog entry for this entity
+                    if "import_log_entry" in entity:
+                        log_entry_copy = entity["import_log_entry"].copy()
+                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            
+            # Edge ingestion  
+            edges_dir = package_root / "edges"
+            if edges_dir.exists():
+                edge_results = edge_phase.parse_and_validate_edges(package_root, manifest_result["manifest"], entity_results)
+                context.record_edges(edge_results)
+                
+                # Emit edge events and persist ImportLog entries
+                for edge in edge_results:
+                    if "event_payload" in edge:
+                        await persist_import_event(
+                            session, campaign_id, None,
+                            "seed.edge_created",
+                            edge["event_payload"]
+                        )
+                    
+                    if "import_log_entry" in edge:
+                        log_entry_copy = edge["import_log_entry"].copy()
+                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            
+            # Ontology ingestion
+            ontologies_dir = package_root / "ontologies"
+            if ontologies_dir.exists():
+                tags, affordances, import_log_entries = ontology_phase.parse_and_validate_ontology(ontologies_dir, manifest_result["manifest"])
+                context.record_ontology(tags, affordances, import_log_entries)
+                
+                # Persist ontology ImportLog entries
+                for log_entry in import_log_entries:
+                    log_entry_copy = log_entry.copy()
+                    log_entry_copy["sequence_no"] = context.next_sequence_number()
+                    await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            
+            # Lore ingestion
+            lore_dir = package_root / "lore"
+            if lore_dir.exists():
+                lore_results = lore_phase.parse_and_validate_lore(lore_dir, manifest_result["manifest"])
+                context.record_lore_chunks(lore_results)
+                
+                # Emit lore events and persist ImportLog entries
+                for chunk in lore_results:
+                    if "event_payload" in chunk:
+                        await persist_import_event(
+                            session, campaign_id, None,
+                            "seed.lore_chunk_created",
+                            chunk["event_payload"]
+                        )
+                    
+                    if "import_log_entry" in chunk:
+                        log_entry_copy = chunk["import_log_entry"].copy()
+                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            
+            # Finalization
+            result = finalization_phase.finalize_import(context, start_time)
+            
+            # Emit completion event
+            completion_event = await persist_import_event(
+                session, campaign_id, None,
+                "seed.import.complete",
+                result["completion_event"]["payload"]
+            )
+            
+            # Persist finalization ImportLog summary
+            summary_entry = result["import_log_summary"].copy()
+            summary_entry["sequence_no"] = context.next_sequence_number()
+            await persist_import_log_entry(session, campaign_id, summary_entry)
+            
+            # Query final database state for validation
+            from sqlalchemy import select, func
+            
+            # Get all events for this campaign
+            events_query = await session.execute(
+                select(models.Event)
+                .where(models.Event.campaign_id == campaign_id)
+                .order_by(models.Event.replay_ordinal)
+            )
+            events = events_query.scalars().all()
+            
+            # Get all ImportLog entries for this campaign
+            import_logs_query = await session.execute(
+                select(models.ImportLog)
+                .where(models.ImportLog.campaign_id == campaign_id)
+                .order_by(models.ImportLog.sequence_no)
+            )
+            import_logs = import_logs_query.scalars().all()
+            
+            # Get hash chain tip (last event hash)
+            hash_chain_tip = None
+            if events:
+                from Adventorator.events import envelope as event_envelope
+                last_event = events[-1]
+                hash_chain_tip = event_envelope.compute_envelope_hash(
+                    campaign_id=last_event.campaign_id,
+                    scene_id=last_event.scene_id,
+                    replay_ordinal=last_event.replay_ordinal,
+                    event_type=last_event.type,
+                    event_schema_version=last_event.event_schema_version,
+                    world_time=last_event.world_time,
+                    wall_time_utc=last_event.wall_time_utc,
+                    prev_event_hash=last_event.prev_event_hash,
+                    payload_hash=last_event.payload_hash,
+                    idempotency_key=last_event.idempotency_key,
+                ).hex()
+            
+            # Commit all changes
+            await session.commit()
+            
+            # Return comprehensive results including database state
+            return {
+                **result,
+                "database_state": {
+                    "events": [
+                        {
+                            "id": e.id,
+                            "replay_ordinal": e.replay_ordinal,
+                            "type": e.type,
+                            "payload": e.payload,
+                            "prev_event_hash": e.prev_event_hash.hex(),
+                            "payload_hash": e.payload_hash.hex(),
+                            "idempotency_key": e.idempotency_key.hex(),
+                        }
+                        for e in events
+                    ],
+                    "import_logs": [
+                        {
+                            "id": il.id,
+                            "sequence_no": il.sequence_no,
+                            "phase": il.phase,
+                            "object_type": il.object_type,
+                            "stable_id": il.stable_id,
+                            "action": il.action,
+                            "file_hash": il.file_hash,
+                            "manifest_hash": il.manifest_hash,
+                        }
+                        for il in import_logs
+                    ],
+                    "hash_chain_tip": hash_chain_tip,
+                    "event_count": len(events),
+                    "import_log_count": len(import_logs),
+                },
+                "hash_chain_tip": hash_chain_tip,
+            }
+            
+        except Exception as e:
+            await session.rollback()
+            raise ImporterError(f"Database import failed: {e}") from e
 
 
 def run_complete_import_pipeline(

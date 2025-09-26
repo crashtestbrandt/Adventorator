@@ -49,6 +49,32 @@ This playbook documents budgets, metrics, and rollout/rollback guidance required
 - **Traces.** Span `executor.run` wraps preview/apply; include link to originating interaction.
 - **Feature flags.** `features.executor_confirm` ensures confirmation for mutating actions; rollback flips flag to `false` and cancels pending confirmations.
 
+## Importer Observability Budget (STORY-CDA-IMPORT-002G)
+
+- **Metrics.**
+  - `importer.idempotent` (counter) — Tracks idempotent package re-run detections; expected on repeated imports.
+  - `importer.rollback` (counter) — Transaction rollbacks due to failures; monitor for operational issues.
+  - `importer.rollback.entity` (counter) — Entity phase rollbacks (e.g., ID collisions, validation failures).
+  - `importer.rollback.edge` (counter) — Edge phase rollbacks (e.g., invalid references, taxonomy mismatches).
+  - `importer.rollback.lore` (counter) — Lore phase rollbacks (e.g., chunk ID collisions, malformed content).
+  - `importer.rollback.ontology` (counter) — Ontology phase rollbacks (e.g., tag conflicts, schema violations).
+  - `importer.entities.skipped_idempotent` (counter) — Entities skipped during idempotent re-runs.
+  - `importer.edges.skipped_idempotent` (counter) — Edges skipped during idempotent re-runs.
+  - `importer.tags.skipped_idempotent` (counter) — Tags skipped during idempotent re-runs.
+  - `importer.chunks.skipped_idempotent` (counter) — Lore chunks skipped during idempotent re-runs.
+- **Logs.** Structured events with scenario identifier, manifest hash correlation:
+  - `import_idempotent_run` — Package re-run detected with `{package_id, manifest_hash, outcome}`.
+  - `import_rollback` — Transaction rollback with `{package_id, manifest_hash, phase, outcome, reason}`.
+  - Log format includes stable IDs and content hashes for correlation, avoiding raw file paths.
+- **Alert thresholds.**
+  - `importer.rollback` spikes (>5/hour) suggest systematic package validation issues.
+  - Missing `importer.idempotent` on known re-runs may indicate hash chain corruption.
+- **Recovery playbook.**
+  - **Retry guidance:** Idempotent re-runs are safe; investigate package content for rollback scenarios.
+  - **Log interpretation:** Check `import_rollback` logs for `reason` field; common causes include ID collisions, missing dependencies, or malformed YAML/JSON.
+  - **Rollback verification:** Confirm no partial ImportLog entries persist after rollback; use `make test-idempotency` for regression validation.
+- **Feature flags.** `features.importer` gates import pipeline; disable to prevent new imports while preserving existing data integrity.
+
 ## Encounter Observability Budget
 
 - **Metrics.**
@@ -92,6 +118,12 @@ This playbook documents budgets, metrics, and rollout/rollback guidance required
 | Events | (n/a) | `events.conflict` | counter | n/a |
 | Events | (n/a) | `events.idempotent_reuse` | counter | n/a |
 | Events | (n/a) | `event.apply.latency_ms` | histogram | n/a |
+| Importer | (n/a) | `importer.idempotent` | counter | n/a |
+| Importer | (n/a) | `importer.rollback` | counter | phase=`entity|edge|lore|ontology` |
+| Importer | (n/a) | `importer.entities.skipped_idempotent` | counter | n/a |
+| Importer | (n/a) | `importer.edges.skipped_idempotent` | counter | n/a |
+| Importer | (n/a) | `importer.tags.skipped_idempotent` | counter | n/a |
+| Importer | (n/a) | `importer.chunks.skipped_idempotent` | counter | n/a |
 | Encounter | `encounter.turn.advance` | `encounter.turn.advance.count` | counter | result=`success|conflict` |
 | Encounter | `encounter.round.duration_ms` | `encounter.round.duration.seconds` | histogram | n/a |
 
@@ -118,6 +150,7 @@ Adopt normalized names in new code; migrate legacy names opportunistically with 
 | `features.executor` | true | Execution | Connects orchestrator to executor preview/apply | Multiple | Medium | Disable to isolate planning without apply |
 | `features.executor_confirm` | (implied true when confirmation flow active) | Safety | Requires explicit confirm for mutating actions | Pending Action / Safety Stories | Low | Use for high-risk tool gating |
 | `features.events` | true | Events | Emits domain events for ledger & integration | Event Epics | Medium | Off halts downstream integrations |
+| `features.importer` | false | Importer | Enables package import pipeline with manifest validation & entity ingestion | EPIC-CDA-IMPORT-002 | High | Off prevents new imports; existing data preserved |
 | `features.rules` | true | Rules Engine | Enables deterministic rules module usage | Core Systems | Low | Rarely disabled outside tests |
 | `features.combat` | true | Encounter | Activates encounter/turn engine | Encounter Turn Engine | Medium | Off pauses active encounters (gracefully) |
 | `features.retrieval.enabled` | true | Retrieval | Enables retrieval-augmented context injection | Retrieval Epic | Medium | provider sub-flags control backend |
