@@ -634,3 +634,392 @@ class TestIntegrationWithFixtures:
         assert "Δ42" in content
         assert "Συνεχής" in content
         assert "следопыт" in content
+
+
+class TestGoldenHashFixtures:
+    """Test hash stability with golden reference values for regression detection."""
+
+    def test_golden_hash_simple_chunk(self):
+        """Test canonical hash stability against known golden values."""
+        # Simple chunk with all basic fields
+        chunk = LoreChunk(
+            chunk_id="GOLDEN-SIMPLE",
+            title="Simple Golden Test",
+            audience="Player",
+            tags=["location:tavern", "mood:peaceful"],
+            content="Simple test content for hashing.",
+            source_path="test.md",
+            chunk_index=0,
+            provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+        )
+
+        # This is the expected canonical hash for this exact content
+        expected_hash = "ae23a20daa3de4dab422d237e03c0c12df08b3ad88b19a46a4e079fc87ce7086"
+        assert chunk.content_hash == expected_hash
+
+    def test_golden_hash_with_embedding_hint(self):
+        """Test hash stability with embedding hint included."""
+        chunk = LoreChunk(
+            chunk_id="GOLDEN-EMBED",
+            title="Embedding Golden Test",
+            audience="GM-Only",
+            tags=["npc:wizard", "trait:mysterious"],
+            content="Content with embedding hint for testing.",
+            source_path="embed_test.md",
+            chunk_index=1,
+            provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+            embedding_hint="focus:personality",
+        )
+
+        expected_hash = "89749064b6fc7f255f40a476bd4b0f28d177c02d1f8fbef16ffc2749a2f6ef4d"
+        assert chunk.content_hash == expected_hash
+
+    def test_golden_hash_unicode_content(self):
+        """Test hash stability with Unicode content after NFC normalization."""
+        # Mix of composed and decomposed Unicode forms
+        composed_content = "The café serves naïve customers with prémière service."
+        chunk = LoreChunk(
+            chunk_id="GOLDEN-UNICODE",
+            title="Unicode Test",
+            audience="Teen",
+            tags=["culture:french"],
+            content=composed_content,
+            source_path="unicode.md",
+            chunk_index=0,
+            provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+        )
+
+        expected_hash = "711fb7b0cc0b0c2dde7a9c1a0bff9f79fa5ca99e87005fb19aefc88b094cb826"
+        assert chunk.content_hash == expected_hash
+
+    def test_hash_regression_detection(self):
+        """Comprehensive regression test with multiple hash values."""
+        test_cases = [
+            {
+                "name": "minimal",
+                "chunk": LoreChunk(
+                    chunk_id="MIN-001",
+                    title="Minimal",
+                    audience="Player",
+                    tags=["test:minimal"],
+                    content="Min",
+                    source_path="min.md",
+                    chunk_index=0,
+                    provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+                ),
+                "expected": "b66704778153305000381ee9cf0d79cc02f3f945d7f6a87fd5f8dc6dd8537b78"
+            },
+            {
+                "name": "maximal",
+                "chunk": LoreChunk(
+                    chunk_id="MAX-COMPLEX-CHUNK-ID-999",
+                    title="Very Complex Maximal Test Case With Long Title That Tests Length Limits",
+                    audience="Adult",
+                    tags=["category:complex", "difficulty:maximal", "type:comprehensive", "status:testing"],
+                    content="This is a very long and complex content block that includes multiple sentences, Unicode characters like café and naïve, and tests the limits of our chunking algorithm. It should produce a stable hash regardless of the complexity.",
+                    source_path="complex/maximal/test.md",
+                    chunk_index=42,
+                    provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"},
+                    embedding_hint="focus:complexity,depth:comprehensive,tone:analytical"
+                ),
+                "expected": "ca00fbe1a094d858e6ee58dc7a3cd621481d8a651583757735663b431eca1347"
+            }
+        ]
+
+        for case in test_cases:
+            actual_hash = case["chunk"].content_hash
+            assert actual_hash == case["expected"], f"Hash regression detected for {case['name']} case"
+
+
+class TestEndToEndIdempotency:
+    """Test end-to-end idempotency and replay behavior per TASK-CDA-IMPORT-SEED-14B."""
+
+    def test_deterministic_replay_behavior(self, tmp_path):
+        """Test that running the importer twice produces identical results."""
+        # Set up test lore files
+        lore_dir = tmp_path / "lore"
+        lore_dir.mkdir()
+
+        content1 = """---
+chunk_id: REPLAY-TEST-1
+title: "First Test File"
+audience: Player
+tags:
+  - location:village
+  - mood:peaceful
+---
+
+## Village Square
+
+The village square bustles with activity.
+
+## Market Day
+
+Vendors hawk their wares enthusiastically.
+"""
+
+        content2 = """---
+chunk_id: REPLAY-TEST-2
+title: "Second Test File"
+audience: GM-Only
+tags:
+  - secret:plot
+  - npc:mayor
+---
+
+The mayor harbors a dark secret.
+"""
+
+        (lore_dir / "file1.md").write_text(content1, encoding="utf-8")
+        (lore_dir / "file2.md").write_text(content2, encoding="utf-8")
+
+        phase = LorePhase(features_importer_enabled=True)
+        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+
+        # First run
+        chunks1 = phase.parse_and_validate_lore(tmp_path, manifest)
+        events1 = phase.create_seed_events(chunks1)
+
+        # Second run (should be identical)
+        chunks2 = phase.parse_and_validate_lore(tmp_path, manifest)
+        events2 = phase.create_seed_events(chunks2)
+
+        # Verify deterministic ordering
+        assert len(chunks1) == len(chunks2)
+        for i, (chunk1, chunk2) in enumerate(zip(chunks1, chunks2)):
+            assert chunk1["chunk_id"] == chunk2["chunk_id"], f"Chunk {i} ID mismatch"
+            assert chunk1["content_hash"] == chunk2["content_hash"], f"Chunk {i} hash mismatch"
+            assert chunk1["source_path"] == chunk2["source_path"], f"Chunk {i} path mismatch"
+            assert chunk1["chunk_index"] == chunk2["chunk_index"], f"Chunk {i} index mismatch"
+
+        # Verify event determinism
+        assert len(events1) == len(events2)
+        for i, (event1, event2) in enumerate(zip(events1, events2)):
+            assert event1 == event2, f"Event {i} differs between runs"
+
+    def test_idempotent_skip_metrics_on_duplicate_files(self, tmp_path):
+        """Test that duplicate files are handled idempotently with proper metrics."""
+        lore_dir = tmp_path / "lore"
+        lore_dir.mkdir()
+
+        # Create identical content in two files (should trigger idempotent skip)
+        identical_content = """---
+chunk_id: IDENTICAL-CHUNK
+title: "Identical Content"
+audience: Player
+tags:
+  - test:idempotent
+---
+
+This content is identical across files.
+"""
+
+        (lore_dir / "file1.md").write_text(identical_content, encoding="utf-8")
+        (lore_dir / "file2.md").write_text(identical_content, encoding="utf-8")
+
+        phase = LorePhase(features_importer_enabled=True)
+        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+
+        chunks = phase.parse_and_validate_lore(tmp_path, manifest)
+
+        # Should have only one chunk (second one skipped as idempotent duplicate)
+        assert len(chunks) == 1
+        assert chunks[0]["chunk_id"] == "IDENTICAL-CHUNK-000"
+
+    def test_collision_rollback_behavior(self, tmp_path):
+        """Test that collision detection properly fails the import."""
+        lore_dir = tmp_path / "lore"
+        lore_dir.mkdir()
+
+        # Create conflicting content with same chunk_id
+        content1 = """---
+chunk_id: CONFLICT-ID
+title: "First Version"
+audience: Player
+tags: []
+---
+
+Original content here.
+"""
+
+        content2 = """---
+chunk_id: CONFLICT-ID
+title: "Second Version"
+audience: Player
+tags: []
+---
+
+Different content that conflicts.
+"""
+
+        (lore_dir / "file1.md").write_text(content1, encoding="utf-8")
+        (lore_dir / "file2.md").write_text(content2, encoding="utf-8")
+
+        phase = LorePhase(features_importer_enabled=True)
+        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+
+        # Should raise LoreCollisionError
+        with pytest.raises(LoreCollisionError, match="Chunk ID collision detected"):
+            phase.parse_and_validate_lore(tmp_path, manifest)
+
+
+class TestFrontMatterSchemaValidation:
+    """Test automated front-matter schema validation per TASK-CDA-IMPORT-CHUNK-13A."""
+
+    def test_schema_validation_success(self, tmp_path):
+        """Test that valid front-matter passes schema validation."""
+        content = """---
+chunk_id: SCHEMA-VALID
+title: "Valid Schema Test"
+audience: Player
+tags:
+  - location:forest
+  - mood:mysterious
+embedding_hint: "focus:atmosphere"
+provenance:
+  manifest_hash: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+  source_path: "lore/test.md"
+---
+
+Valid content with compliant front-matter.
+"""
+        test_file = tmp_path / "valid.md"
+        test_file.write_text(content, encoding="utf-8")
+
+        chunker = LoreChunker(features_importer_embeddings=True)
+        chunks = chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+
+        assert len(chunks) == 1
+        chunk = chunks[0]
+        assert chunk.chunk_id == "SCHEMA-VALID-000"
+        assert chunk.embedding_hint == "focus:atmosphere"
+
+    def test_schema_validation_invalid_chunk_id(self, tmp_path):
+        """Test that invalid chunk_id fails schema validation."""
+        content = """---
+chunk_id: "invalid-lowercase-id"
+title: "Invalid ID Test"
+audience: Player
+tags: []
+---
+
+Invalid chunk_id format.
+"""
+        test_file = tmp_path / "invalid_id.md"
+        test_file.write_text(content, encoding="utf-8")
+
+        chunker = LoreChunker()
+        # This should fail at parser validation (before schema validation)
+        with pytest.raises(FrontMatterValidationError, match="Invalid chunk_id format"):
+            chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+
+    def test_schema_validation_invalid_audience(self, tmp_path):
+        """Test that invalid audience fails schema validation."""
+        content = """---
+chunk_id: SCHEMA-BAD-AUD
+title: "Bad Audience Test"
+audience: "InvalidAudience"
+tags: []
+---
+
+Invalid audience value.
+"""
+        test_file = tmp_path / "invalid_audience.md"
+        test_file.write_text(content, encoding="utf-8")
+
+        chunker = LoreChunker()
+        # This should fail at parser validation (before schema validation)  
+        with pytest.raises(FrontMatterValidationError, match="Invalid audience"):
+            chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+
+    def test_schema_validation_invalid_tag_format(self, tmp_path):
+        """Test that invalid tag format fails schema validation."""
+        content = """---
+chunk_id: SCHEMA-BAD-TAG
+title: "Bad Tag Test"
+audience: Player
+tags:
+  - "invalid_tag_format"
+  - "location:valid"
+---
+
+Invalid tag format.
+"""
+        test_file = tmp_path / "invalid_tag.md" 
+        test_file.write_text(content, encoding="utf-8")
+
+        chunker = LoreChunker()
+        # This should fail at parser validation (before schema validation)
+        with pytest.raises(FrontMatterValidationError, match="Invalid tag format"):
+            chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+
+    def test_schema_validation_invalid_provenance(self, tmp_path):
+        """Test that invalid provenance format fails schema validation."""
+        content = """---
+chunk_id: SCHEMA-BAD-PROV
+title: "Bad Provenance Test"
+audience: Player
+tags: []
+provenance:
+  manifest_hash: "invalid_hash_format"
+  source_path: "valid/path.md"
+---
+
+Invalid provenance format.
+"""
+        test_file = tmp_path / "invalid_provenance.md"
+        test_file.write_text(content, encoding="utf-8")
+
+        chunker = LoreChunker()
+        # This should fail at parser validation (before schema validation)
+        with pytest.raises(FrontMatterValidationError, match="Invalid manifest_hash format"):
+            chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+
+    def test_provenance_validation_in_parser(self, tmp_path):
+        """Test that the parser validates provenance metadata correctly."""
+        content = """---
+chunk_id: PROV-VALID
+title: "Provenance Validation Test"
+audience: GM-Only
+tags:
+  - secret:important
+provenance:
+  manifest_hash: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  source_path: "lore/secrets/important.md"
+---
+
+Content with valid provenance metadata.
+"""
+        test_file = tmp_path / "prov_valid.md"
+        test_file.write_text(content, encoding="utf-8")
+
+        chunker = LoreChunker()
+        chunks = chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+
+        assert len(chunks) == 1
+        chunk = chunks[0]
+        assert chunk.chunk_id == "PROV-VALID-000"
+
+    def test_direct_schema_validation_function(self):
+        """Test the validate_front_matter_against_schema function directly."""
+        from Adventorator.lore_chunker import validate_front_matter_against_schema
+
+        # Valid front-matter should pass
+        valid_fm = {
+            "chunk_id": "TEST-SCHEMA",
+            "title": "Schema Test",
+            "audience": "Player",
+            "tags": ["test:validation"]
+        }
+        # Should not raise any exception
+        validate_front_matter_against_schema(valid_fm)
+
+        # Invalid front-matter should fail
+        invalid_fm = {
+            "chunk_id": "invalid-id",  # lowercase not allowed by schema
+            "title": "Invalid Schema Test",
+            "audience": "Player",
+            "tags": ["test:validation"]
+        }
+        with pytest.raises(FrontMatterValidationError, match="Front-matter schema validation failed"):
+            validate_front_matter_against_schema(invalid_fm)

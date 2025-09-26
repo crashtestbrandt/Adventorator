@@ -23,6 +23,41 @@ import yaml
 from Adventorator.canonical_json import compute_canonical_hash
 
 
+def validate_front_matter_against_schema(front_matter: dict[str, Any], schema_path: Path | None = None) -> None:
+    """Validate front-matter against the JSON schema contract.
+
+    Args:
+        front_matter: Parsed front-matter dictionary
+        schema_path: Path to schema file (defaults to contracts/content/chunk-front-matter.v1.json)
+
+    Raises:
+        FrontMatterValidationError: If schema validation fails
+    """
+    try:
+        import jsonschema  # type: ignore[import-untyped]
+    except ImportError:
+        # Skip schema validation if jsonschema is not available
+        return
+
+    if schema_path is None:
+        schema_path = Path("contracts/content/chunk-front-matter.v1.json")
+
+    if not schema_path.exists():
+        raise FrontMatterValidationError(f"Front-matter schema not found at {schema_path}")
+
+    try:
+        with open(schema_path, encoding="utf-8") as f:
+            import json
+            schema = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        raise FrontMatterValidationError(f"Failed to load front-matter schema: {exc}") from exc
+
+    try:
+        jsonschema.validate(front_matter, schema)
+    except jsonschema.ValidationError as exc:
+        raise FrontMatterValidationError(f"Front-matter schema validation failed: {exc.message}") from exc
+
+
 class LoreChunkerError(Exception):
     """Base exception for lore chunker errors."""
 
@@ -180,6 +215,9 @@ class LoreChunker:
         front_matter, body = self._extract_front_matter(normalized_content, file_path)
         self._validate_front_matter(front_matter, file_path)
 
+        # Validate against JSON schema contract
+        validate_front_matter_against_schema(front_matter)
+
         # Enforce audience gating
         self._enforce_audience_gating(front_matter["audience"], file_path)
 
@@ -292,6 +330,49 @@ class LoreChunker:
                     f"embedding_hint too long ({len(embedding_hint)} chars) in {file_path}. "
                     "Maximum length is 128 characters."
                 )
+
+        # Validate provenance if present
+        if "provenance" in front_matter:
+            self._validate_provenance_metadata(front_matter["provenance"], file_path)
+
+    def _validate_provenance_metadata(self, provenance: Any, file_path: Path) -> None:
+        """Validate optional provenance metadata against schema requirements.
+
+        Args:
+            provenance: Provenance object from front-matter
+            file_path: Path for error reporting
+
+        Raises:
+            FrontMatterValidationError: If provenance validation fails
+        """
+        if not isinstance(provenance, dict):
+            raise FrontMatterValidationError(
+                f"provenance must be an object in {file_path}"
+            )
+
+        # Check required fields
+        required_fields = ["manifest_hash", "source_path"]
+        for field in required_fields:
+            if field not in provenance:
+                raise FrontMatterValidationError(
+                    f"Missing required field '{field}' in provenance of {file_path}"
+                )
+
+        # Validate manifest_hash format (64 hex chars)
+        manifest_hash = provenance["manifest_hash"]
+        if not isinstance(manifest_hash, str) or not re.match(r"^[a-f0-9]{64}$", manifest_hash):
+            raise FrontMatterValidationError(
+                f"Invalid manifest_hash format '{manifest_hash}' in provenance of {file_path}. "
+                "Must be a 64-character lowercase hexadecimal string."
+            )
+
+        # Validate source_path
+        source_path = provenance["source_path"]
+        if not isinstance(source_path, str) or not source_path.strip():
+            raise FrontMatterValidationError(
+                f"Invalid source_path in provenance of {file_path}. "
+                "Must be a non-empty string."
+            )
 
     def _enforce_audience_gating(self, audience: str, file_path: Path) -> None:
         """Enforce audience gating with descriptive errors.
@@ -475,4 +556,5 @@ __all__ = [
     "AudienceEnforcementError",
     "LoreChunk",
     "LoreChunker",
+    "validate_front_matter_against_schema",
 ]
