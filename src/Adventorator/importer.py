@@ -25,6 +25,7 @@ from typing import Any
 
 from Adventorator.manifest_validation import ManifestValidationError, validate_manifest
 from Adventorator.metrics import inc_counter as metrics_inc_counter
+from Adventorator.metrics import observe_histogram
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -1677,8 +1678,8 @@ class FinalizationPhase:
             duration_ms=duration_ms,
         )
         
-        # Record duration metric
-        inc_counter("importer.duration_ms", value=duration_ms, package_id=context.package_id)
+        # Record duration metric as histogram
+        observe_histogram("importer.duration_ms", duration_ms)
         
         return {
             "completion_event": completion_event,
@@ -1737,7 +1738,7 @@ class FinalizationPhase:
                 if isinstance(entry.get("sequence_no"), int)
             )
         
-        # Verify sequence contiguity (basic check)
+        # Verify sequence contiguity and enforce "no gaps" requirement
         sequences = [
             entry.get("sequence_no") for entry in import_logs 
             if isinstance(entry.get("sequence_no"), int)
@@ -1752,6 +1753,13 @@ class FinalizationPhase:
                     actual=sequences,
                     package_id=context.package_id,
                 )
+                # Enforce contiguity requirement - raise error for gaps
+                missing_sequences = set(expected_sequences) - set(sequences)
+                if missing_sequences:
+                    raise ImporterError(
+                        f"ImportLog sequence gaps detected in package {context.package_id}: "
+                        f"missing sequences {sorted(missing_sequences)}"
+                    )
         
         summary_entry = {
             "phase": "finalization",
@@ -1789,6 +1797,92 @@ def create_lore_phase(
     )
 
 
+def create_finalization_phase(features_importer: bool = False) -> FinalizationPhase:
+    """Factory function to create finalization phase with feature flags.
+
+    Args:
+        features_importer: Value of features.importer feature flag
+
+    Returns:
+        Configured FinalizationPhase instance
+    """
+    return FinalizationPhase(features_importer_enabled=features_importer)
+
+
+def run_complete_import_pipeline(
+    package_root: Path, 
+    features_importer: bool = False, 
+    features_importer_embeddings: bool = False
+) -> dict[str, Any]:
+    """Run the complete import pipeline with finalization.
+    
+    This provides a production call site that demonstrates how the finalization
+    phase integrates with the broader importer flow.
+    
+    Args:
+        package_root: Root directory containing package files
+        features_importer: Whether importer features are enabled
+        features_importer_embeddings: Whether embedding features are enabled
+        
+    Returns:
+        Complete import result including finalization output
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+    
+    from Adventorator.importer_context import ImporterRunContext
+    
+    # Initialize context
+    context = ImporterRunContext()
+    start_time = datetime.now(timezone.utc)
+    
+    # Manifest phase
+    manifest_phase = ManifestPhase(features_importer_enabled=features_importer)
+    manifest_path = package_root / "package.manifest.json"
+    manifest_result = manifest_phase.validate_and_register(manifest_path, package_root)
+    context.record_manifest(manifest_result)
+    
+    manifest_with_hash = dict(manifest_result["manifest"])
+    manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
+    
+    # Entity phase
+    entity_phase = EntityPhase(features_importer_enabled=features_importer)
+    entities = entity_phase.parse_and_validate_entities(package_root, manifest_with_hash)
+    context.record_entities(entities)
+    
+    # Edge phase
+    edge_phase = EdgePhase(features_importer_enabled=features_importer)
+    edges = edge_phase.parse_and_validate_edges(package_root, manifest_with_hash, entities)
+    context.record_edges(edges)
+    
+    # Ontology phase
+    ontology_phase = OntologyPhase(features_importer_enabled=features_importer)
+    tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
+        package_root, manifest_with_hash
+    )
+    context.record_ontology(tags, affordances, ontology_logs)
+    
+    # Lore phase
+    lore_phase = create_lore_phase(features_importer, features_importer_embeddings)
+    chunks = lore_phase.parse_and_validate_lore(package_root, manifest_with_hash)
+    context.record_lore_chunks(chunks)
+    
+    # Finalization phase
+    finalization_phase = create_finalization_phase(features_importer)
+    finalization_result = finalization_phase.finalize_import(context, start_time)
+    
+    return {
+        "manifest_result": manifest_result,
+        "entities": entities,
+        "edges": edges,
+        "tags": tags,
+        "affordances": affordances,
+        "chunks": chunks,
+        "finalization": finalization_result,
+        "context": context,
+    }
+
+
 __all__ = [
     "ManifestPhase",
     "EntityPhase", 
@@ -1797,6 +1891,8 @@ __all__ = [
     "LorePhase",
     "FinalizationPhase",
     "create_lore_phase",
+    "create_finalization_phase",
+    "run_complete_import_pipeline",
     "ImporterError",
     "ManifestValidationError",
     "EntityValidationError",
