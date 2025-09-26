@@ -18,6 +18,10 @@ from Adventorator.lore_chunker import (
     LoreChunker,
 )
 
+# Test constants
+TEST_MANIFEST_HASH = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+TEST_PACKAGE_ID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+
 
 class TestLoreChunk:
     """Test the LoreChunk data class."""
@@ -32,7 +36,7 @@ class TestLoreChunk:
             content="Test content with ünicøde",
             source_path="test.md",
             chunk_index=0,
-            provenance={"package_id": "test", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+            provenance={"package_id": "test", "manifest_hash": TEST_MANIFEST_HASH},
         )
 
         hash1 = chunk.content_hash
@@ -52,7 +56,7 @@ class TestLoreChunk:
             content="Test content",
             source_path="test.md",
             chunk_index=0,
-            provenance={"package_id": "test", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+            provenance={"package_id": "test", "manifest_hash": TEST_MANIFEST_HASH},
         )
 
         chunk_with = LoreChunk(
@@ -63,7 +67,7 @@ class TestLoreChunk:
             content="Test content",
             source_path="test.md",
             chunk_index=0,
-            provenance={"package_id": "test", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+            provenance={"package_id": "test", "manifest_hash": TEST_MANIFEST_HASH},
             embedding_hint="focus:atmosphere",
         )
 
@@ -94,7 +98,7 @@ class TestLoreChunk:
             content="Test content",
             source_path="test.md",
             chunk_index=0,
-            provenance={"package_id": "test", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+            provenance={"package_id": "test", "manifest_hash": TEST_MANIFEST_HASH},
             embedding_hint="focus:atmosphere",
         )
 
@@ -109,7 +113,7 @@ class TestLoreChunk:
         assert payload["word_count"] == 2
         assert payload["embedding_hint"] == "focus:atmosphere"
         assert "content_hash" in payload
-        assert payload["provenance"] == {"package_id": "test", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        assert payload["provenance"] == {"package_id": "test", "manifest_hash": TEST_MANIFEST_HASH}
 
 
 class TestLoreChunker:
@@ -146,7 +150,7 @@ Patrons begin to arrive.
         test_file.write_text(content, encoding="utf-8")
 
         chunker = LoreChunker()
-        chunks = chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks = chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
         assert len(chunks) == 2  # Split by ## headings
 
@@ -185,7 +189,7 @@ Content with {composed} and {decomposed}.
         test_file.write_text(content, encoding="utf-8")
 
         chunker = LoreChunker()
-        chunks = chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks = chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
         assert len(chunks) == 1
         chunk = chunks[0]
@@ -214,12 +218,12 @@ Test content with embedding hint.
 
         # Test with flag disabled
         chunker_disabled = LoreChunker(features_importer_embeddings=False)
-        chunks_disabled = chunker_disabled.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks_disabled = chunker_disabled.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
         assert chunks_disabled[0].embedding_hint is None
 
         # Test with flag enabled
         chunker_enabled = LoreChunker(features_importer_embeddings=True)
-        chunks_enabled = chunker_enabled.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks_enabled = chunker_enabled.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
         assert chunks_enabled[0].embedding_hint == "focus:atmosphere"
 
         # Hashes should be different because the enabled version includes the hint
@@ -233,7 +237,7 @@ Test content with embedding hint.
 
         chunker = LoreChunker()
         with pytest.raises(FrontMatterValidationError, match="Missing YAML front-matter"):
-            chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
         # Invalid YAML
         invalid_yaml = """---
@@ -245,7 +249,7 @@ Content
 """
         test_file.write_text(invalid_yaml, encoding="utf-8")
         with pytest.raises(FrontMatterValidationError, match="Invalid YAML front-matter"):
-            chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
         # Missing required fields
         missing_field = """---
@@ -258,7 +262,7 @@ Content
 """
         test_file.write_text(missing_field, encoding="utf-8")
         with pytest.raises(FrontMatterValidationError, match="Missing required field 'audience'"):
-            chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
     def test_chunk_id_validation(self, tmp_path):
         """Test chunk_id format validation."""
@@ -276,7 +280,7 @@ Content
 
         chunker = LoreChunker()
         with pytest.raises(FrontMatterValidationError, match="Invalid chunk_id format"):
-            chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
     def test_audience_validation(self, tmp_path):
         """Test audience value validation."""
@@ -293,7 +297,7 @@ Content
 
         chunker = LoreChunker()
         with pytest.raises(FrontMatterValidationError, match="Invalid audience"):
-            chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
     def test_tag_format_validation(self, tmp_path):
         """Test tag format validation."""
@@ -312,7 +316,7 @@ Content
 
         chunker = LoreChunker()
         with pytest.raises(FrontMatterValidationError, match="Invalid tag format"):
-            chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
     def test_embedding_hint_length_validation(self, tmp_path):
         """Test embedding_hint length validation."""
@@ -331,7 +335,7 @@ Content
 
         chunker = LoreChunker()
         with pytest.raises(FrontMatterValidationError, match="embedding_hint too long"):
-            chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
     def test_chunking_by_headings(self, tmp_path):
         """Test content splitting by heading boundaries."""
@@ -364,7 +368,7 @@ Deep content.
         test_file.write_text(content, encoding="utf-8")
 
         chunker = LoreChunker()
-        chunks = chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks = chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
         # Should split on ## headings (level 2+)
         assert len(chunks) >= 2
@@ -397,7 +401,7 @@ Another paragraph that should be in a separate chunk due to length.
         test_file.write_text(content, encoding="utf-8")
 
         chunker = LoreChunker(max_tokens=100)  # Small limit for testing
-        chunks = chunker.parse_lore_file(test_file, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks = chunker.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
 
         # Should split into multiple chunks due to length
         assert len(chunks) > 1
@@ -431,7 +435,7 @@ class TestLorePhase:
     def test_no_lore_directory(self, tmp_path):
         """Test handling when no lore directory exists."""
         phase = LorePhase(features_importer_enabled=True)
-        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        manifest = {"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH}
 
         chunks = phase.parse_and_validate_lore(tmp_path, manifest)
         assert len(chunks) == 0
@@ -464,7 +468,7 @@ Content from file 1.
         (lore_dir / "file_a.md").write_text(file1_content, encoding="utf-8")
 
         phase = LorePhase(features_importer_enabled=True)
-        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        manifest = {"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH}
 
         chunks = phase.parse_and_validate_lore(tmp_path, manifest)
 
@@ -501,7 +505,7 @@ Different content 2.
         (lore_dir / "file2.md").write_text(file2_content, encoding="utf-8")
 
         phase = LorePhase(features_importer_enabled=True)
-        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        manifest = {"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH}
 
         with pytest.raises(LoreCollisionError, match="Chunk ID collision detected"):
             phase.parse_and_validate_lore(tmp_path, manifest)
@@ -525,7 +529,7 @@ Identical content.
         (lore_dir / "file2.md").write_text(identical_content, encoding="utf-8")
 
         phase = LorePhase(features_importer_enabled=True)
-        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        manifest = {"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH}
 
         chunks = phase.parse_and_validate_lore(tmp_path, manifest)
 
@@ -556,7 +560,7 @@ Test content for event.
             features_importer_embeddings=True,
         )
         # Use proper ULID format for package_id and 64-char hex for manifest_hash
-        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        manifest = {"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH}
 
         chunks = phase.parse_and_validate_lore(tmp_path, manifest)
         events = phase.create_seed_events(chunks)
@@ -598,7 +602,7 @@ class TestIntegrationWithFixtures:
             pytest.skip("Fixture file not found")
 
         chunker = LoreChunker(features_importer_embeddings=True)
-        chunks = chunker.parse_lore_file(fixture_path, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks = chunker.parse_lore_file(fixture_path, "test-pkg", TEST_MANIFEST_HASH)
 
         assert len(chunks) >= 1
         chunk = chunks[0]
@@ -621,7 +625,7 @@ class TestIntegrationWithFixtures:
             pytest.skip("Fixture file not found")
 
         chunker = LoreChunker()
-        chunks = chunker.parse_lore_file(fixture_path, "test-pkg", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks = chunker.parse_lore_file(fixture_path, "test-pkg", TEST_MANIFEST_HASH)
 
         assert len(chunks) >= 2  # Should split on headings
 
@@ -650,7 +654,7 @@ class TestGoldenHashFixtures:
             content="Simple test content for hashing.",
             source_path="test.md",
             chunk_index=0,
-            provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+            provenance={"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH},
         )
 
         # This is the expected canonical hash for this exact content
@@ -667,7 +671,7 @@ class TestGoldenHashFixtures:
             content="Content with embedding hint for testing.",
             source_path="embed_test.md",
             chunk_index=1,
-            provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+            provenance={"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH},
             embedding_hint="focus:personality",
         )
 
@@ -686,7 +690,7 @@ class TestGoldenHashFixtures:
             content=composed_content,
             source_path="unicode.md",
             chunk_index=0,
-            provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"},
+            provenance={"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH},
         )
 
         expected_hash = "711fb7b0cc0b0c2dde7a9c1a0bff9f79fa5ca99e87005fb19aefc88b094cb826"
@@ -705,7 +709,7 @@ class TestGoldenHashFixtures:
                     content="Min",
                     source_path="min.md",
                     chunk_index=0,
-                    provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+                    provenance={"package_id": TEST_PACKAGE_ID, "manifest_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
                 ),
                 "expected": "b66704778153305000381ee9cf0d79cc02f3f945d7f6a87fd5f8dc6dd8537b78"
             },
@@ -719,7 +723,7 @@ class TestGoldenHashFixtures:
                     content="This is a very long and complex content block that includes multiple sentences, Unicode characters like café and naïve, and tests the limits of our chunking algorithm. It should produce a stable hash regardless of the complexity.",
                     source_path="complex/maximal/test.md",
                     chunk_index=42,
-                    provenance={"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"},
+                    provenance={"package_id": TEST_PACKAGE_ID, "manifest_hash": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"},
                     embedding_hint="focus:complexity,depth:comprehensive,tone:analytical"
                 ),
                 "expected": "ca00fbe1a094d858e6ee58dc7a3cd621481d8a651583757735663b431eca1347"
@@ -774,7 +778,7 @@ The mayor harbors a dark secret.
         (lore_dir / "file2.md").write_text(content2, encoding="utf-8")
 
         phase = LorePhase(features_importer_enabled=True)
-        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        manifest = {"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH}
 
         # First run
         chunks1 = phase.parse_and_validate_lore(tmp_path, manifest)
@@ -818,7 +822,7 @@ This content is identical across files.
         (lore_dir / "file2.md").write_text(identical_content, encoding="utf-8")
 
         phase = LorePhase(features_importer_enabled=True)
-        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        manifest = {"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH}
 
         chunks = phase.parse_and_validate_lore(tmp_path, manifest)
 
@@ -856,7 +860,7 @@ Different content that conflicts.
         (lore_dir / "file2.md").write_text(content2, encoding="utf-8")
 
         phase = LorePhase(features_importer_enabled=True)
-        manifest = {"package_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "manifest_hash": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}
+        manifest = {"package_id": TEST_PACKAGE_ID, "manifest_hash": TEST_MANIFEST_HASH}
 
         # Should raise LoreCollisionError
         with pytest.raises(LoreCollisionError, match="Chunk ID collision detected"):
@@ -877,7 +881,7 @@ tags:
   - mood:mysterious
 embedding_hint: "focus:atmosphere"
 provenance:
-  manifest_hash: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+  manifest_hash: TEST_MANIFEST_HASH
   source_path: "lore/test.md"
 ---
 
@@ -887,7 +891,7 @@ Valid content with compliant front-matter.
         test_file.write_text(content, encoding="utf-8")
 
         chunker = LoreChunker(features_importer_embeddings=True)
-        chunks = chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks = chunker.parse_lore_file(test_file, TEST_PACKAGE_ID, TEST_MANIFEST_HASH)
 
         assert len(chunks) == 1
         chunk = chunks[0]
@@ -911,7 +915,7 @@ Invalid chunk_id format.
         chunker = LoreChunker()
         # This should fail at parser validation (before schema validation)
         with pytest.raises(FrontMatterValidationError, match="Invalid chunk_id format"):
-            chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, TEST_PACKAGE_ID, TEST_MANIFEST_HASH)
 
     def test_schema_validation_invalid_audience(self, tmp_path):
         """Test that invalid audience fails schema validation."""
@@ -930,7 +934,7 @@ Invalid audience value.
         chunker = LoreChunker()
         # This should fail at parser validation (before schema validation)  
         with pytest.raises(FrontMatterValidationError, match="Invalid audience"):
-            chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, TEST_PACKAGE_ID, TEST_MANIFEST_HASH)
 
     def test_schema_validation_invalid_tag_format(self, tmp_path):
         """Test that invalid tag format fails schema validation."""
@@ -951,7 +955,7 @@ Invalid tag format.
         chunker = LoreChunker()
         # This should fail at parser validation (before schema validation)
         with pytest.raises(FrontMatterValidationError, match="Invalid tag format"):
-            chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, TEST_PACKAGE_ID, TEST_MANIFEST_HASH)
 
     def test_schema_validation_invalid_provenance(self, tmp_path):
         """Test that invalid provenance format fails schema validation."""
@@ -973,7 +977,7 @@ Invalid provenance format.
         chunker = LoreChunker()
         # This should fail at parser validation (before schema validation)
         with pytest.raises(FrontMatterValidationError, match="Invalid manifest_hash format"):
-            chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+            chunker.parse_lore_file(test_file, TEST_PACKAGE_ID, TEST_MANIFEST_HASH)
 
     def test_provenance_validation_in_parser(self, tmp_path):
         """Test that the parser validates provenance metadata correctly."""
@@ -994,7 +998,7 @@ Content with valid provenance metadata.
         test_file.write_text(content, encoding="utf-8")
 
         chunker = LoreChunker()
-        chunks = chunker.parse_lore_file(test_file, "01ARZ3NDEKTSV4RRFFQ69G5FAV", "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        chunks = chunker.parse_lore_file(test_file, TEST_PACKAGE_ID, TEST_MANIFEST_HASH)
 
         assert len(chunks) == 1
         chunk = chunks[0]

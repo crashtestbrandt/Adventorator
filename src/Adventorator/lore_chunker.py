@@ -13,6 +13,7 @@ Implements requirements from ARCH-CDA-001 and EPIC-CDA-IMPORT-002.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import unicodedata
 from pathlib import Path
@@ -47,7 +48,6 @@ def validate_front_matter_against_schema(front_matter: dict[str, Any], schema_pa
 
     try:
         with open(schema_path, encoding="utf-8") as f:
-            import json
             schema = json.load(f)
     except (json.JSONDecodeError, OSError) as exc:
         raise FrontMatterValidationError(f"Failed to load front-matter schema: {exc}") from exc
@@ -162,6 +162,11 @@ class LoreChunker:
 
     # Heading pattern for chunk boundaries (## or higher)
     HEADING_PATTERN = re.compile(r"^#{2,6}\s+", re.MULTILINE)
+
+    # Validation patterns
+    CHUNK_ID_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9_-]*[A-Z0-9]$")
+    TAG_FORMAT_PATTERN = re.compile(r"^[a-z][a-z0-9_]*:[a-z0-9_-]+$")
+    MANIFEST_HASH_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 
     # Default maximum tokens per chunk (conservative estimate: ~4 chars per token)
     DEFAULT_MAX_TOKENS = 2000
@@ -287,9 +292,7 @@ class LoreChunker:
 
         # Validate chunk_id format
         chunk_id = front_matter["chunk_id"]
-        if not isinstance(chunk_id, str) or not re.match(
-            r"^[A-Z0-9][A-Z0-9_-]*[A-Z0-9]$", chunk_id
-        ):
+        if not isinstance(chunk_id, str) or not self.CHUNK_ID_PATTERN.match(chunk_id):
             raise FrontMatterValidationError(
                 f"Invalid chunk_id format '{chunk_id}' in {file_path}. "
                 "Must match pattern: ^[A-Z0-9][A-Z0-9_-]*[A-Z0-9]$"
@@ -314,7 +317,7 @@ class LoreChunker:
             raise FrontMatterValidationError(f"Tags must be an array in {file_path}")
 
         for tag in tags:
-            if not isinstance(tag, str) or not re.match(r"^[a-z][a-z0-9_]*:[a-z0-9_-]+$", tag):
+            if not isinstance(tag, str) or not self.TAG_FORMAT_PATTERN.match(tag):
                 raise FrontMatterValidationError(
                     f"Invalid tag format '{tag}' in {file_path}. "
                     "Must match pattern: ^[a-z][a-z0-9_]*:[a-z0-9_-]+$ (ASCII only, lowercase)"
@@ -360,7 +363,7 @@ class LoreChunker:
 
         # Validate manifest_hash format (64 hex chars)
         manifest_hash = provenance["manifest_hash"]
-        if not isinstance(manifest_hash, str) or not re.match(r"^[a-f0-9]{64}$", manifest_hash):
+        if not isinstance(manifest_hash, str) or not self.MANIFEST_HASH_PATTERN.match(manifest_hash):
             raise FrontMatterValidationError(
                 f"Invalid manifest_hash format '{manifest_hash}' in provenance of {file_path}. "
                 "Must be a 64-character lowercase hexadecimal string."
