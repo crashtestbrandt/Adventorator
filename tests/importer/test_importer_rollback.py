@@ -486,7 +486,8 @@ class TestDatabaseRollbackValidation:
             with pytest.raises(EntityCollisionError):
                 await run_full_import_with_database(
                     package_root=package_root,
-                    campaign_id=1
+                    campaign_id=1,
+                    features_importer=True
                 )
             
             # Verify database state is unchanged (rollback completed)
@@ -541,7 +542,8 @@ class TestDatabaseRollbackValidation:
             with pytest.raises(ImporterError):
                 await run_full_import_with_database(
                     package_root=package_root,
-                    campaign_id=1
+                    campaign_id=1,
+                    features_importer=True
                 )
             
             # Verify database state is unchanged (rollback completed)

@@ -202,7 +202,7 @@ class TestImporterIdempotency:
         
         # Create location entity for edge reference
         location_data = {
-            "stable_id": "01JLOC00000000000000000001",
+            "stable_id": "01JC0C00000000000000000001",
             "kind": "location",
             "name": "Great Library",
             "tags": ["library"],
@@ -219,7 +219,7 @@ class TestImporterIdempotency:
             "stable_id": "01JEDGE0000000000000000001",
             "type": "npc.resides_in.location", 
             "src_ref": "01JA6Z7F8NPC00000000000000",
-            "dst_ref": "01JLOC00000000000000000001",
+            "dst_ref": "01JC0C00000000000000000001",
             "attributes": {
                 "relationship_context": "workplace"
             },
@@ -429,7 +429,12 @@ class TestImporterIdempotencyDatabaseIntegration:
                 await session.commit()
             
             # Run 1: First import with database integration
-            result1 = await run_full_import_with_database(package_root, campaign_id)
+            result1 = await run_full_import_with_database(
+                package_root, 
+                campaign_id, 
+                features_importer=True,
+                features_importer_embeddings=True
+            )
             
             # Query database state after first run
             async with session_scope() as session:
@@ -444,7 +449,12 @@ class TestImporterIdempotencyDatabaseIntegration:
                 import_logs1 = import_logs1_query.scalars().all()
             
             # Run 2: Idempotent re-run (should produce identical state)
-            result2 = await run_full_import_with_database(package_root, campaign_id)
+            result2 = await run_full_import_with_database(
+                package_root, 
+                campaign_id, 
+                features_importer=True,
+                features_importer_embeddings=True
+            )
             
             # Query database state after second run
             async with session_scope() as session:

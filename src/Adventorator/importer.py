@@ -462,6 +462,7 @@ class EntityPhase:
         except EntityCollisionError as exc:
             collisions_detected = 1
             inc_counter("importer.collision", value=1, package_id=package_id)
+            inc_counter("importer.entities.collision", value=1, package_id=package_id)
             # Record rollback metrics and logs
             record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
             raise exc
@@ -770,6 +771,11 @@ class EdgePhase:
                     if file_hash != existing_hash:
                         inc_counter(
                             "importer.collision",
+                            value=1,
+                            package_id=package_id,
+                        )
+                        inc_counter(
+                            "importer.edges.collision",
                             value=1,
                             package_id=package_id,
                         )
@@ -1668,6 +1674,7 @@ class LorePhase:
         except LoreCollisionError as exc:
             collisions_detected = 1
             inc_counter("importer.collision", value=1, package_id=package_id)
+            inc_counter("importer.lore.collision", value=1, package_id=package_id)
             # Record rollback metrics and logs
             record_rollback("lore", package_id, manifest_hash, str(exc))
             raise exc

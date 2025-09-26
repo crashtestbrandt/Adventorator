@@ -127,7 +127,7 @@ class TestEntityPhase:
                 phase.parse_and_validate_entities(package_root, manifest)
                 raise AssertionError("Should have raised EntityValidationError")
             except EntityValidationError as e:
-                assert "Missing required field 'tags'" in str(e)
+                assert "'tags' is a required property" in str(e)
 
     def test_parse_entities_collision_different_hash(self):
         """Test collision detection with different file hashes."""

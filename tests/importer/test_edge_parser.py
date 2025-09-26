@@ -117,7 +117,7 @@ class TestEdgePhase:
             invalid_edge = {
                 "stable_id": "01JAR9WYH41R8TFM6Z0X5E7EDX",
                 "type": "npc.resides_in.location",
-                "src_ref": "01JAR9WYH41R8TFM6Z0X5E7MISSING",
+                "src_ref": "01JAR9WYH41R8TFM6Z0X5E7M00",
                 "dst_ref": DST_ID,
                 "attributes": {"relationship_context": "liaison_residence"},
             }
@@ -159,7 +159,7 @@ class TestEdgePhase:
                 phase.parse_and_validate_edges(package_root, manifest, self._entity_registry())
                 raise AssertionError("Unsupported type should raise EdgeValidationError")
             except EdgeValidationError as exc:
-                assert "unsupported edge type" in str(exc)
+                assert "is not one of" in str(exc)
 
     def test_required_attributes_enforced(self):
         phase = EdgePhase(features_importer_enabled=True)
@@ -212,7 +212,7 @@ class TestEdgePhase:
                     "oversight": "Council",
                 },
                 "validity": {
-                    "start_event_id": "01JAR9WYH41R8TFM6Z0X5EVLD9",
+                    "start_event_id": "01JAR9WYH41R8TFM6Z0X5EV009",
                     "end_event_id": "01JAR9WYH41R8TFM6Z0X5EV001",
                 },
             }
