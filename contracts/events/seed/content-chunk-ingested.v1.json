@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.adventorator.com/events/seed/content-chunk-ingested.v1.json",
+  "title": "Content Chunk Ingested Event Schema",
+  "description": "Schema for seed.content_chunk_ingested events emitted during lore ingestion phase",
+  "type": "object",
+  "required": [
+    "chunk_id",
+    "title",
+    "audience", 
+    "tags",
+    "source_path",
+    "content_hash",
+    "provenance"
+  ],
+  "properties": {
+    "chunk_id": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9_-]*[A-Z0-9]$",
+      "minLength": 3,
+      "maxLength": 64,
+      "description": "Stable identifier for the chunk from front-matter"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable title for the chunk"
+    },
+    "audience": {
+      "type": "string",
+      "enum": ["Player", "GM-Only", "Teen", "Adult"],
+      "description": "Audience gating classification"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*:[a-z0-9_-]+$"
+      },
+      "uniqueItems": true,
+      "description": "Array of canonical tags in category:value format"
+    },
+    "source_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Relative path to the source markdown file"
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hash of canonical chunk content (front-matter + body)"
+    },
+    "embedding_hint": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "Optional embedding hint (only when features.importer_embeddings enabled)"
+    },
+    "chunk_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Zero-based index of chunk within source file for deterministic ordering"
+    },
+    "word_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Word count of the chunk content for metrics"
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["package_id", "manifest_hash", "source_path", "file_hash"],
+      "properties": {
+        "package_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "ULID of the package"
+        },
+        "manifest_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hash of the package manifest"
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path to the source file within package"
+        },
+        "file_hash": {
+          "type": "string", 
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hash of the source markdown file"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

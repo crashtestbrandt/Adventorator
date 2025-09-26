@@ -28,8 +28,8 @@ class TestOntologyIntegration:
                     "revision": "2025-02-21",
                     "provenance": {
                         "manifest_path": "packages/test/package.manifest.json",
-                        "sha256": "aaaa111111111111111111111111111111111111111111111111111111111111"
-                    }
+                        "sha256": "aaaa111111111111111111111111111111111111111111111111111111111111",
+                    },
                 },
                 "tags": [
                     {
@@ -39,14 +39,11 @@ class TestOntologyIntegration:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike", "swing"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        },
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                         "metadata": {
                             "description": "Direct offensive action.",
-                            "canonical_affordance": "affordance.attack.allowed"
-                        }
+                            "canonical_affordance": "affordance.attack.allowed",
+                        },
                     },
                     {
                         "tag_id": "action.cast_spell",
@@ -55,10 +52,7 @@ class TestOntologyIntegration:
                         "display_name": "Cast Spell",
                         "synonyms": ["cast", "spell", "cast spell"],
                         "audience": ["player"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": "magic-enabled"
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": "magic-enabled"},
                     },
                     {
                         "tag_id": "target.door",
@@ -67,15 +61,12 @@ class TestOntologyIntegration:
                         "display_name": "Door",
                         "synonyms": ["door", "gate"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        },
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                         "metadata": {
                             "description": "Door targets within the dungeon map.",
-                            "canonical_affordance": "affordance.environment.openable"
-                        }
-                    }
+                            "canonical_affordance": "affordance.environment.openable",
+                        },
+                    },
                 ],
                 "affordances": [
                     {
@@ -86,15 +77,12 @@ class TestOntologyIntegration:
                         "gating": {
                             "audience": "player",
                             "requires_feature": None,
-                            "ruleset_version": "v2.7"
+                            "ruleset_version": "v2.7",
                         },
                         "metadata": {
                             "effect": "Allows melee attack rolls",
-                            "improbability_drive": {
-                                "intent_frame": "attack",
-                                "confidence": 97
-                            }
-                        }
+                            "improbability_drive": {"intent_frame": "attack", "confidence": 97},
+                        },
                     },
                     {
                         "affordance_id": "affordance.environment.openable",
@@ -104,10 +92,10 @@ class TestOntologyIntegration:
                         "gating": {
                             "audience": "gm",
                             "requires_feature": None,
-                            "ruleset_version": "v2.7"
-                        }
-                    }
-                ]
+                            "ruleset_version": "v2.7",
+                        },
+                    },
+                ],
             }
 
             ontology_file = ontology_dir / "complete.json"
@@ -116,35 +104,35 @@ class TestOntologyIntegration:
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
             # Step 1: Parse and validate
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
-            
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
+
             assert len(tags) == 3
             assert len(affordances) == 2
             assert len(import_log_entries) == 5  # 3 tags + 2 affordances
-            
+
             # Verify tags are normalized
             attack_tag = next(t for t in tags if t["tag_id"] == "action.attack")
             # Normalized to lowercase
             assert attack_tag["synonyms"] == ["attack", "strike", "swing"]
             assert attack_tag["slug"] == "attack"
-            
+
             spell_tag = next(t for t in tags if t["tag_id"] == "action.cast_spell")
             assert spell_tag["slug"] == "cast-spell"  # Normalized with hyphens
-            
+
             # Step 2: Duplicate checking is automatic now - no separate step needed
-            
-            # Step 3: Emit seed events (no longer needs source_paths parameter) 
+
+            # Step 3: Emit seed events (no longer needs source_paths parameter)
             event_counts = phase.emit_seed_events(tags, affordances, manifest)
-            
+
             assert event_counts["tag_events"] == 3
             assert event_counts["affordance_events"] == 2
 
     @patch("Adventorator.importer.inc_counter")
     @patch("Adventorator.importer.emit_structured_log")
     def test_complete_workflow_with_duplicates_and_metrics(
-        self, 
-        mock_emit_log: MagicMock, 
-        mock_inc_counter: MagicMock
+        self, mock_emit_log: MagicMock, mock_inc_counter: MagicMock
     ):
         """Test complete workflow including duplicate handling and metrics."""
         phase = OntologyPhase(features_importer_enabled=True)
@@ -165,13 +153,10 @@ class TestOntologyIntegration:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     }
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             ontology_data_2 = {
@@ -184,10 +169,7 @@ class TestOntologyIntegration:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     },
                     {
                         "tag_id": "action.move",  # Unique tag
@@ -196,13 +178,10 @@ class TestOntologyIntegration:
                         "display_name": "Move",
                         "synonyms": ["move", "go", "walk"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
-                    }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
+                    },
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             # Write files in alphabetical order for deterministic processing
@@ -212,8 +191,10 @@ class TestOntologyIntegration:
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
             # Parse ontology (duplicates handled automatically)
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
-            
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
+
             # Should get unique tags only (duplicates automatically removed)
             assert len(tags) == 2  # attack (unique), move (unique)
             assert len(affordances) == 0
@@ -226,19 +207,15 @@ class TestOntologyIntegration:
 
             # Verify metrics were called (parsing metrics called before duplicate removal)
             mock_inc_counter.assert_any_call(
-                "importer.tags.parsed", 
+                "importer.tags.parsed",
                 value=3,  # Original count before duplicate removal
-                package_id="test-package-001"
+                package_id="test-package-001",
             )
             mock_inc_counter.assert_any_call(
-                "importer.affordances.parsed", 
-                value=0, 
-                package_id="test-package-001"
+                "importer.affordances.parsed", value=0, package_id="test-package-001"
             )
             mock_inc_counter.assert_any_call(
-                "importer.tags.skipped_idempotent", 
-                value=1, 
-                package_id="test-package-001"
+                "importer.tags.skipped_idempotent", value=1, package_id="test-package-001"
             )
 
     def test_deterministic_ordering_across_files(self):
@@ -261,10 +238,10 @@ class TestOntologyIntegration:
                         "display_name": "Zebra Action",
                         "synonyms": ["zebra"],
                         "audience": ["player"],
-                        "gating": {"ruleset_version": "v2.7", "requires_feature": None}
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     }
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             file_a = {
@@ -277,10 +254,10 @@ class TestOntologyIntegration:
                         "display_name": "Apple Action",
                         "synonyms": ["apple"],
                         "audience": ["player"],
-                        "gating": {"ruleset_version": "v2.7", "requires_feature": None}
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     }
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             file_m = {
@@ -293,10 +270,10 @@ class TestOntologyIntegration:
                         "display_name": "Middle Action",
                         "synonyms": ["middle"],
                         "audience": ["player"],
-                        "gating": {"ruleset_version": "v2.7", "requires_feature": None}
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     }
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             # Write files in reverse alphabetical order
@@ -314,9 +291,9 @@ class TestOntologyIntegration:
             assert len(tags_2) == 3
 
             # Should be in alphabetical filename order despite creation order
-            assert tags_1[0]["tag_id"] == "action.apple"    # From a_apple.json
-            assert tags_1[1]["tag_id"] == "action.middle"   # From m_middle.json  
-            assert tags_1[2]["tag_id"] == "action.zebra"    # From z_zebra.json
+            assert tags_1[0]["tag_id"] == "action.apple"  # From a_apple.json
+            assert tags_1[1]["tag_id"] == "action.middle"  # From m_middle.json
+            assert tags_1[2]["tag_id"] == "action.zebra"  # From z_zebra.json
 
             # Both runs should produce identical ordering
             tag_ids_1 = [t["tag_id"] for t in tags_1]
@@ -340,8 +317,8 @@ class TestOntologyIntegration:
                 "provenance": {
                     "package_id": "test-package-001",
                     "source_path": "ontology/test.json",
-                    "file_hash": "z" * 64
-                }
+                    "file_hash": "z" * 64,
+                },
             },
             {
                 "tag_id": "action.apple",
@@ -354,8 +331,8 @@ class TestOntologyIntegration:
                 "provenance": {
                     "package_id": "test-package-001",
                     "source_path": "ontology/test.json",
-                    "file_hash": "a" * 64
-                }
+                    "file_hash": "a" * 64,
+                },
             },
             {
                 "tag_id": "target.alpha",
@@ -368,9 +345,9 @@ class TestOntologyIntegration:
                 "provenance": {
                     "package_id": "test-package-001",
                     "source_path": "ontology/test.json",
-                    "file_hash": "a" * 64
-                }
-            }
+                    "file_hash": "a" * 64,
+                },
+            },
         ]
 
         affordances = []
@@ -382,8 +359,7 @@ class TestOntologyIntegration:
 
             # Get all the seed event calls
             seed_calls = [
-                call for call in mock_emit.call_args_list 
-                if call[0][0] == "seed_event_emitted"
+                call for call in mock_emit.call_args_list if call[0][0] == "seed_event_emitted"
             ]
 
             assert len(seed_calls) == 3

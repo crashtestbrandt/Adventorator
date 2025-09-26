@@ -714,7 +714,7 @@ def validate_event_payload_schema(payload: dict[str, Any], event_type: str = "ma
 
     Args:
         payload: Event payload to validate
-        event_type: Type of event ("manifest" or "entity")
+        event_type: Type of event ("manifest", "entity", "edge", or "content_chunk")
 
     Raises:
         ImporterError: If payload doesn't match schema
@@ -731,6 +731,8 @@ def validate_event_payload_schema(payload: dict[str, Any], event_type: str = "ma
         schema_path = Path("contracts/events/seed/entity-created.v1.json")
     elif event_type == "edge":
         schema_path = Path("contracts/events/seed/edge-created.v1.json")
+    elif event_type == "content_chunk":
+        schema_path = Path("contracts/events/seed/content-chunk-ingested.v1.json")
     else:
         raise ImporterError(f"Unknown event type: {event_type}")
 
@@ -827,7 +829,7 @@ class OntologyValidationError(Exception):
 
 class OntologyPhase:
     """Handles ontology (tags and affordances) parsing and registration.
-    
+
     Implements STORY-CDA-IMPORT-002D requirements.
     """
 
@@ -840,7 +842,7 @@ class OntologyPhase:
         manifest: dict[str, Any],
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         """Parse and validate tags and affordances from ontology files.
-        
+
         Returns:
             Tuple of (tags, affordances, import_log_entries) with normalized data and provenance.
         """
@@ -885,11 +887,11 @@ class OntologyPhase:
                 # Unicode normalization per ADR-0007
                 normalized = unicodedata.normalize("NFC", content)
                 payload = json.loads(normalized)
-                
+
                 # Compute file hash for provenance
                 file_hash = self._compute_file_hash(normalized)
                 file_hash_cache[rel_path] = file_hash
-                
+
             except (json.JSONDecodeError, OSError) as exc:
                 raise OntologyValidationError(
                     f"Failed to parse ontology file {rel_path}: {exc}"
@@ -927,7 +929,7 @@ class OntologyPhase:
         tag_skips, affordance_skips = self.check_for_duplicates_and_conflicts(
             tags, affordances, package_id
         )
-        
+
         # Validate taxonomy invariants across all parsed data
         self._validate_taxonomy_invariants(tags, affordances)
 
@@ -935,31 +937,35 @@ class OntologyPhase:
         sequence_no = 1
         unique_tags = self._filter_duplicates_from_list(tags)
         unique_affordances = self._filter_duplicates_from_list(affordances)
-        
+
         for tag in unique_tags:
-            import_log_entries.append({
-                "sequence_no": sequence_no,
-                "phase": "ontology",
-                "object_type": "tag",
-                "stable_id": tag["tag_id"],
-                "file_hash": tag["provenance"]["file_hash"],
-                "action": "created",
-                "manifest_hash": manifest_hash,
-                "timestamp": datetime.now(timezone.utc),
-            })
+            import_log_entries.append(
+                {
+                    "sequence_no": sequence_no,
+                    "phase": "ontology",
+                    "object_type": "tag",
+                    "stable_id": tag["tag_id"],
+                    "file_hash": tag["provenance"]["file_hash"],
+                    "action": "created",
+                    "manifest_hash": manifest_hash,
+                    "timestamp": datetime.now(timezone.utc),
+                }
+            )
             sequence_no += 1
-            
+
         for affordance in unique_affordances:
-            import_log_entries.append({
-                "sequence_no": sequence_no,
-                "phase": "ontology", 
-                "object_type": "affordance",
-                "stable_id": affordance["affordance_id"],
-                "file_hash": affordance["provenance"]["file_hash"],
-                "action": "created",
-                "manifest_hash": manifest_hash,
-                "timestamp": datetime.now(timezone.utc),
-            })
+            import_log_entries.append(
+                {
+                    "sequence_no": sequence_no,
+                    "phase": "ontology",
+                    "object_type": "affordance",
+                    "stable_id": affordance["affordance_id"],
+                    "file_hash": affordance["provenance"]["file_hash"],
+                    "action": "created",
+                    "manifest_hash": manifest_hash,
+                    "timestamp": datetime.now(timezone.utc),
+                }
+            )
             sequence_no += 1
 
         emit_structured_log(
@@ -989,8 +995,13 @@ class OntologyPhase:
 
         # Ensure required fields are present
         required_fields = [
-            "tag_id", "category", "slug", "display_name", 
-            "synonyms", "audience", "gating"
+            "tag_id",
+            "category",
+            "slug",
+            "display_name",
+            "synonyms",
+            "audience",
+            "gating",
         ]
         for field in required_fields:
             if field not in normalized:
@@ -1077,11 +1088,11 @@ class OntologyPhase:
         package_id: str = "unknown",
     ) -> tuple[int, int]:
         """Check for duplicate/conflicting tags and affordances, returning skip counts.
-        
+
         Implements ADR-0011 collision policy:
         - Identical hash: idempotent skip
         - Different hash: hard failure
-        
+
         Returns:
             Tuple of (tag_skips, affordance_skips) for idempotent duplicates
         """
@@ -1098,7 +1109,7 @@ class OntologyPhase:
             # Exclude provenance from hash
             hash_data = {k: v for k, v in tag.items() if k != "provenance"}
             current_hash = compute_canonical_hash(hash_data)
-            
+
             if key in tag_hashes:
                 if tag_hashes[key] == current_hash:
                     # Identical duplicate - idempotent skip
@@ -1127,15 +1138,13 @@ class OntologyPhase:
             # Exclude provenance from hash
             hash_data = {k: v for k, v in affordance.items() if k != "provenance"}
             current_hash = compute_canonical_hash(hash_data)
-            
+
             if key in affordance_hashes:
                 if affordance_hashes[key] == current_hash:
                     # Identical duplicate - idempotent skip
                     affordance_skips += 1
                     inc_counter(
-                        "importer.affordances.skipped_idempotent", 
-                        value=1, 
-                        package_id=package_id
+                        "importer.affordances.skipped_idempotent", value=1, package_id=package_id
                     )
                     emit_structured_log(
                         "ontology_duplicate_skip",
@@ -1158,12 +1167,12 @@ class OntologyPhase:
 
     def _compute_file_hash(self, content: str) -> str:
         """Compute SHA-256 hash of file content.
-        
+
         Uses the same method as existing importer phases for consistency.
-        
+
         Args:
             content: Normalized file content
-            
+
         Returns:
             Hexadecimal SHA-256 hash string
         """
@@ -1171,44 +1180,44 @@ class OntologyPhase:
 
     def _filter_duplicates_from_list(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Filter duplicates from a list of tags or affordances, keeping first occurrence.
-        
+
         Args:
             items: List of tag or affordance dictionaries
-            
+
         Returns:
             List with duplicates removed (first occurrence kept)
         """
         from Adventorator.canonical_json import compute_canonical_hash
-        
+
         seen_hashes = {}
         unique_items = []
-        
+
         for item in items:
             # Determine the key based on item type
             if "tag_id" in item:
                 key = (item["tag_id"], item["category"])
             else:
                 key = (item["affordance_id"], item["category"])
-            
+
             # Compute hash excluding provenance
             hash_data = {k: v for k, v in item.items() if k != "provenance"}
             item_hash = compute_canonical_hash(hash_data)
-            
+
             if key not in seen_hashes or seen_hashes[key] == item_hash:
                 if key not in seen_hashes:
                     unique_items.append(item)
                     seen_hashes[key] = item_hash
                 # else: duplicate with same hash, skip
-                
+
         return unique_items
 
     def _validate_taxonomy_invariants(
         self, tags: list[dict[str, Any]], affordances: list[dict[str, Any]]
     ) -> None:
         """Validate taxonomy invariants across all tags and affordances.
-        
+
         Checks for category uniqueness and basic relationship consistency.
-        
+
         Args:
             tags: List of normalized tag dictionaries
             affordances: List of normalized affordance dictionaries
@@ -1221,7 +1230,7 @@ class OntologyPhase:
                 # This is caught by duplicate detection, but validate here for completeness
                 pass  # Allow duplicate detection to handle this
             tag_keys.add(key)
-        
+
         # Check for duplicate (category, affordance_id) combinations across files
         affordance_keys = set()
         for affordance in affordances:
@@ -1230,7 +1239,7 @@ class OntologyPhase:
                 # This is caught by duplicate detection, but validate here for completeness
                 pass  # Allow duplicate detection to handle this
             affordance_keys.add(key)
-        
+
         # Validate affordance references to tags
         tag_ids = {tag["tag_id"] for tag in tags}
         for affordance in affordances:
@@ -1253,22 +1262,22 @@ class OntologyPhase:
         manifest: dict[str, Any],
     ) -> dict[str, int]:
         """Emit seed events for registered tags and affordances.
-        
+
         Args:
             tags: List of tag dictionaries with provenance
             affordances: List of affordance dictionaries with provenance
             manifest: Manifest dictionary for version info
-        
+
         Returns:
             Dictionary with event counts for metrics
         """
         package_id = manifest.get("package_id", "unknown")
         version = manifest.get("version", "1.0.0")
-        
+
         # Sort by (category, tag_id/affordance_id) for deterministic ordering
         sorted_tags = sorted(tags, key=lambda t: (t["category"], t["tag_id"]))
         sorted_affordances = sorted(affordances, key=lambda a: (a["category"], a["affordance_id"]))
-        
+
         tag_events = 0
         affordance_events = 0
 
@@ -1284,11 +1293,11 @@ class OntologyPhase:
                 "audience": tag["audience"],
                 "gating": tag["gating"],
             }
-            
+
             # Add optional metadata
             if "metadata" in tag:
                 event_payload["metadata"] = tag["metadata"]
-            
+
             # Add provenance from tag data (now has real file hash)
             event_payload["provenance"] = tag["provenance"]
 
@@ -1310,11 +1319,11 @@ class OntologyPhase:
                 "applies_to": affordance["applies_to"],
                 "gating": affordance["gating"],
             }
-            
+
             # Add optional metadata
             if "metadata" in affordance:
                 event_payload["metadata"] = affordance["metadata"]
-            
+
             # Add provenance from affordance data (now has real file hash)
             event_payload["provenance"] = affordance["provenance"]
 
@@ -1327,3 +1336,267 @@ class OntologyPhase:
             affordance_events += 1
 
         return {"tag_events": tag_events, "affordance_events": affordance_events}
+
+
+class LoreValidationError(ImporterError):
+    """Exception raised when lore validation fails."""
+
+    pass
+
+
+class LoreCollisionError(ImporterError):
+    """Exception raised when lore chunk collision is detected."""
+
+    pass
+
+
+class LorePhase:
+    """Handles lore content chunking and ingestion phase of package import."""
+
+    def __init__(
+        self,
+        features_importer_enabled: bool = False,
+        features_importer_embeddings: bool = False,
+    ):
+        """Initialize lore phase.
+
+        Args:
+            features_importer_enabled: Whether importer feature flag is enabled
+            features_importer_embeddings: Whether embedding metadata processing is enabled
+        """
+        self.features_importer_enabled = features_importer_enabled
+        self.features_importer_embeddings = features_importer_embeddings
+
+    def parse_and_validate_lore(
+        self, package_root: Path, manifest: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Parse and validate all lore files in package.
+
+        Args:
+            package_root: Root directory of the package
+            manifest: Validated package manifest
+
+        Returns:
+            List of parsed and validated chunk dictionaries with provenance
+
+        Raises:
+            ImporterError: If feature flag is disabled or validation fails
+        """
+        if not self.features_importer_enabled:
+            raise ImporterError("Importer feature flag is disabled (features.importer=false)")
+
+        from Adventorator.lore_chunker import LoreChunker, LoreChunkerError
+
+        chunks: list[dict[str, Any]] = []
+        package_id = manifest["package_id"]
+        manifest_hash = manifest.get("manifest_hash", "unknown")
+        content_index = manifest.get("content_index", {})
+
+        # Find all lore files by scanning lore/ directory
+        lore_dir = package_root / "lore"
+        if not lore_dir.exists():
+            emit_structured_log(
+                "lore_parse_complete",
+                package_id=package_id,
+                chunk_count=0,
+                message="No lore directory found",
+            )
+            return chunks
+
+        # Initialize chunker with feature flags
+        chunker = LoreChunker(features_importer_embeddings=self.features_importer_embeddings)
+
+        lore_files = []
+        for file_path in lore_dir.rglob("*.md"):
+            rel_path = file_path.relative_to(package_root).as_posix()
+            lore_files.append((rel_path, file_path))
+
+        # Sort deterministically by path
+        lore_files.sort()
+
+        collisions_detected = 0
+        chunks_skipped_idempotent = 0
+
+        for rel_path, file_path in lore_files:
+            try:
+                # Parse file into chunks
+                file_chunks = chunker.parse_lore_file(file_path, package_id, manifest_hash)
+
+                for chunk in file_chunks:
+                    # Update source_path to be relative to package root
+                    chunk.source_path = rel_path
+                    chunk.provenance["source_path"] = rel_path
+
+                    # Verify against content index if present
+                    if rel_path in content_index:
+                        expected_hash = content_index[rel_path]
+                        if chunk.provenance["file_hash"] != expected_hash:
+                            raise LoreValidationError(
+                                f"File hash mismatch for {rel_path}: "
+                                f"expected {expected_hash}, got {chunk.provenance['file_hash']}"
+                            )
+
+                    # Convert to dictionary for processing
+                    chunk_dict = {
+                        "chunk_id": chunk.chunk_id,
+                        "title": chunk.title,
+                        "audience": chunk.audience,
+                        "tags": chunk.tags,
+                        "content": chunk.content,
+                        "source_path": chunk.source_path,
+                        "chunk_index": chunk.chunk_index,
+                        "content_hash": chunk.content_hash,
+                        "word_count": chunk.word_count,
+                        "provenance": chunk.provenance,
+                    }
+
+                    # Include embedding_hint if present
+                    if chunk.embedding_hint is not None:
+                        chunk_dict["embedding_hint"] = chunk.embedding_hint
+
+                    chunks.append(chunk_dict)
+
+            except LoreChunkerError as exc:
+                raise LoreValidationError(f"Failed to parse lore file {rel_path}: {exc}") from exc
+
+        # Sort chunks deterministically by (source_path, chunk_index)
+        chunks.sort(key=lambda c: (c["source_path"], c["chunk_index"]))
+
+        # Check for chunk_id collisions and filter duplicates
+        try:
+            filtered_chunks, chunks_skipped_idempotent = self._check_chunk_id_collisions(chunks)
+        except LoreCollisionError as exc:
+            collisions_detected = 1
+            inc_counter("importer.collision", value=1, package_id=package_id)
+            raise exc
+
+        # Create ImportLog entries for each chunk
+        import_log_entries = []
+        for i, chunk in enumerate(filtered_chunks):
+            import_log_entry = {
+                "sequence_no": i + 1,
+                "phase": "lore",
+                "object_type": "content_chunk",
+                "stable_id": chunk["chunk_id"],
+                "file_hash": chunk["content_hash"],
+                "action": "ingested",
+                "manifest_hash": manifest_hash,
+                "timestamp": datetime.now(timezone.utc),
+            }
+            import_log_entries.append(import_log_entry)
+
+        # Emit metrics with actual counts
+        chunk_count = len(filtered_chunks)
+        inc_counter("importer.chunks.ingested", value=chunk_count, package_id=package_id)
+        if chunks_skipped_idempotent > 0:
+            inc_counter(
+                "importer.chunks.skipped_idempotent",
+                value=chunks_skipped_idempotent,
+                package_id=package_id,
+            )
+
+        # Store ImportLog entries (would be persisted to database in real implementation)
+        for chunk in filtered_chunks:
+            chunk["import_log_entries"] = import_log_entries
+
+        # Log summary
+        emit_structured_log(
+            "lore_parse_complete",
+            package_id=package_id,
+            chunk_count=chunk_count,
+            collisions_detected=collisions_detected,
+            chunks_skipped_idempotent=chunks_skipped_idempotent,
+        )
+
+        return filtered_chunks
+
+    def _check_chunk_id_collisions(
+        self, chunks: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Check for chunk_id collisions and filter duplicates for idempotent replay.
+
+        Args:
+            chunks: List of parsed chunks
+
+        Returns:
+            Tuple of (filtered_chunks, skipped_count)
+
+        Raises:
+            LoreCollisionError: If collisions are detected
+        """
+        seen_ids: dict[str, tuple[str, str]] = {}
+        filtered_chunks = []
+        skipped_count = 0
+
+        for chunk in chunks:
+            chunk_id = chunk["chunk_id"]
+            content_hash = chunk["content_hash"]
+            source_path = chunk["source_path"]
+
+            if chunk_id in seen_ids:
+                existing_hash, existing_path = seen_ids[chunk_id]
+                if content_hash != existing_hash:
+                    raise LoreCollisionError(
+                        f"Chunk ID collision detected for '{chunk_id}': "
+                        f"different content in {existing_path} vs {source_path}"
+                    )
+                # Same hash = idempotent duplicate, skip it
+                skipped_count += 1
+            else:
+                seen_ids[chunk_id] = (content_hash, source_path)
+                filtered_chunks.append(chunk)
+
+        return filtered_chunks, skipped_count
+
+    def create_seed_events(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Create seed.content_chunk_ingested events for parsed chunks.
+
+        Args:
+            chunks: List of validated chunks with provenance
+
+        Returns:
+            List of event payloads for seed.content_chunk_ingested events
+        """
+        events = []
+        for chunk in chunks:
+            # Create event payload (all fields already validated)
+            event_payload = {
+                "chunk_id": chunk["chunk_id"],
+                "title": chunk["title"],
+                "audience": chunk["audience"],
+                "tags": sorted(chunk["tags"]),  # Canonical ordering
+                "source_path": chunk["source_path"],
+                "content_hash": chunk["content_hash"],
+                "chunk_index": chunk["chunk_index"],
+                "word_count": chunk["word_count"],
+                "provenance": chunk["provenance"],
+            }
+
+            # Include embedding_hint if present
+            if "embedding_hint" in chunk:
+                event_payload["embedding_hint"] = chunk["embedding_hint"]
+
+            # Validate event payload against schema
+            validate_event_payload_schema(event_payload, event_type="content_chunk")
+
+            events.append(event_payload)
+
+        return events
+
+
+def create_lore_phase(
+    features_importer: bool = False, features_importer_embeddings: bool = False
+) -> LorePhase:
+    """Factory function to create lore phase with feature flags.
+
+    Args:
+        features_importer: Value of features.importer feature flag
+        features_importer_embeddings: Value of features.importer_embeddings feature flag
+
+    Returns:
+        Configured LorePhase instance
+    """
+    return LorePhase(
+        features_importer_enabled=features_importer,
+        features_importer_embeddings=features_importer_embeddings,
+    )

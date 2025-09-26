@@ -29,8 +29,8 @@ class TestOntologyIngestion:
                     "revision": "2025-02-21",
                     "provenance": {
                         "manifest_path": "packages/test/package.manifest.json",
-                        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
-                    }
+                        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                    },
                 },
                 "tags": [
                     {
@@ -40,14 +40,11 @@ class TestOntologyIngestion:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike", "swing"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        },
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                         "metadata": {
                             "description": "Direct offensive action.",
-                            "canonical_affordance": "affordance.attack.allowed"
-                        }
+                            "canonical_affordance": "affordance.attack.allowed",
+                        },
                     }
                 ],
                 "affordances": [
@@ -59,17 +56,14 @@ class TestOntologyIngestion:
                         "gating": {
                             "audience": "player",
                             "requires_feature": None,
-                            "ruleset_version": "v2.7"
+                            "ruleset_version": "v2.7",
                         },
                         "metadata": {
                             "effect": "Allows melee attack rolls",
-                            "improbability_drive": {
-                                "intent_frame": "attack",
-                                "confidence": 97
-                            }
-                        }
+                            "improbability_drive": {"intent_frame": "attack", "confidence": 97},
+                        },
                     }
-                ]
+                ],
             }
 
             ontology_file = ontology_dir / "test.json"
@@ -77,12 +71,14 @@ class TestOntologyIngestion:
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
 
             assert len(tags) == 1
             assert len(affordances) == 1
             assert len(import_log_entries) == 2  # One for tag, one for affordance
-            
+
             # Verify tag was normalized properly
             tag = tags[0]
             assert tag["tag_id"] == "action.attack"
@@ -93,21 +89,23 @@ class TestOntologyIngestion:
             assert tag["provenance"]["package_id"] == "test-package-001"
             assert tag["provenance"]["source_path"] == "ontology/test.json"
             assert len(tag["provenance"]["file_hash"]) == 64  # SHA-256 hex string
-            
+
             # Verify affordance was normalized properly
             affordance = affordances[0]
             assert affordance["affordance_id"] == "affordance.attack.allowed"
             assert affordance["category"] == "combat"
             assert affordance["slug"] == "attack-allowed"
             assert "provenance" in affordance
-            
+
             # Verify ImportLog entries
             tag_log = next(entry for entry in import_log_entries if entry["object_type"] == "tag")
             assert tag_log["phase"] == "ontology"
             assert tag_log["stable_id"] == "action.attack"
             assert tag_log["action"] == "created"
-            
-            affordance_log = next(entry for entry in import_log_entries if entry["object_type"] == "affordance")
+
+            affordance_log = next(
+                entry for entry in import_log_entries if entry["object_type"] == "affordance"
+            )
             assert affordance_log["phase"] == "ontology"
             assert affordance_log["stable_id"] == "affordance.attack.allowed"
 
@@ -119,7 +117,9 @@ class TestOntologyIngestion:
             package_root = Path(temp_dir)
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
 
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
 
             assert len(tags) == 0
             assert len(affordances) == 0
@@ -145,10 +145,7 @@ class TestOntologyIngestion:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     },
                     {
                         "tag_id": "action.attack",
@@ -157,20 +154,19 @@ class TestOntologyIngestion:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
-                    }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
+                    },
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             ontology_file = ontology_dir / "duplicate.json"
             ontology_file.write_text(json.dumps(ontology_data, indent=2))
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
 
             # Should get 2 tags from parser (before duplicate removal)
             # Note: duplicates are now automatically handled within parse_and_validate_ontology
@@ -198,10 +194,7 @@ class TestOntologyIngestion:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     },
                     {
                         "tag_id": "action.attack",
@@ -212,11 +205,11 @@ class TestOntologyIngestion:
                         "audience": ["player", "gm"],
                         "gating": {
                             "ruleset_version": "v2.8",  # Different version
-                            "requires_feature": None
-                        }
-                    }
+                            "requires_feature": None,
+                        },
+                    },
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             ontology_file = ontology_dir / "conflict.json"
@@ -227,7 +220,7 @@ class TestOntologyIngestion:
             # Should raise exception during parsing due to automatic conflict detection
             with pytest.raises(OntologyValidationError) as exc_info:
                 phase.parse_and_validate_ontology(package_root, manifest)
-            
+
             assert "Conflicting tag definition" in str(exc_info.value)
             assert "action.attack" in str(exc_info.value)
 
@@ -251,13 +244,10 @@ class TestOntologyIngestion:
                         "display_name": "Cast Spell",
                         "synonyms": ["cast", "spell"],
                         "audience": ["player"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": "magic-enabled"
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": "magic-enabled"},
                     }
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             ontology_data_2 = {
@@ -270,13 +260,10 @@ class TestOntologyIngestion:
                         "display_name": "Attack",
                         "synonyms": ["attack", "strike"],
                         "audience": ["player", "gm"],
-                        "gating": {
-                            "ruleset_version": "v2.7",
-                            "requires_feature": None
-                        }
+                        "gating": {"ruleset_version": "v2.7", "requires_feature": None},
                     }
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             # Write files in non-alphabetical order
@@ -284,7 +271,9 @@ class TestOntologyIngestion:
             (ontology_dir / "a_combat.json").write_text(json.dumps(ontology_data_2, indent=2))
 
             manifest = {"package_id": "test-package-001", "version": "1.0.0"}
-            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(package_root, manifest)
+            tags, affordances, import_log_entries = phase.parse_and_validate_ontology(
+                package_root, manifest
+            )
 
             assert len(tags) == 2
             # Should be ordered by filename (a_combat.json before z_magic.json)
@@ -303,18 +292,13 @@ class TestOntologyIngestion:
                 "display_name": "Attack",
                 "synonyms": ["attack", "strike"],
                 "audience": ["player", "gm"],
-                "gating": {
-                    "ruleset_version": "v2.7",
-                    "requires_feature": None
-                },
-                "metadata": {
-                    "description": "Direct offensive action."
-                },
+                "gating": {"ruleset_version": "v2.7", "requires_feature": None},
+                "metadata": {"description": "Direct offensive action."},
                 "provenance": {
                     "package_id": "test-package-001",
                     "source_path": "ontology/combat.json",
-                    "file_hash": "abc123"  # Example hash
-                }
+                    "file_hash": "abc123",  # Example hash
+                },
             }
         ]
 
@@ -327,13 +311,13 @@ class TestOntologyIngestion:
                 "gating": {
                     "audience": "player",
                     "requires_feature": None,
-                    "ruleset_version": "v2.7"
+                    "ruleset_version": "v2.7",
                 },
                 "provenance": {
-                    "package_id": "test-package-001", 
+                    "package_id": "test-package-001",
                     "source_path": "ontology/combat.json",
-                    "file_hash": "def456"  # Example hash
-                }
+                    "file_hash": "def456",  # Example hash
+                },
             }
         ]
 
@@ -365,7 +349,7 @@ class TestOntologyIngestion:
                         # Missing synonyms, audience, gating
                     }
                 ],
-                "affordances": []
+                "affordances": [],
             }
 
             ontology_file = ontology_dir / "invalid.json"
@@ -375,7 +359,7 @@ class TestOntologyIngestion:
 
             with pytest.raises(OntologyValidationError) as exc_info:
                 phase.parse_and_validate_ontology(package_root, manifest)
-            
+
             assert "Missing required field" in str(exc_info.value)
 
     def test_feature_flag_disabled(self):
@@ -388,5 +372,5 @@ class TestOntologyIngestion:
 
             with pytest.raises(Exception) as exc_info:
                 phase.parse_and_validate_ontology(package_root, manifest)
-            
+
             assert "feature flag is disabled" in str(exc_info.value)
