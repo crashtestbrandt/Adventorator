@@ -156,13 +156,15 @@ async def persist_import_event(
             )
         
         payload_hash = event_envelope.compute_payload_hash(payload)
+        # Exclude replay_ordinal from idempotency key per EPIC-CDA-IMPORT-002 requirements
+        # Idempotency keys should be based on stable content only, not run-scoped fields
         idempotency_key = event_envelope.compute_idempotency_key(
             campaign_id=campaign_id,
             event_type=event_type,
             execution_request_id=request_id,
             plan_id=None,
             payload=payload,
-            replay_ordinal=replay_ordinal,
+            # replay_ordinal=replay_ordinal,  # Excluded per EPIC spec
         )
         
         event = models.Event(
@@ -498,6 +500,14 @@ class EntityPhase:
             entities_skipped_idempotent=entities_skipped_idempotent,
         )
 
+        # Create seed events for successfully parsed entities and attach to entity records
+        seed_events = self.create_seed_events(filtered_entities)
+        
+        # Attach event payloads to entity records for database persistence
+        for i, entity in enumerate(filtered_entities):
+            if i < len(seed_events):
+                entity["event_payload"] = seed_events[i]
+
         return filtered_entities
 
     def _validate_entity_schema(self, entity_data: dict[str, Any], source_path: str) -> None:
@@ -820,6 +830,14 @@ class EdgePhase:
             edge_count=created_count,
             edges_skipped_idempotent=skipped_idempotent,
         )
+
+        # Create seed events for successfully parsed edges and attach to edge records
+        seed_events = self.create_seed_events(parsed_edges)
+        
+        # Attach event payloads to edge records for database persistence
+        for i, edge in enumerate(parsed_edges):
+            if i < len(seed_events):
+                edge["event_payload"] = seed_events[i]
 
         return parsed_edges
 
@@ -1688,6 +1706,14 @@ class LorePhase:
             chunks_skipped_idempotent=chunks_skipped_idempotent,
         )
 
+        # Create seed events for successfully parsed chunks and attach to chunk records
+        seed_events = self.create_seed_events(filtered_chunks)
+        
+        # Attach event payloads to chunk records for database persistence
+        for i, chunk in enumerate(filtered_chunks):
+            if i < len(seed_events):
+                chunk["event_payload"] = seed_events[i]
+
         return filtered_chunks
 
     def _check_chunk_id_collisions(
@@ -2030,9 +2056,12 @@ async def run_full_import_with_database(
             if not package_id:
                 raise ImporterError("Missing package_id in manifest")
                 
-            # Compute manifest hash for idempotent detection
-            manifest_content = json.dumps(manifest_data, sort_keys=True)
-            manifest_hash = hashlib.sha256(manifest_content.encode('utf-8')).hexdigest()
+            # Compute manifest hash using canonical JSON helper
+            from Adventorator.manifest_validation import compute_manifest_hash
+            manifest_hash = compute_manifest_hash(manifest_data)
+            
+            # Attach manifest hash to manifest dict for reuse
+            manifest_data["manifest_hash"] = manifest_hash
             
             # Check for existing import with same manifest hash
             from sqlalchemy import select
@@ -2211,9 +2240,9 @@ async def run_full_import_with_database(
                         await persist_import_log_entry(session, campaign_id, log_entry_copy)
             
             # Ontology ingestion
-            ontologies_dir = package_root / "ontologies"
-            if ontologies_dir.exists():
-                tags, affordances, import_log_entries = ontology_phase.parse_and_validate_ontology(ontologies_dir, manifest_result["manifest"])
+            ontology_dir = package_root / "ontology"
+            if ontology_dir.exists():
+                tags, affordances, import_log_entries = ontology_phase.parse_and_validate_ontology(package_root, manifest_result["manifest"])
                 context.record_ontology(tags, affordances, import_log_entries)
                 
                 # Persist ontology ImportLog entries
@@ -2221,11 +2250,24 @@ async def run_full_import_with_database(
                     log_entry_copy = log_entry.copy()
                     log_entry_copy["sequence_no"] = context.next_sequence_number()
                     await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            else:
+                # Record empty ontology phase for completeness
+                empty_log_entry = {
+                    "sequence_no": context.next_sequence_number(),
+                    "phase": "ontology",
+                    "object_type": "phase_complete",
+                    "stable_id": "N/A",
+                    "action": "skipped_no_directory",
+                    "file_hash": "N/A",
+                    "manifest_hash": manifest_result.get("manifest_hash", "unknown"),
+                    "timestamp": datetime.now(timezone.utc),
+                }
+                await persist_import_log_entry(session, campaign_id, empty_log_entry)
             
             # Lore ingestion
             lore_dir = package_root / "lore"
             if lore_dir.exists():
-                lore_results = lore_phase.parse_and_validate_lore(lore_dir, manifest_result["manifest"])
+                lore_results = lore_phase.parse_and_validate_lore(package_root, manifest_result["manifest"])
                 context.record_lore_chunks(lore_results)
                 
                 # Emit lore events and persist ImportLog entries
@@ -2241,6 +2283,19 @@ async def run_full_import_with_database(
                         log_entry_copy = chunk["import_log_entry"].copy()
                         log_entry_copy["sequence_no"] = context.next_sequence_number()
                         await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            else:
+                # Record empty lore phase for completeness
+                empty_log_entry = {
+                    "sequence_no": context.next_sequence_number(),
+                    "phase": "lore",
+                    "object_type": "phase_complete",
+                    "stable_id": "N/A",
+                    "action": "skipped_no_directory",
+                    "file_hash": "N/A",
+                    "manifest_hash": manifest_result.get("manifest_hash", "unknown"),
+                    "timestamp": datetime.now(timezone.utc),
+                }
+                await persist_import_log_entry(session, campaign_id, empty_log_entry)
             
             # Finalization
             result = finalization_phase.finalize_import(context, start_time)
