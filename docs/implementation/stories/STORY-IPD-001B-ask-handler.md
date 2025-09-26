@@ -25,10 +25,11 @@ Epic Link: #TBD (EPIC-IPD-001)
 ## Acceptance Criteria (validated)
 Concrete, testable criteria (Gherkin welcome):
 
-- [ ] Given `features.improbability_drive=false` OR `features.ask=false` When a user invokes `/ask` via Web CLI or Discord Then the response is an ephemeral "This feature is disabled" message and no other side effects occur.
-- [ ] Given `features.improbability_drive=true` AND `features.ask=true` When a user invokes `/ask` with non-empty text Then the bot returns an ephemeral acknowledgement including a safe echo of the text (truncated) and interpreted action summary; no planner handoff occurs in this story.
-- [ ] Given the enabled state When `/ask` is invoked Then metrics `ask.received` and `ask.ask_report.emitted` are incremented and logs `ask.initiated` and `ask.completed` are emitted with correlation/request_id if available.
-- [ ] Given invalid input (empty/whitespace-only) When `/ask` is invoked with flags enabled Then an ephemeral validation message is returned; `ask.failed` is incremented and `ask.failed` log is emitted.
+- [x] Given `features.improbability_drive=false` OR `features.ask=false` When a user invokes `/ask` via Web CLI or Discord Then the response is an ephemeral "This feature is disabled" message and no other side effects occur.
+- [x] Given `features.improbability_drive=true` AND `features.ask=true` When a user invokes `/ask` with non-empty text Then the bot returns an ephemeral acknowledgement including a safe echo of the text (truncated) and a concise interpreted summary; no planner handoff occurs.
+- [x] Given the enabled state When `/ask` is invoked Then metrics `ask.received` and `ask.ask_report.emitted` are incremented and logs `ask.initiated` and `ask.completed` are emitted with correlation/request_id if available.
+- [x] Given invalid input (empty/whitespace-only) When `/ask` is invoked with flags enabled Then an ephemeral validation message is returned; `ask.failed` is incremented and `ask.failed` log is emitted.
+
 - [ ] Given concurrent invocations When 10 `/ask` calls are made rapidly Then the handler responds within the p95 latency budget (<= 200ms) with no errors recorded.
  - [ ] Given a dev webhook override (header or settings) When the sink is unreachable Then the command completes without raising; a `discord.followup.network_error` is logged with `base_url_source != default`.
 

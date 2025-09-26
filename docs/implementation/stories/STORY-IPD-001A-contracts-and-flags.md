@@ -1,7 +1,9 @@
 # STORY-IPD-001A — Contracts and feature flag scaffolding
 
 Epic: [EPIC-IPD-001 — ImprobabilityDrive Enablement](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
-Status: In Progress
+
+Status: Implemented
+
 Owner: Contracts/Config WG
 
 ## Summary
@@ -21,6 +23,7 @@ Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and Affordanc
 - [ ] TASK-IPD-FLAGS-02 — Extend config.toml and config dataclass with flags (default off) and docs. (Note: current `config.toml` sets `improbability_drive=true` and `ask.enabled=true` in dev; document the exception or flip defaults to false)
 - [ ] TASK-IPD-DOC-04 — Add commented TOML examples and update configuration docs.
 
+
 ## Definition of Ready
 - Contract change proposal reviewed with planner maintainers.
 - Test plan outlines identity fixtures and error handling.
@@ -35,6 +38,7 @@ Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and Affordanc
 
 ## Test Plan
 - Unit tests: round-trip serialize/deserialize; versioned schema compatibility; invalid payload rejection.
+- Schema parity test present: `tests/ask/test_contract_parity_with_json_artifact.py` (keeps runtime model in sync with `contracts/ask/v1/ask-report.v1.json`).
 - Golden fixtures stored under tests/fixtures/ask/.
  - Ensure stable ordering in JSON serialization where needed for golden comparisons.
 
@@ -55,6 +59,7 @@ Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and Affordanc
  - features.ask_nlu_rule_based (default=true)
  - features.ask_kb_lookup (default=false)
  - features.ask_planner_handoff (default=false)
+ - features.ask_nlu_debug (default=false)
 
 ## Traceability
 - Epic: EPIC-IPD-001
@@ -68,15 +73,16 @@ Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and Affordanc
 	- `features_ask_nlu_rule_based: bool = True`
 	- `features_ask_kb_lookup: bool = False`
 	- `features_ask_planner_handoff: bool = False`
+ 	- `features_ask_nlu_debug: bool = False`
 - TOML mapping in `_toml_settings_source()`:
 	- `[features]` keys: `improbability_drive`, `ask`
-	- `[features.ask]` keys: `nlu_rule_based`, `kb_lookup`, `planner_handoff`
+	- `[features.ask]` keys: `nlu_rule_based`, `kb_lookup`, `planner_handoff`, `nlu_debug`
 - Contracts module (runtime models): `src/Adventorator/schemas.py` (AskReport, IntentFrame, AffordanceTag)
 - Contract registry (artifact): `contracts/ask/v1/` JSON schema, validated by `scripts/validate_prompts_and_contracts.py`
 - Tests: `tests/ask/` with golden round-trip fixtures
 
-Follow-ups proposed:
-- Add a parity test ensuring `AskReport.model_json_schema()` remains in sync with `contracts/ask/v1/ask-report.v1.json`.
+Follow-ups realized:
+- Parity test added to ensure `AskReport.model_json_schema()` remains in sync with `contracts/ask/v1/ask-report.v1.json`.
 
 ---
 

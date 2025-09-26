@@ -1,7 +1,7 @@
 # STORY-IPD-001F — Logging, metrics, and ActivityLog linkage
 
 Epic: [EPIC-IPD-001 — ImprobabilityDrive Enablement](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
-Status: In Progress
+Status: Partially Done (not properly initiated)
 Owner: Observability WG
 
 ## Summary
@@ -33,6 +33,8 @@ Standardize logs and counters for /ask and tagging; integrate with ActivityLog w
 - Counters: ask.*, kb.*; Structured log events at INFO with keys.
 - Traces
 	- add span `interactions/ask.handle` with tracing backend.
+
+Note on status: This story was not formally initiated; metrics/logging were implemented opportunistically alongside other work. ActivityLog linkage and tracing remain open.
 
 ## Risks & Mitigations
 - Over-logging PII: use redaction filters from Story H; review log keys.

@@ -36,6 +36,25 @@
 
 ## Stories
 
+### Status snapshot (as of 2025-09-25)
+
+**Status Overview (2025-09-25):**
+
+- **Done:**  
+    - Story A — Contracts & Flags (models, JSON artifact, tests, flags)  
+    - Story B — /ask Handler (handler, gating, metrics/logs, tests)  
+    - Story C — NLU/Tagging Baseline (rule-based parser, golden fixtures)  
+    - Story D — KB Adapter (read-only; adapter, cache, limits, tests)
+
+- **Partially Done (not properly initiated):**  
+    - Story E — Ontology Mgmt (schemas, seed, docs; validator extension pending)  
+    - Story F — Logging/Metrics/ActivityLog (metrics/logs implemented; ActivityLog linkage pending)
+
+- **Pending:**  
+    - Story G — Planner Handoff  
+    - Story H — Privacy/Redaction/Safety  
+    - Story I — Operational Rollout
+
 ### STORY-IPD-001A — Contracts and feature flag scaffolding
 Story doc: [/docs/implementation/stories/STORY-IPD-001A-contracts-and-flags.md](/docs/implementation/stories/STORY-IPD-001A-contracts-and-flags.md)
 *Epic linkage:* Establishes AskReport/IntentFrame contracts and flags for phased rollout.
@@ -52,6 +71,7 @@ Status: In Progress
   - [ ] `TASK-IPD-FLAGS-02` — Extend config.toml and config dataclass with `features.improbability_drive`, `features.ask` (default off) and docs. (Dev config currently enabled; document exception or flip defaults.)
   - [x] `TASK-IPD-TEST-03` — Add round-trip tests using deterministic fixtures.
   - [x] `TASK-IPD-CONTRACT-05` — Add Ask JSON contract artifact under `contracts/ask/v1/` and wire to validation script.
+
 - DoR.
   - Contract change proposal reviewed with planner maintainers.
   - Test plan outlines identity fixtures and error handling.
@@ -68,7 +88,7 @@ Status: Implemented
 - Summary. Add `/ask` handler using registry decorators and responder abstraction; when enabled, constructs AskReport using NLU/tagging scaffold and emits structured logs/metrics.
 - Acceptance criteria.
   - `/ask` available behind `features.ask` and `features.improbability_drive`.
-  - On success, returns a concise textual summary and stores full AskReport for observability.
+  - On success, returns a concise textual summary and emits AskReport-shaped data for observability; full persistence/linkage is deferred to Story F/ActivityLog.
   - On disable, no behavior change to existing commands.
 - Tasks.
   - [x] `TASK-IPD-HANDLER-04` — Implement `/ask` handler with config gating and responder usage.
@@ -132,7 +152,7 @@ Status: In Progress
 - Tasks.
   - [x] `TASK-IPD-ONTO-13` — Author ontology schema and seed ontology.
   - [ ] `TASK-IPD-VALIDATE-14` — Extend validation script to include ontology checks.
-  - [ ] `TASK-IPD-DOCS-15` — Author ontology guide under docs/architecture or docs/dev.
+  - [x] `TASK-IPD-DOCS-15` — Author ontology guide under docs/architecture or docs/dev.
 - DoR.
   - Stakeholders aligned on taxonomy scope.
 - DoD.
@@ -206,6 +226,7 @@ Target Settings fields in `src/Adventorator/config.py` (defaults preserve curren
 - `features_ask_nlu_rule_based: bool = True`
 - `features_ask_kb_lookup: bool = False`
 - `features_ask_planner_handoff: bool = False`
+- `features_ask_nlu_debug: bool = False` (developer-only ephemeral debug output)
 
 TOML mapping in `_toml_settings_source()`:
 
@@ -214,6 +235,7 @@ TOML mapping in `_toml_settings_source()`:
   - `ask = false`
 - Optional sub-flags under `[features.ask]` (mirrors existing nested retrieval config):
   - `nlu_rule_based = true`
+  - `nlu_debug = false`
   - `kb_lookup = false`
   - `planner_handoff = false`
 
@@ -226,8 +248,20 @@ ask = false
 
 [features.ask]
 nlu_rule_based = true
+nlu_debug = false
 kb_lookup = false
 planner_handoff = false
+```
+
+KB configuration knobs (used when `features.ask` and `features.ask.kb_lookup` are enabled):
+
+```toml
+[ask.kb]
+timeout_s = 0.05
+max_candidates = 5
+cache_ttl_s = 60
+cache_max_size = 1024
+max_terms_per_call = 20
 ```
 
 Module placement:

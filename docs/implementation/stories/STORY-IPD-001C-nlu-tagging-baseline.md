@@ -29,7 +29,7 @@ Concrete, testable criteria (Gherkin welcome):
 - [x] Given empty or ambiguous input When parsed Then ambiguity is surfaced in structured fields and tests assert expected fallbacks.
 - [x] Unit tests cover varied phrasing and edge cases using fixtures under `tests/fixtures/ask/`.
 - [x] Implementation avoids external NLP libraries (e.g., spaCy); solution is strictly rule-based and offline.
-- [x] Behavior is gated by `features.improbability_drive` and `features.ask_nlu_rule_based` (default true for the latter) in `config.toml`.
+- [x] Behavior is gated by `features.improbability_drive` and `features.ask_nlu_rule_based` (default true for the latter) in `config.toml`; optional developer debug aided by `features.ask.nlu_debug` (ephemeral output only).
 
 ## Contracts & Compatibility
 - OpenAPI/Protobuf/GraphQL deltas: None for this story (no new external API). Seed ontology lives under `contracts/ontology/` (v0.1 seed).
@@ -46,7 +46,7 @@ Concrete, testable criteria (Gherkin welcome):
 
 ## Observability
 - Metrics: None added in this story (per current decision).
-- Logs: Optional structured debug logs with `error_code` for parse/ontology lookup failures; controlled by a dev flag.
+- Logs: Optional structured debug logs with `error_code` for parse/ontology lookup failures; controlled by a dev flag (`features.ask.nlu_debug`).
 - Traces: Not introduced in this story.
 - Dashboards/alerts: No updates required.
 
@@ -71,14 +71,14 @@ Implemented components and their locations:
 	- Runtime models (Pydantic): `src/Adventorator/schemas.py` (`AskReport`, `IntentFrame`, `AffordanceTag`).
 	- Schema parity test: `tests/ask/test_contract_parity_with_json_artifact.py`.
 - Seed ontology and governance:
-	- `contracts/ontology/seed-v0_1.json` (version `0.1`), used by the parser; aligns with Story E placement.
+	- `contracts/ontology/seed-v0_1.json` (version `0.1`), used by the parser; aligns with Story E placement. Additional schemas and docs live under `contracts/ontology/`.
 - Feature flags and gating (per ADR-0005 and Epic config mapping):
 	- Settings loader: `src/Adventorator/config.py` (`features_improbability_drive`, `features_ask`, sub-flags incl. `features_ask_nlu_rule_based`, `features_ask_nlu_debug`).
 	- Example toggles: `config.toml` under `[features]` and `[features.ask]`.
 - Ask command integration slice (behind flags):
 	- `src/Adventorator/commands/ask.py` — uses registry decorators and responder abstraction; ephemeral summary; dev debug details when `nlu_debug` enabled.
 - Tests and fixtures:
-	- Unit tests: `tests/ask/test_rule_based_nlu.py`, `tests/ask/test_multi_action_tagging.py`, `tests/ask/test_property_nlu.py`, `tests/ask/test_golden_fixtures.py`.
+	- Unit/property tests: `tests/ask/test_property_nlu.py`, `tests/ask/test_golden_fixtures.py`, plus fixture-driven parsing tests.
 	- Golden fixtures: `tests/fixtures/ask/*.json`.
 
 Quality gates (local run snapshot):
