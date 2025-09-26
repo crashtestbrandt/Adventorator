@@ -28,6 +28,7 @@ from Adventorator.metrics import inc_counter as metrics_inc_counter, get_counter
 from Adventorator.metrics import observe_histogram
 from Adventorator.db import session_scope
 from Adventorator import repos, models
+from Adventorator.importer_context import ImporterRunContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Set up logging
