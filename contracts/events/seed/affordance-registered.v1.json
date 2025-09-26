@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adventorator.dev/contracts/events/seed/affordance-registered.v1.json",
+  "title": "Affordance Registered Seed Event v1",
+  "description": "Synthetic event emitted when an ontology affordance is registered during package import",
+  "type": "object",
+  "required": ["affordance_id", "category", "version", "slug", "applies_to", "gating", "provenance"],
+  "properties": {
+    "affordance_id": {
+      "type": "string",
+      "description": "Unique identifier for the affordance in format affordance.category.name",
+      "pattern": "^affordance\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_-]*$",
+      "minLength": 12,
+      "maxLength": 100
+    },
+    "category": {
+      "type": "string",
+      "description": "Affordance category classification",
+      "enum": ["combat", "environment", "social", "magic", "exploration"],
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "version": {
+      "type": "string",
+      "description": "Version of the ontology definition",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "slug": {
+      "type": "string",
+      "description": "URL-safe slug for the affordance (lowercase, hyphenated)",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "applies_to": {
+      "type": "array",
+      "description": "Tags or entities this affordance applies to",
+      "items": {
+        "type": "string",
+        "pattern": "^(tag:[a-z][a-z0-9_]*\\.[a-z][a-z0-9_-]*|entity:[0-9A-HJKMNP-TV-Z]{26})$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "gating": {
+      "type": "object",
+      "description": "Access control and versioning information",
+      "required": ["audience", "ruleset_version"],
+      "properties": {
+        "audience": {
+          "type": "string",
+          "description": "Primary role that can trigger this affordance",
+          "enum": ["player", "gm", "system"]
+        },
+        "ruleset_version": {
+          "type": "string",
+          "description": "Minimum ruleset version required",
+          "pattern": "^v\\d+\\.\\d+$"
+        },
+        "requires_feature": {
+          "type": ["string", "null"],
+          "description": "Optional feature flag requirement",
+          "maxLength": 64
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional affordance metadata",
+      "properties": {
+        "effect": {
+          "type": "string",
+          "description": "Description of what this affordance enables",
+          "maxLength": 500
+        },
+        "improbability_drive": {
+          "type": "object",
+          "description": "ImprobabilityDrive integration metadata",
+          "properties": {
+            "intent_frame": {
+              "type": "string",
+              "description": "Primary intent frame for NLU mapping",
+              "enum": ["attack", "move", "cast", "manipulate", "social", "explore"]
+            },
+            "confidence": {
+              "type": "number",
+              "description": "Confidence threshold for intent matching",
+              "minimum": 0.0,
+              "maximum": 1.0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Import provenance metadata",
+      "required": ["package_id", "source_path", "file_hash"],
+      "properties": {
+        "package_id": {
+          "type": "string",
+          "description": "ULID of the source package"
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Relative path within the package"
+        },
+        "file_hash": {
+          "type": "string",
+          "description": "SHA-256 hash of the source file (hex encoded)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

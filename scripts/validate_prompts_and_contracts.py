@@ -116,6 +116,67 @@ def validate_contracts() -> list[str]:
             text = path.read_text(encoding="utf-8")
             if "openapi" not in text:
                 errors.append(f"{path}: expected to mention 'openapi' for schema traceability")
+    
+    # Validate manifest fixtures against schema
+    errors.extend(validate_manifest_fixtures())
+    return errors
+
+
+def validate_manifest_fixtures() -> list[str]:
+    """Validate manifest fixtures against the manifest schema."""
+    errors: list[str] = []
+    
+    try:
+        import jsonschema
+    except ImportError:
+        # Skip manifest fixture validation if jsonschema is not available
+        print("Note: Skipping manifest fixture validation (jsonschema not available)")
+        return errors
+    
+    schema_path = Path("contracts/package/manifest.v1.json")
+    if not schema_path.exists():
+        return [f"manifest schema not found at {schema_path}"]
+    
+    try:
+        with open(schema_path, encoding="utf-8") as f:
+            schema = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        return [f"failed to load manifest schema: {exc}"]
+    
+    fixtures_dir = Path("tests/fixtures/import/manifest")
+    if not fixtures_dir.exists():
+        return [f"manifest fixtures directory not found at {fixtures_dir}"]
+    
+    # Validate happy-path fixture
+    happy_path = fixtures_dir / "happy-path" / "package.manifest.json"
+    if happy_path.exists():
+        try:
+            with open(happy_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+            jsonschema.validate(manifest, schema)
+            print(f"✓ {happy_path} validates against schema")
+        except json.JSONDecodeError as exc:
+            errors.append(f"{happy_path}: invalid JSON - {exc}")
+        except jsonschema.ValidationError as exc:
+            errors.append(f"{happy_path}: schema validation failed - {exc.message}")
+        except OSError as exc:
+            errors.append(f"{happy_path}: failed to read - {exc}")
+    
+    # Validate tampered fixture (should also pass schema but fail hash check later)  
+    tampered_path = fixtures_dir / "tampered" / "package.manifest.json"
+    if tampered_path.exists():
+        try:
+            with open(tampered_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+            jsonschema.validate(manifest, schema)
+            print(f"✓ {tampered_path} validates against schema")
+        except json.JSONDecodeError as exc:
+            errors.append(f"{tampered_path}: invalid JSON - {exc}")
+        except jsonschema.ValidationError as exc:
+            errors.append(f"{tampered_path}: schema validation failed - {exc.message}")
+        except OSError as exc:
+            errors.append(f"{tampered_path}: failed to read - {exc}")
+    
     return errors
 
 

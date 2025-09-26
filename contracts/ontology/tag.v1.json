@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adventorator.dev/contracts/ontology/tag.v1.json",
+  "title": "Ontology Tag Definition v1",
+  "description": "Schema for ontology tag definitions used in package import",
+  "type": "object",
+  "required": ["tag_id", "category", "slug", "display_name", "synonyms", "audience", "gating"],
+  "properties": {
+    "tag_id": {
+      "type": "string",
+      "description": "Unique identifier for the tag in format category.name",
+      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_-]*$",
+      "minLength": 3,
+      "maxLength": 64
+    },
+    "category": {
+      "type": "string",
+      "description": "Tag category classification",
+      "enum": ["action", "target", "modifier", "trait"],
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "slug": {
+      "type": "string",
+      "description": "URL-safe slug for the tag (lowercase, hyphenated)",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable display name",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "synonyms": {
+      "type": "array",
+      "description": "Alternative terms that map to this tag",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "audience": {
+      "type": "array",
+      "description": "Roles that can use this tag",
+      "items": {
+        "type": "string",
+        "enum": ["player", "gm", "system"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "gating": {
+      "type": "object",
+      "description": "Access control and versioning information",
+      "required": ["ruleset_version"],
+      "properties": {
+        "ruleset_version": {
+          "type": "string",
+          "description": "Minimum ruleset version required",
+          "pattern": "^v\\d+\\.\\d+$"
+        },
+        "requires_feature": {
+          "type": ["string", "null"],
+          "description": "Optional feature flag requirement",
+          "maxLength": 64
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional tag metadata",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the tag",
+          "maxLength": 500
+        },
+        "canonical_affordance": {
+          "type": "string",
+          "description": "Reference to the primary affordance for this tag",
+          "pattern": "^affordance\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_-]*$"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

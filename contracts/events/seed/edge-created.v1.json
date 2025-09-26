@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adventorator.dev/contracts/events/seed/edge-created.v1.json",
+  "title": "Edge Created Seed Event v1",
+  "description": "Synthetic event emitted when an edge is ingested during package import",
+  "type": "object",
+  "required": [
+    "stable_id",
+    "type",
+    "src_ref",
+    "dst_ref",
+    "attributes",
+    "provenance"
+  ],
+  "properties": {
+    "stable_id": {
+      "type": "string",
+      "description": "Globally unique identifier for this edge",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "type": {
+      "type": "string",
+      "description": "Edge relationship type",
+      "enum": [
+        "npc.resides_in.location",
+        "organization.controls.location"
+      ]
+    },
+    "src_ref": {
+      "type": "string",
+      "description": "Stable ID of the source entity",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "dst_ref": {
+      "type": "string",
+      "description": "Stable ID of the destination entity",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Edge-specific attributes required by the taxonomy",
+      "additionalProperties": {
+        "anyOf": [
+          {"type": "string"},
+          {"type": "number"},
+          {"type": "boolean"},
+          {"type": "null"}
+        ]
+      }
+    },
+    "validity": {
+      "type": "object",
+      "description": "Temporal validity metadata for this edge",
+      "required": ["start_event_id"],
+      "properties": {
+        "start_event_id": {
+          "type": "string",
+          "description": "Event ID that establishes when the edge becomes valid",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "end_event_id": {
+          "description": "Event ID when the edge stops being valid; null for open-ended",
+          "anyOf": [
+            {"type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Import provenance metadata",
+      "required": ["package_id", "source_path", "file_hash"],
+      "properties": {
+        "package_id": {
+          "type": "string",
+          "description": "ULID of the source package"
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Relative path within the package"
+        },
+        "file_hash": {
+          "type": "string",
+          "description": "SHA-256 hash of the source edge content (hex encoded)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

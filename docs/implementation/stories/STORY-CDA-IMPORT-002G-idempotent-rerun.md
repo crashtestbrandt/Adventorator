@@ -1,0 +1,65 @@
+# STORY-CDA-IMPORT-002G — Idempotent re-run & rollback tests
+
+Epic: [EPIC-CDA-IMPORT-002 — Package Import & Provenance](/docs/implementation/epics/EPIC-CDA-IMPORT-002-package-import-and-provenance.md)
+Status: Planned
+Owner: Campaign Data / Content Pipeline WG — Reliability & QA team
+
+## Summary
+Validate importer resilience by exercising repeated runs of the same package, failure injection mid-phase, and transactional rollback guarantees. Confirm metrics, logs, and ImportLog entries accurately reflect idempotent skips and rolled-back operations. This story codifies replay determinism mandated by ARCH-CDA-001 and ADR-0011.
+
+## Acceptance Criteria
+- Second import run using identical package emits no new entity/edge/tag/chunk events; tests assert unchanged replay_ordinal sequence and ImportLog entries annotated as idempotent skips.
+- Failure injection harness simulates mid-phase collision and missing dependency file, asserting transaction rollback leaves no partial events or ImportLog rows.
+- Metrics include `importer.idempotent` counter and per-phase rollback counters; structured logs capture scenario + outcome with manifest hash correlation.
+- Documentation records recovery playbook for operators (retry guidance, log interpretation).
+
+## Tasks
+- [ ] **TASK-CDA-IMPORT-RERUN-19A — Replay baseline test.** Implement integration test running full importer twice on clean DB, asserting event counts, ImportLog state, metrics, and `state_digest` equality.
+- [ ] **TASK-CDA-IMPORT-RERUN-19B — Ledger hash chain verification.** Extend test to check hash chain tip unchanged after second run and that idempotent path does not append events.
+- [ ] **TASK-CDA-IMPORT-FAIL-20A — Failure injection harness.** Build utility enabling targeted failure scenarios (entity collision, missing file, invalid YAML) triggered during import phases.
+- [ ] **TASK-CDA-IMPORT-FAIL-20B — Transaction rollback tests.** Use harness to assert DB state, ImportLog, and metrics remain unchanged post-failure; include log assertions for rollback notice.
+- [ ] **TASK-CDA-IMPORT-METRIC-21A — Metrics instrumentation.** Register `importer.idempotent` and `importer.rollback` counters; add tests verifying increments with failure scenarios.
+- [ ] **TASK-CDA-IMPORT-METRIC-21B — Observability docs update.** Document new metrics/log patterns in observability guide and importer runbook.
+- [ ] **TASK-CDA-IMPORT-RERUN-19C — CLI/automation support.** Provide script or Make target to execute idempotency regression suite for operators/CI.
+
+## Definition of Ready
+- Prior stories deliver deterministic importer pipeline with accessible manifest hash, counts, and metrics hooks.
+- Golden manifest fixture available for baseline re-run tests; corrupted fixtures prepared for failure injection scenarios.
+- Agreements on rollback semantics (full phase rollback vs per-item) documented with persistence team.
+
+## Definition of Done
+- Idempotent re-run tests pass in CI; failure injection scenarios produce expected metrics/logs and leave database clean.
+- Runbook updated with retry procedures, log signatures, and metric alerting thresholds.
+- Observability dashboards (if applicable) annotated with idempotent/rollback counters.
+- Importer CLI/automation documented for QA/regression runs.
+
+## Test Plan
+- **Integration tests:** Automated importer rerun test verifying zero new events/ImportLog entries; failure injection tests covering collision, missing file, invalid schema.
+- **Hash chain verification:** Assert ledger hash tip unchanged after rerun using helper from ADR-0006 implementation.
+- **Metric/log capture tests:** Use instrumentation capture to ensure expected counters/log lines emitted for idempotent and rollback scenarios.
+- **Manual validation:** Document operator steps to simulate failure and confirm rollback (optional but recommended).
+
+## Observability
+- Metrics: `importer.idempotent`, `importer.rollback`, per-phase counters reused from earlier stories.
+- Structured logs: include scenario identifier, manifest hash, affected phase, outcome (idempotent, rollback, failure reason).
+
+## Risks & Mitigations
+- **Flaky integration tests due to timing:** Use deterministic fixtures and control time/IDs in tests.
+- **Incomplete rollback coverage:** Expand harness scenarios iteratively; document gaps for follow-up.
+- **Operator confusion interpreting metrics/logs:** Provide runbook updates and sample queries/dashboard references.
+
+## Dependencies
+- All prior importer phases implemented with deterministic ordering and metrics hooks.
+- Failure injection hooks or ability to monkeypatch importer pipeline safely (design with persistence team).
+- Observability documentation baseline (from earlier stories) to extend.
+
+## Feature Flags
+- `features.importer` (global); ensure rerun harness respects flag states in tests.
+
+## Traceability
+- Epic: [EPIC-CDA-IMPORT-002](/docs/implementation/epics/EPIC-CDA-IMPORT-002-package-import-and-provenance.md)
+- Tests: `tests/importer/test_importer_idempotency.py`, `tests/importer/test_importer_rollback.py`.
+
+## Implementation Notes
+- Consider running rerun tests using database transaction snapshots to speed up repeated runs.
+- Provide CLI harness to intentionally corrupt file between runs to validate detection/rollback messaging.

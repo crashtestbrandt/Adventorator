@@ -1,0 +1,12 @@
+{
+  "stable_id": "01JAR9WYH41R8TFM6Z0X5E7L0C",
+  "kind": "location",
+  "name": "Temporal Archive Atrium",
+  "tags": ["building", "knowledge"],
+  "affordances": ["enter", "consult", "catalog"],
+  "traits": ["anchored", "cloistered"],
+  "props": {
+    "timezone": "UTC",
+    "security_level": "restricted"
+  }
+}

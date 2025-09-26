@@ -1,0 +1,16 @@
+{
+  "tags": [
+    {
+      "tag_id": "tag.lore.intro",
+      "category": "lore",
+      "version": "1.0.0"
+    }
+  ],
+  "affordances": [
+    {
+      "affordance_id": "affordance.greet",
+      "description": "Allow NPCs to greet players",
+      "ruleset_version": "v1.2.3"
+    }
+  ]
+}

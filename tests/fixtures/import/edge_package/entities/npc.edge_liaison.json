@@ -1,0 +1,12 @@
+{
+  "stable_id": "01JAR9WYH41R8TFM6Z0X5E7NPC",
+  "kind": "npc",
+  "name": "Lyra the Edge Liaison",
+  "tags": ["liaison", "temporal"],
+  "affordances": ["route", "authorize", "mentor"],
+  "traits": ["meticulous", "patient"],
+  "props": {
+    "division": "Topology",
+    "clearance": "omega"
+  }
+}

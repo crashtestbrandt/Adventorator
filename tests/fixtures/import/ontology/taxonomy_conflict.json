@@ -1,0 +1,46 @@
+{
+  "version": "1.0.0",
+  "source": {
+    "package": "wanderhome-campaign",
+    "revision": "2025-02-14",
+    "provenance": {
+      "manifest_path": "packages/wanderhome/package.manifest.json",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "tags": [
+    {
+      "tag_id": "action.attack",
+      "category": "action",
+      "slug": "attack",
+      "display_name": "Attack",
+      "synonyms": ["attack", "strike"],
+      "audience": ["player", "gm"],
+      "gating": {
+        "ruleset_version": "v2.7",
+        "requires_feature": null
+      },
+      "metadata": {
+        "description": "Direct offensive action.",
+        "canonical_affordance": "affordance.attack.allowed"
+      }
+    },
+    {
+      "tag_id": "action.attack",
+      "category": "action",
+      "slug": "attack",
+      "display_name": "Attack",
+      "synonyms": ["attack", "strike", "power attack"],
+      "audience": ["player", "gm"],
+      "gating": {
+        "ruleset_version": "v2.8",
+        "requires_feature": null
+      },
+      "metadata": {
+        "description": "Conflicting attack definition with different ruleset.",
+        "canonical_affordance": "affordance.attack.allowed"
+      }
+    }
+  ],
+  "affordances": []
+}

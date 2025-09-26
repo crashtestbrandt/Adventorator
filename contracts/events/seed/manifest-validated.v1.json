@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/events/seed/manifest-validated.v1.json",
+  "title": "Seed Manifest Validated Event Schema v1",
+  "description": "Schema for seed.manifest.validated synthetic events emitted after successful manifest validation",
+  "type": "object",
+  "required": [
+    "package_id",
+    "manifest_hash", 
+    "schema_version",
+    "ruleset_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "package_id": {
+      "type": "string",
+      "pattern": "^[0-9][0-9A-HJKMNP-TV-Z]{25}$",
+      "description": "ULID of the validated package"
+    },
+    "manifest_hash": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$",
+      "description": "SHA-256 hash of the canonical manifest JSON"
+    },
+    "schema_version": {
+      "type": "integer", 
+      "minimum": 1,
+      "description": "Version of the manifest schema that was validated"
+    },
+    "ruleset_version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "description": "Semantic version of the ruleset from the manifest"
+    }
+  }
+}
