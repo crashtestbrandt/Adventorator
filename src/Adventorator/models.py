@@ -471,3 +471,66 @@ class Combatant(Base):
             "order_idx",
         ),
     )
+
+
+# -----------------------------
+# Phase 10: Import Pipeline
+# -----------------------------
+
+
+class Entity(Base):
+    """Imported entity definitions with provenance tracking."""
+
+    __tablename__ = "entities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
+    )
+    stable_id: Mapped[str] = mapped_column(String(26), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    affordances: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    traits: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    props: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Provenance fields
+    package_id: Mapped[str] = mapped_column(String(26), nullable=False, index=True)
+    source_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "stable_id", name="ux_entities_campaign_stable_id"),
+        Index("ix_entities_campaign_kind_name", "campaign_id", "kind", "name"),
+        Index("ix_entities_package_source", "package_id", "source_path"),
+    )
+
+
+class ImportLog(Base):
+    """Audit trail for package import operations."""
+
+    __tablename__ = "import_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
+    )
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    object_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    stable_id: Mapped[str] = mapped_column(String(26), nullable=False, index=True)
+    file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)  # "created", "skipped"
+    manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "sequence_no", name="ux_import_logs_campaign_sequence"),
+        Index("ix_import_logs_campaign_phase_object", "campaign_id", "phase", "object_type"),
+        Index("ix_import_logs_manifest_hash", "manifest_hash"),
+    )

@@ -1,0 +1,11 @@
+{
+  "stable_id": "01JA6Z7F8NPC00000000000000",
+  "kind": "npc",
+  "name": "Ada the Archivist",
+  "tags": ["librarian"],
+  "affordances": ["greet"],
+  "traits": ["curious"],
+  "props": {
+    "role": "knowledge_keeper"
+  }
+}

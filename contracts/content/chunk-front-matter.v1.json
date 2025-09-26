@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.adventorator.com/content/chunk-front-matter.v1.json",
+  "title": "Lore Chunk Front-Matter Schema",
+  "description": "Schema for YAML front-matter metadata in lore markdown files for content chunking and ingestion",
+  "type": "object",
+  "required": [
+    "chunk_id",
+    "title", 
+    "audience",
+    "tags"
+  ],
+  "properties": {
+    "chunk_id": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9_-]*[A-Z0-9]$",
+      "minLength": 3,
+      "maxLength": 64,
+      "description": "Stable identifier for the chunk, provided by authoring tools"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable title for the chunk"
+    },
+    "audience": {
+      "type": "string",
+      "enum": ["Player", "GM-Only", "Teen", "Adult"],
+      "description": "Audience gating classification per narrative design guidelines"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*:[a-z0-9_-]+$"
+      },
+      "uniqueItems": true,
+      "description": "Array of canonical tags in category:value format"
+    },
+    "embedding_hint": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "Optional hint for embedding generation (gated by features.importer_embeddings)"
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["manifest_hash", "source_path"],
+      "properties": {
+        "manifest_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hash of the package manifest"
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path to the source file within the package"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Provenance metadata linking chunk to package manifest"
+    }
+  },
+  "additionalProperties": false
+}

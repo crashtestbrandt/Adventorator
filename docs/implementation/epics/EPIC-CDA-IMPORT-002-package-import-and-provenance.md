@@ -38,6 +38,8 @@
 ### STORY-CDA-IMPORT-002A — Manifest validation & package_id registration
 *Epic linkage:* Establishes trusted seed manifest and genesis for subsequent phases.
 
+Implementation plan: [STORY-CDA-IMPORT-002A — Manifest validation & package_id registration](/docs/implementation/stories/STORY-CDA-IMPORT-002A-manifest-validation.md)
+
 - **Summary.** Validate `package.manifest.json` (schema_version, engine_contract_range, content_index hashes, signatures) and record package row + synthetic `seed.manifest.validated` event.
 - **Acceptance criteria.**
   - Manifest schema JSON in `contracts/package/` validated by existing script or extended checker.
@@ -54,6 +56,8 @@
 
 ### STORY-CDA-IMPORT-002B — Entity ingestion & synthetic events
 *Epic linkage:* Deterministically loads entity definitions with provenance & seed events.
+
+Implementation plan: [STORY-CDA-IMPORT-002B — Entity ingestion & synthetic events](/docs/implementation/stories/STORY-CDA-IMPORT-002B-entity-ingestion.md)
 
 - **Summary.** Parse entity files, validate stable_id uniqueness, record provenance, emit `seed.entity_created` events in sorted order.
 - **Acceptance criteria.**
@@ -72,6 +76,8 @@
 ### STORY-CDA-IMPORT-002C — Edge ingestion & temporal validity
 *Epic linkage:* Adds relational topology with validity metadata.
 
+Implementation plan: [STORY-CDA-IMPORT-002C — Edge ingestion & temporal validity](/docs/implementation/stories/STORY-CDA-IMPORT-002C-edge-ingestion.md)
+
 - **Summary.** Ingest edge definitions (contains, adjacent_to, member_of, bound_by_rule) and emit `seed.edge_created` events.
 - **Acceptance criteria.**
   - Validation ensures referenced entities exist (fail fast otherwise).
@@ -88,6 +94,8 @@
 
 ### STORY-CDA-IMPORT-002D — Ontology (tags & affordances) registration
 *Epic linkage:* Seeds controlled vocabulary before dependent features (retrieval, predicate gating).
+
+Implementation plan: [STORY-CDA-IMPORT-002D — Ontology (tags & affordances) registration](/docs/implementation/stories/STORY-CDA-IMPORT-002D-ontology-registration.md)
 
 - **Summary.** Parse ontology files, register tags/affordances, emit `seed.tag_registered` events.
 - **Acceptance criteria.**
@@ -106,6 +114,8 @@
 ### STORY-CDA-IMPORT-002E — Lore content chunking & ingestion
 *Epic linkage:* Provides retrieval-ready modular content with provenance.
 
+Implementation plan: [STORY-CDA-IMPORT-002E — Lore content chunking & ingestion](/docs/implementation/stories/STORY-CDA-IMPORT-002E-lore-chunking.md)
+
 - **Summary.** Chunk markdown lore with front-matter, register `ContentChunk` rows, emit `seed.content_chunk_ingested` events.
 - **Acceptance criteria.**
   - Audience enforcement fields (`audience`) captured; optional embedding metadata gated behind flag.
@@ -122,6 +132,8 @@
 
 ### STORY-CDA-IMPORT-002F — Finalization & ImportLog consolidation
 *Epic linkage:* Closes import transaction and asserts replay invariants.
+
+Implementation plan: [STORY-CDA-IMPORT-002F — Finalization & ImportLog consolidation](/docs/implementation/stories/STORY-CDA-IMPORT-002F-finalization.md)
 
 - **Summary.** Emit `seed.import.complete` event summarizing counts, finalize ImportLog, and run post-import replay sanity (fold to state_digest).
 - **Acceptance criteria.**
@@ -140,6 +152,8 @@
 ### STORY-CDA-IMPORT-002G — Idempotent re-run & rollback tests
 *Epic linkage:* Validates resilience and re-entrant design.
 
+Implementation plan: [STORY-CDA-IMPORT-002G — Idempotent re-run & rollback tests](/docs/implementation/stories/STORY-CDA-IMPORT-002G-idempotent-rerun.md)
+
 - **Summary.** Ensure repeated import of the same package produces no additional seed events (or clearly deduplicated) and partial failures leave no inconsistent state.
 - **Acceptance criteria.**
   - Second import run yields zero new entity/edge/tag/chunk seed events; ImportLog notes idempotent outcomes.
@@ -157,6 +171,16 @@
 ---
 
 ## Traceability Log
+
+| Artifact | Description |
+| --- | --- |
+| [STORY-CDA-IMPORT-002A](/docs/implementation/stories/STORY-CDA-IMPORT-002A-manifest-validation.md) | Manifest validation plan, contracts, and deterministic hashing tasks. |
+| [STORY-CDA-IMPORT-002B](/docs/implementation/stories/STORY-CDA-IMPORT-002B-entity-ingestion.md) | Entity ingestion ordering, provenance, and seed event plan. |
+| [STORY-CDA-IMPORT-002C](/docs/implementation/stories/STORY-CDA-IMPORT-002C-edge-ingestion.md) | Edge ingestion referential validation and ImportLog coverage. |
+| [STORY-CDA-IMPORT-002D](/docs/implementation/stories/STORY-CDA-IMPORT-002D-ontology-registration.md) | Ontology/taxonomy ingestion plan with duplicate handling. |
+| [STORY-CDA-IMPORT-002E](/docs/implementation/stories/STORY-CDA-IMPORT-002E-lore-chunking.md) | Lore chunking, audience enforcement, and provenance hashing plan. |
+| [STORY-CDA-IMPORT-002F](/docs/implementation/stories/STORY-CDA-IMPORT-002F-finalization.md) | Import finalization, state digest, and metrics instrumentation plan. |
+| [STORY-CDA-IMPORT-002G](/docs/implementation/stories/STORY-CDA-IMPORT-002G-idempotent-rerun.md) | Idempotent rerun & rollback validation plan. |
 
 | Artifact | Link | Notes |
 | --- | --- | --- |

@@ -10,11 +10,14 @@ async def test_smoke_roll_basic():
     load_all_commands()
     cmd = find_command("roll", None)
     assert cmd is not None
+
     class _Spy:
         def __init__(self):
             self.msgs = []
+
         async def send(self, content: str, *, ephemeral: bool = False):
             self.msgs.append((content, ephemeral))
+
     inv = Invocation(
         name="roll",
         subcommand=None,
@@ -35,11 +38,14 @@ async def test_smoke_ask_empty_validation():
     load_all_commands()
     cmd = find_command("ask", None)
     assert cmd is not None
+
     class _Spy:
         def __init__(self):
             self.msgs = []
+
         async def send(self, content: str, *, ephemeral: bool = False):
             self.msgs.append((content, ephemeral))
+
     spy = _Spy()
     inv = Invocation(
         name="ask",
@@ -49,11 +55,15 @@ async def test_smoke_ask_empty_validation():
         channel_id="c2",
         guild_id="g2",
         responder=spy,
-        settings=type("S", (), {
-            "features_improbability_drive": True,
-            "features_ask": True,
-            "features_ask_nlu_rule_based": True,
-        })(),
+        settings=type(
+            "S",
+            (),
+            {
+                "features_improbability_drive": True,
+                "features_ask": True,
+                "features_ask_nlu_rule_based": True,
+            },
+        )(),
     )
     opts = cmd.option_model.model_validate(inv.options)
     await cmd.handler(inv, opts)

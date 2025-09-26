@@ -17,6 +17,8 @@ activity_log = true
 planning_tiers = true  # Enables tiered planning scaffolding (Level >1 expansion paths)
 improbability_drive = true
 ask = { enabled = true, nlu_rule_based = true, nlu_debug = true, kb_lookup = false }
+importer = false  # Global importer gate per EPIC-CDA-IMPORT-002
+importer_embeddings = false  # Embedding metadata processing for lore chunks (STORY-CDA-IMPORT-002E)
 
 # --- ImprobabilityDrive /ask feature flags ---
 # Two supported forms:

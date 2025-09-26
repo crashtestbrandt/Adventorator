@@ -1,0 +1,12 @@
+{
+  "stable_id": "01JA6Z7F8LOC00000000000000",
+  "kind": "location",
+  "name": "The Grand Library",
+  "tags": ["building", "knowledge"],
+  "affordances": ["enter", "search", "study"],
+  "traits": ["ancient", "vast"],
+  "props": {
+    "capacity": 500,
+    "librarian": "01JA6Z7F8NPC00000000000000"
+  }
+}

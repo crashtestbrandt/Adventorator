@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://adventorator.dev/contracts/events/seed/tag-registered.v1.json",
+  "title": "Tag Registered Seed Event v1",
+  "description": "Synthetic event emitted when an ontology tag is registered during package import",
+  "type": "object",
+  "required": ["tag_id", "category", "version", "slug", "display_name", "synonyms", "audience", "gating", "provenance"],
+  "properties": {
+    "tag_id": {
+      "type": "string",
+      "description": "Unique identifier for the tag in format category.name",
+      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_-]*$",
+      "minLength": 3,
+      "maxLength": 64
+    },
+    "category": {
+      "type": "string",
+      "description": "Tag category classification",
+      "enum": ["action", "target", "modifier", "trait"],
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "version": {
+      "type": "string",
+      "description": "Version of the ontology definition",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "slug": {
+      "type": "string",
+      "description": "URL-safe slug for the tag (lowercase, hyphenated)",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable display name",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "synonyms": {
+      "type": "array",
+      "description": "Alternative terms that map to this tag",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "audience": {
+      "type": "array",
+      "description": "Roles that can use this tag",
+      "items": {
+        "type": "string",
+        "enum": ["player", "gm", "system"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "gating": {
+      "type": "object",
+      "description": "Access control and versioning information",
+      "required": ["ruleset_version"],
+      "properties": {
+        "ruleset_version": {
+          "type": "string",
+          "description": "Minimum ruleset version required",
+          "pattern": "^v\\d+\\.\\d+$"
+        },
+        "requires_feature": {
+          "type": ["string", "null"],
+          "description": "Optional feature flag requirement",
+          "maxLength": 64
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional tag metadata",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the tag",
+          "maxLength": 500
+        },
+        "canonical_affordance": {
+          "type": "string",
+          "description": "Reference to the primary affordance for this tag",
+          "pattern": "^affordance\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_-]*$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Import provenance metadata",
+      "required": ["package_id", "source_path", "file_hash"],
+      "properties": {
+        "package_id": {
+          "type": "string",
+          "description": "ULID of the source package"
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Relative path within the package"
+        },
+        "file_hash": {
+          "type": "string",
+          "description": "SHA-256 hash of the source file (hex encoded)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
