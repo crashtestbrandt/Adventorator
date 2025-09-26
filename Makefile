@@ -1,4 +1,4 @@
-.PHONY: dev test lint type run docker
+.PHONY: dev test lint type run docker test-idempotency
 
 uv:
 	curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -44,6 +44,10 @@ tunnel-dev-dns:
 
 test:
 	. .venv/bin/activate && pytest
+
+# Idempotency and rollback test suite (TASK-CDA-IMPORT-RERUN-19C)
+test-idempotency:
+	. .venv/bin/activate && pytest tests/importer/test_importer_idempotency.py tests/importer/test_importer_rollback.py -v
 
 .PHONY: smoke
 smoke:

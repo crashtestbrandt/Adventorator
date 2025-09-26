@@ -222,12 +222,29 @@ class TestImporterIdempotency:
         with open(package_root / "entities" / "npc.json", "w") as f:
             json.dump(entity_data, f, indent=2)
         
+        # Create location entity for edge reference
+        location_data = {
+            "stable_id": "01JLOC00000000000000000001",
+            "kind": "location",
+            "name": "Great Library",
+            "tags": ["library"],
+            "affordances": ["research"],
+            "traits": ["vast"],
+            "props": {"architecture": "gothic"}
+        }
+        
+        with open(package_root / "entities" / "location.json", "w") as f:
+            json.dump(location_data, f, indent=2)
+        
         # Create edge file
         edge_data = {
             "stable_id": "01JEDGE0000000000000000001",
-            "source": "01JA6Z7F8NPC00000000000000",
-            "target": "01JLOC00000000000000000001",
-            "relationship": "works_at",
+            "type": "npc.resides_in.location", 
+            "src_ref": "01JA6Z7F8NPC00000000000000",
+            "dst_ref": "01JLOC00000000000000000001",
+            "attributes": {
+                "relationship_context": "workplace"
+            },
             "tags": ["employment"]
         }
         
@@ -286,6 +303,7 @@ A vast repository of knowledge stretches before you.
         
         # Entity ingestion
         entities_dir = package_root / "entities"
+        entity_results = []
         if entities_dir.exists():
             entity_results = entity_phase.parse_and_validate_entities(package_root, manifest_result["manifest"])
             context.record_entities(entity_results)
@@ -293,14 +311,14 @@ A vast repository of knowledge stretches before you.
         # Edge ingestion  
         edges_dir = package_root / "edges"
         if edges_dir.exists():
-            edge_results = edge_phase.parse_and_validate_edges(package_root, manifest_result["manifest"])
+            edge_results = edge_phase.parse_and_validate_edges(package_root, manifest_result["manifest"], entity_results)
             context.record_edges(edge_results)
         
         # Ontology ingestion
         ontologies_dir = package_root / "ontologies"
         if ontologies_dir.exists():
-            ontology_results = ontology_phase.parse_and_validate_ontologies(ontologies_dir, manifest_result["manifest"])
-            context.record_ontologies(ontology_results)
+            tags, affordances, import_log_entries = ontology_phase.parse_and_validate_ontology(ontologies_dir, manifest_result["manifest"])
+            context.record_ontology(tags, affordances, import_log_entries)
         
         # Lore ingestion
         lore_dir = package_root / "lore"
