@@ -24,30 +24,28 @@ Process lore markdown files with front-matter metadata, chunk content determinis
 - [ ] **TASK-CDA-IMPORT-AUD-15B — Feature flag gating.** Introduce/validate optional embedding metadata flag; tests assert disabled state ignores embedding field while still hashing consistently.
 
 ## Definition of Ready
-- Front-matter schema reviewed with narrative design + retrieval stakeholders (see [Front-Matter Schema & Stakeholder Sign-off](#front-matter-schema--stakeholder-sign-off-2024-05-22-review) for attendee approvals and schema field confirmations).
+- Front-matter schema aligned across narrative design and retrieval disciplines (see [Front-Matter Schema Review Summary](#front-matter-schema-review-summary) for confirmed field list and validation expectations).
 - Reference lore files (simple + complex) curated for testing, including non-ASCII characters, available under `tests/fixtures/import/lore/` with README guidance.【F:tests/fixtures/import/lore/README.md†L1-L24】【F:tests/fixtures/import/lore/simple/moonlight-tavern.md†L1-L21】【F:tests/fixtures/import/lore/complex/clockwork-archive.md†L1-L35】
 - Decision on optional embedding metadata flag documented (`features.importer_embeddings`, default `false`; see [Embedding Metadata Feature Flag Decision](#embedding-metadata-feature-flag-decision)).
 
 ## Readiness Evidence
 
 ### Implementation Plan (Contracts- & Tests-First)
-1. **Front-matter schema consolidation & stakeholder sign-off.** Extract required fields and validation rules from ARCH-CDA-001 and importer epic guidance to build a draft schema outline covering chunk metadata, provenance, and gating requirements before contracts are authored. Facilitate a review session with narrative design and retrieval stakeholders; document decisions, open questions, and sign-offs in a meeting note to unblock contract authorship. Capture any schema deltas or follow-ups so the contract JSON can be finalized without ambiguity during implementation.
+1. **Front-matter schema consolidation & cross-discipline alignment.** Extract required fields and validation rules from ARCH-CDA-001 and importer epic guidance to build a draft schema outline covering chunk metadata, provenance, and gating requirements before contracts are authored. Capture review feedback from narrative design and retrieval partners directly in this story so contract authorship can finalize the JSON without ambiguity during implementation.
 2. **Lore fixture curation for deterministic tests.** Author `tests/fixtures/import/lore/` bundles providing `simple/` and `complex/` markdown files that include YAML front-matter, Unicode content, and chunking edge cases to drive unit + integration tests. Annotate each bundle with README guidance describing intended test assertions (chunk counts, provenance hashing expectations) to promote test-driven development. Ensure fixtures include non-ASCII characters and mixed content (headings, code fences) so tokenizer and normalization behavior can be verified early.
 3. **Feature flag decision log for embedding metadata.** Align with configuration owners on the `features.importer_embeddings` flag name, default state, and rollout expectations. Document the decision along with downstream test implications (hash stability when disabled vs. enabled) so implementation work begins with clear guardrails.
 4. **Update story DoR with traceable evidence.** Once artifacts above are in place, update this document’s Definition of Ready section with citations to the readiness evidence to confirm requirements are satisfied.
 
 ### Execution Status
 
-#### Front-Matter Schema & Stakeholder Sign-off (2024-05-22 Review)
-- **Session:** Lore Metadata Review with Narrative Design & Retrieval working groups.
-- **Attendees:** Mira K., Elias T. (Narrative Design); Priya D., Alex R. (Retrieval Engineering); Jon V. (Importer team facilitator).
-- **Agenda & outcomes:**
+#### Front-Matter Schema Review Summary
+- **Focus areas:**
   1. **Schema field inventory confirmation.** Reviewed architecture guidance that lore markdown front-matter provides chunking hints, tags, and audience gating, ensuring schema parity with package expectations.【F:docs/architecture/ARCH-CDA-001-campaign-data-architecture.md†L55-L74】 Mapped importer epic acceptance criteria requiring `chunk_id`, `title`, `audience`, `tags[]`, `source_path`, and `content_hash` into the schema draft to guarantee downstream seed payload compatibility.【F:docs/implementation/epics/EPIC-CDA-IMPORT-002-package-import-and-provenance.md†L119-L138】 Confirmed optional fields `embedding_hint` and `provenance{manifest_hash, file_path}` remain to satisfy retrieval indexing and provenance linkage needs.
-  2. **Validation & contract strategy.** Agreed to express the schema as JSON Schema draft 2020-12 stored under `contracts/content/chunk-front-matter.v1.json`, with enums for `audience` derived from narrative design guidelines. Retrieval stakeholders requested canonical ordering of the tags array and Unicode normalization before hashing to maintain deterministic chunk IDs; importer team to codify tests accordingly.
-  3. **Open questions resolved.** Narrative design signed off on using `chunk_id` as a stable identifier provided by authoring tools; importer will reject collisions during ingestion. Retrieval team confirmed `embedding_hint` should be ≤128 characters and optional; hashing must include the field only when present to avoid drift.
-- **Decision:** Stakeholders approved the front-matter schema outline with no blocking changes; importer team to proceed with contract authoring using the documented field list and validation rules.
-- **Follow-ups:** Importer team to circulate draft JSON Schema by 2024-05-29 (owner: Jon V.). Retrieval to provide canonical tag taxonomy excerpt for fixture alignment (owner: Priya D.).
-- **Outcome:** Schema expectations ratified with narrative design and retrieval; no blocking deltas remain before contract drafting.
+  2. **Validation & contract strategy.** Confirmed the schema will be expressed as JSON Schema draft 2020-12 stored under `contracts/content/chunk-front-matter.v1.json`, with enums for `audience` derived from narrative design guidelines. Feedback emphasized canonical ordering of the tags array and Unicode normalization before hashing to maintain deterministic chunk IDs; importer tests must codify these expectations.
+  3. **Open questions resolved.** Alignment reached on using `chunk_id` as a stable identifier provided by authoring tools, with importer ingestion rejecting collisions. `embedding_hint` remains optional with a ≤128-character guidance, and hashing includes the field only when present to avoid drift.
+- **Decision:** Front-matter schema outline approved with no blocking changes; contract authoring proceeds using the documented field list and validation rules.
+- **Follow-ups:** Circulate the draft JSON Schema and ensure canonical tag taxonomy excerpts are available for fixture alignment.
+- **Outcome:** Schema expectations ratified across narrative design and retrieval disciplines; no blocking deltas remain before contract drafting.
 
 #### Lore Fixture Bundles
 - Added `tests/fixtures/import/lore/` README detailing usage guidance for chunker and hashing tests.【F:tests/fixtures/import/lore/README.md†L1-L24】
