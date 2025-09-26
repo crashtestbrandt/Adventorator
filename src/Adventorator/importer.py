@@ -2082,9 +2082,10 @@ async def run_full_import_with_database(
             if not package_id:
                 raise ImporterError("Missing package_id in manifest")
                 
-            # Compute manifest hash for idempotent detection
-            manifest_content = json.dumps(manifest_data, sort_keys=True)
-            manifest_hash = hashlib.sha256(manifest_content.encode('utf-8')).hexdigest()
+            # Compute manifest hash for idempotent detection using canonical helper
+            # This must match the hashing used by validate_manifest to ensure equality.
+            from Adventorator.manifest_validation import compute_manifest_hash
+            manifest_hash = compute_manifest_hash(manifest_data)
 
             # Check for existing import with same manifest hash
             # SQLite doesn't support JSON contains filtering portably, so filter in Python
@@ -2167,6 +2168,7 @@ async def run_full_import_with_database(
                         "action": "completed",
                         "manifest_hash": manifest_hash
                     },
+                    "hash_chain_tip": hash_chain_tip,
                     "database_state": {
                         "events": [
                             {
