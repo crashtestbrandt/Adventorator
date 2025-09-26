@@ -105,7 +105,8 @@ async def persist_import_event(
     scene_id: int | None,
     event_type: str,
     payload: dict[str, Any],
-    actor_id: str = "importer"
+    actor_id: str = "importer",
+    package_id: str | None = None
 ) -> models.Event:
     """Persist an import-related event to the database.
     
@@ -116,14 +117,19 @@ async def persist_import_event(
         event_type: Type of event (e.g., 'seed.manifest.validated')
         payload: Event payload data
         actor_id: Who triggered the event (default: 'importer')
+        package_id: Package ID for deterministic request ID generation
         
     Returns:
         Created Event record
     """
     # For import events, we'll create scene-less events linked to campaign
     if scene_id is None:
-        # Create a temporary execution request ID for import events
-        request_id = f"import-{campaign_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+        # Create a deterministic execution request ID for import events
+        # Use package_id if provided, otherwise fall back to campaign_id with timestamp
+        if package_id:
+            request_id = f"import-{package_id}"
+        else:
+            request_id = f"import-{campaign_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
         
         # Get the last event to determine replay_ordinal and prev_hash
         from sqlalchemy import select
@@ -156,15 +162,15 @@ async def persist_import_event(
             )
         
         payload_hash = event_envelope.compute_payload_hash(payload)
-        # Exclude replay_ordinal from idempotency key per EPIC-CDA-IMPORT-002 requirements
-        # Idempotency keys should be based on stable content only, not run-scoped fields
+        # Use deterministic replay_ordinal=0 for idempotency key computation to ensure
+        # stable keys across reruns while using actual replay_ordinal for event record
         idempotency_key = event_envelope.compute_idempotency_key(
             campaign_id=campaign_id,
             event_type=event_type,
             execution_request_id=request_id,
             plan_id=None,
             payload=payload,
-            # replay_ordinal=replay_ordinal,  # Excluded per EPIC spec
+            replay_ordinal=0,  # Fixed value for deterministic idempotency
         )
         
         event = models.Event(
@@ -2194,10 +2200,12 @@ async def run_full_import_with_database(
             context.record_manifest(manifest_result)
             
             # Emit manifest validation event to database
+            package_id = manifest_result["manifest"]["package_id"]
             manifest_event = await persist_import_event(
                 session, campaign_id, None,
                 "seed.manifest.validated",
-                manifest_result["event_payload"]
+                manifest_result["event_payload"],
+                package_id=package_id
             )
             
             # Persist manifest ImportLog entry
@@ -2205,10 +2213,14 @@ async def run_full_import_with_database(
             manifest_log_entry["sequence_no"] = context.next_sequence_number()
             await persist_import_log_entry(session, campaign_id, manifest_log_entry)
             
+            # Create manifest with hash attached for subsequent phases
+            manifest_with_hash = dict(manifest_result["manifest"])
+            manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
+            
             # Entity ingestion
             entities_dir = package_root / "entities"
             if entities_dir.exists():
-                entity_results = entity_phase.parse_and_validate_entities(package_root, manifest_result["manifest"])
+                entity_results = entity_phase.parse_and_validate_entities(package_root, manifest_with_hash)
                 context.record_entities(entity_results)
                 
                 # Emit entity events and persist ImportLog entries
@@ -2217,19 +2229,23 @@ async def run_full_import_with_database(
                         await persist_import_event(
                             session, campaign_id, None,
                             "seed.entity_created",
-                            entity["event_payload"]
+                            entity["event_payload"],
+                            package_id=package_id
                         )
                     
                     # Persist ImportLog entry for this entity
                     if "import_log_entry" in entity:
                         log_entry_copy = entity["import_log_entry"].copy()
-                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        sequence_no = context.next_sequence_number()
+                        log_entry_copy["sequence_no"] = sequence_no
+                        # Update the original entry in the entity as well
+                        entity["import_log_entry"]["sequence_no"] = sequence_no
                         await persist_import_log_entry(session, campaign_id, log_entry_copy)
             
             # Edge ingestion  
             edges_dir = package_root / "edges"
             if edges_dir.exists():
-                edge_results = edge_phase.parse_and_validate_edges(package_root, manifest_result["manifest"], entity_results)
+                edge_results = edge_phase.parse_and_validate_edges(package_root, manifest_with_hash, entity_results)
                 context.record_edges(edge_results)
                 
                 # Emit edge events and persist ImportLog entries
@@ -2238,24 +2254,31 @@ async def run_full_import_with_database(
                         await persist_import_event(
                             session, campaign_id, None,
                             "seed.edge_created",
-                            edge["event_payload"]
+                            edge["event_payload"],
+                            package_id=package_id
                         )
                     
                     if "import_log_entry" in edge:
                         log_entry_copy = edge["import_log_entry"].copy()
-                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        sequence_no = context.next_sequence_number()
+                        log_entry_copy["sequence_no"] = sequence_no
+                        # Update the original entry in the edge as well
+                        edge["import_log_entry"]["sequence_no"] = sequence_no
                         await persist_import_log_entry(session, campaign_id, log_entry_copy)
             
             # Ontology ingestion
             ontology_dir = package_root / "ontology"
             if ontology_dir.exists():
-                tags, affordances, import_log_entries = ontology_phase.parse_and_validate_ontology(package_root, manifest_result["manifest"])
+                tags, affordances, import_log_entries = ontology_phase.parse_and_validate_ontology(package_root, manifest_with_hash)
                 context.record_ontology(tags, affordances, import_log_entries)
                 
                 # Persist ontology ImportLog entries
                 for log_entry in import_log_entries:
                     log_entry_copy = log_entry.copy()
-                    log_entry_copy["sequence_no"] = context.next_sequence_number()
+                    sequence_no = context.next_sequence_number()
+                    log_entry_copy["sequence_no"] = sequence_no
+                    # Update the original entry as well
+                    log_entry["sequence_no"] = sequence_no
                     await persist_import_log_entry(session, campaign_id, log_entry_copy)
             else:
                 # Record empty ontology phase for completeness
@@ -2270,11 +2293,13 @@ async def run_full_import_with_database(
                     "timestamp": datetime.now(timezone.utc),
                 }
                 await persist_import_log_entry(session, campaign_id, empty_log_entry)
+                # Record the empty log entry in context for finalization validation
+                context._import_logs.append(empty_log_entry)
             
             # Lore ingestion
             lore_dir = package_root / "lore"
             if lore_dir.exists():
-                lore_results = lore_phase.parse_and_validate_lore(package_root, manifest_result["manifest"])
+                lore_results = lore_phase.parse_and_validate_lore(package_root, manifest_with_hash)
                 context.record_lore_chunks(lore_results)
                 
                 # Emit lore events and persist ImportLog entries
@@ -2283,12 +2308,16 @@ async def run_full_import_with_database(
                         await persist_import_event(
                             session, campaign_id, None,
                             "seed.lore_chunk_created",
-                            chunk["event_payload"]
+                            chunk["event_payload"],
+                            package_id=package_id
                         )
                     
                     if "import_log_entry" in chunk:
                         log_entry_copy = chunk["import_log_entry"].copy()
-                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        sequence_no = context.next_sequence_number()
+                        log_entry_copy["sequence_no"] = sequence_no
+                        # Update the original entry in the chunk as well
+                        chunk["import_log_entry"]["sequence_no"] = sequence_no
                         await persist_import_log_entry(session, campaign_id, log_entry_copy)
             else:
                 # Record empty lore phase for completeness
@@ -2303,6 +2332,8 @@ async def run_full_import_with_database(
                     "timestamp": datetime.now(timezone.utc),
                 }
                 await persist_import_log_entry(session, campaign_id, empty_log_entry)
+                # Record the empty log entry in context for finalization validation
+                context._import_logs.append(empty_log_entry)
             
             # Finalization
             result = finalization_phase.finalize_import(context, start_time)
@@ -2311,7 +2342,8 @@ async def run_full_import_with_database(
             completion_event = await persist_import_event(
                 session, campaign_id, None,
                 "seed.import.complete",
-                result["completion_event"]["payload"]
+                result["completion_event"]["payload"],
+                package_id=package_id
             )
             
             # Persist finalization ImportLog summary
