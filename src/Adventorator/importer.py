@@ -2057,7 +2057,7 @@ async def run_full_import_with_database(
             existing_import = existing_events.scalars().first()
             
             if existing_import:
-                # This is an idempotent re-run - return existing results without creating new records
+                # This is an idempotent re-run - return existing results without creating new import records (but metrics/logs are still recorded for observability)
                 record_idempotent_run(package_id, manifest_hash)
                 
                 # Get existing import summary from the completion event
