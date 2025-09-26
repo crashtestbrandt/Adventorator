@@ -323,81 +323,33 @@ class TestStateFoldVerification:
         if not fixture_path.exists():
             pytest.skip("Golden manifest fixture not available")
         
-        from Adventorator.importer import (
-            EdgePhase,
-            EntityPhase,
-            LorePhase,
-            ManifestPhase,
-            OntologyPhase,
-        )
+        from Adventorator.importer import run_complete_import_pipeline
         
         def run_full_import():
-            """Run complete import pipeline and return context + events."""
-            manifest_phase = ManifestPhase(features_importer_enabled=True)
-            manifest_result = manifest_phase.validate_and_register(fixture_path, fixture_root)
-
-            context = ImporterRunContext()
-            context.record_manifest(manifest_result)
-
-            manifest_with_hash = dict(manifest_result["manifest"])
-            manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
-
-            # Collect all events from each phase
-            all_events = []
-            
-            # Entity phase
-            entity_phase = EntityPhase(features_importer_enabled=True)
-            entities = entity_phase.parse_and_validate_entities(fixture_root, manifest_with_hash)
-            context.record_entities(entities)
-            entity_events = entity_phase.create_seed_events(entities)
-            all_events.extend(entity_events)
-
-            # Edge phase
-            edge_phase = EdgePhase(features_importer_enabled=True)
-            edges = edge_phase.parse_and_validate_edges(fixture_root, manifest_with_hash, entities)
-            context.record_edges(edges)
-            edge_events = edge_phase.create_seed_events(edges)
-            all_events.extend(edge_events)
-
-            # Ontology phase
-            ontology_phase = OntologyPhase(features_importer_enabled=True)
-            tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
-                fixture_root, manifest_with_hash
+            """Run complete import pipeline using production code path."""
+            return run_complete_import_pipeline(
+                fixture_root, 
+                features_importer=True, 
+                features_importer_embeddings=True
             )
-            context.record_ontology(tags, affordances, ontology_logs)
-            ontology_event_counts = ontology_phase.emit_seed_events(tags, affordances, manifest_with_hash)
-            # Note: ontology phase returns counts, not actual events, so we track counts
-
-            # Lore phase
-            lore_phase = LorePhase(features_importer_enabled=True, features_importer_embeddings=True)
-            chunks = lore_phase.parse_and_validate_lore(fixture_root, manifest_with_hash)
-            context.record_lore_chunks(chunks)
-            lore_events = lore_phase.create_seed_events(chunks)
-            all_events.extend(lore_events)
-            
-            # Finalization phase
-            finalization_phase = FinalizationPhase(features_importer_enabled=True)
-            start_time = datetime.now(timezone.utc)
-            finalization_result = finalization_phase.finalize_import(context, start_time)
-            all_events.append(finalization_result["completion_event"])
-            
-            return context, all_events, finalization_result
         
         # First run
-        context1, events1, result1 = run_full_import()
+        result1 = run_full_import()
         
         # Second run (replay)
-        context2, events2, result2 = run_full_import()
+        result2 = run_full_import()
         
         # Assert identical state digests (idempotency)
-        assert result1["state_digest"] == result2["state_digest"]
+        assert result1["finalization"]["state_digest"] == result2["finalization"]["state_digest"]
         
-        # Assert identical event counts (no duplicates in second run)
-        assert len(events1) == len(events2)
+        # Assert identical counts (no duplicates in second run)
+        counts1 = result1["context"].summary_counts()
+        counts2 = result2["context"].summary_counts()
+        assert counts1 == counts2
         
         # Assert completion events have same core data (deterministic payload)
-        payload1 = result1["completion_event"]["payload"]
-        payload2 = result2["completion_event"]["payload"]
+        payload1 = result1["finalization"]["completion_event"]["payload"]
+        payload2 = result2["finalization"]["completion_event"]["payload"]
         
         for field in ["package_id", "manifest_hash", "entity_count", "edge_count", 
                      "tag_count", "affordance_count", "chunk_count", "state_digest"]:
@@ -405,4 +357,25 @@ class TestStateFoldVerification:
         
         # Verify that in a real ledger scenario, the second run would produce
         # no new ledger events (this test simulates by checking event determinism)
-        # In practice, this would integrate with the actual event ledger system
+        # The production pipeline properly manages ImportLog entries and sequence numbers
+        
+        # Verify ImportLog entries are properly sequenced in both runs
+        logs1 = result1["context"].import_log_entries
+        logs2 = result2["context"].import_log_entries
+        
+        # Both runs should have the same ImportLog structure
+        assert len(logs1) == len(logs2)
+        
+        # Verify sequence numbers are contiguous (no gaps)
+        sequences1 = [entry.get("sequence_no") for entry in logs1 if isinstance(entry.get("sequence_no"), int)]
+        sequences2 = [entry.get("sequence_no") for entry in logs2 if isinstance(entry.get("sequence_no"), int)]
+        
+        if sequences1:
+            sequences1.sort()
+            expected_sequences = list(range(1, len(sequences1) + 1))
+            assert sequences1 == expected_sequences, f"First run has sequence gaps: {sequences1}"
+            
+        if sequences2:
+            sequences2.sort()
+            expected_sequences = list(range(1, len(sequences2) + 1))
+            assert sequences2 == expected_sequences, f"Second run has sequence gaps: {sequences2}"

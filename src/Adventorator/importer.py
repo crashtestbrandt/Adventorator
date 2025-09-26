@@ -283,8 +283,7 @@ class EntityPhase:
             inc_counter("importer.collision", value=1, package_id=package_id)
             raise exc
 
-        # Create ImportLog entries for each entity
-        import_log_entries = []
+        # Create ImportLog entries for each entity and assign them individually
         for i, entity in enumerate(filtered_entities):
             import_log_entry = {
                 "sequence_no": i + 1,
@@ -296,7 +295,8 @@ class EntityPhase:
                 "manifest_hash": manifest.get("manifest_hash", "unknown"),
                 "timestamp": datetime.now(timezone.utc),
             }
-            import_log_entries.append(import_log_entry)
+            # Each entity gets only its own ImportLog entry
+            entity["import_log_entries"] = [import_log_entry]
 
         # Emit metrics with actual counts
         entity_count = len(filtered_entities)
@@ -307,10 +307,6 @@ class EntityPhase:
                 value=entities_skipped_idempotent,
                 package_id=package_id,
             )
-
-        # Store ImportLog entries (would be persisted to database in real implementation)
-        for entity in filtered_entities:
-            entity["import_log_entries"] = import_log_entries
 
         # Log summary
         emit_structured_log(
@@ -1489,8 +1485,7 @@ class LorePhase:
             inc_counter("importer.collision", value=1, package_id=package_id)
             raise exc
 
-        # Create ImportLog entries for each chunk
-        import_log_entries = []
+        # Create ImportLog entries for each chunk and assign them individually
         for i, chunk in enumerate(filtered_chunks):
             import_log_entry = {
                 "sequence_no": i + 1,
@@ -1502,7 +1497,8 @@ class LorePhase:
                 "manifest_hash": manifest_hash,
                 "timestamp": datetime.now(timezone.utc),
             }
-            import_log_entries.append(import_log_entry)
+            # Each chunk gets only its own ImportLog entry
+            chunk["import_log_entries"] = [import_log_entry]
 
         # Emit metrics with actual counts
         chunk_count = len(filtered_chunks)
@@ -1513,10 +1509,6 @@ class LorePhase:
                 value=chunks_skipped_idempotent,
                 package_id=package_id,
             )
-
-        # Store ImportLog entries (would be persisted to database in real implementation)
-        for chunk in filtered_chunks:
-            chunk["import_log_entries"] = import_log_entries
 
         # Log summary
         emit_structured_log(
@@ -1840,6 +1832,12 @@ def run_complete_import_pipeline(
     manifest_phase = ManifestPhase(features_importer_enabled=features_importer)
     manifest_path = package_root / "package.manifest.json"
     manifest_result = manifest_phase.validate_and_register(manifest_path, package_root)
+    
+    # Add sequence number to manifest ImportLog entry
+    if "import_log_entry" in manifest_result:
+        manifest_result["import_log_entry"]["sequence_no"] = context.next_sequence_number()
+        manifest_result["import_log_entry"]["manifest_hash"] = manifest_result["manifest_hash"]
+    
     context.record_manifest(manifest_result)
     
     manifest_with_hash = dict(manifest_result["manifest"])
@@ -1848,11 +1846,25 @@ def run_complete_import_pipeline(
     # Entity phase
     entity_phase = EntityPhase(features_importer_enabled=features_importer)
     entities = entity_phase.parse_and_validate_entities(package_root, manifest_with_hash)
+    
+    # Fix sequence numbers for entity ImportLog entries
+    for entity in entities:
+        import_log_entries = entity.get("import_log_entries", [])
+        for entry in import_log_entries:
+            entry["sequence_no"] = context.next_sequence_number()
+    
     context.record_entities(entities)
     
     # Edge phase
     edge_phase = EdgePhase(features_importer_enabled=features_importer)
     edges = edge_phase.parse_and_validate_edges(package_root, manifest_with_hash, entities)
+    
+    # Fix sequence numbers for edge ImportLog entries
+    for edge in edges:
+        import_log_entry = edge.get("import_log_entry")
+        if import_log_entry:
+            import_log_entry["sequence_no"] = context.next_sequence_number()
+    
     context.record_edges(edges)
     
     # Ontology phase
@@ -1860,11 +1872,23 @@ def run_complete_import_pipeline(
     tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
         package_root, manifest_with_hash
     )
+    
+    # Fix sequence numbers for ontology ImportLog entries
+    for entry in ontology_logs:
+        entry["sequence_no"] = context.next_sequence_number()
+    
     context.record_ontology(tags, affordances, ontology_logs)
     
     # Lore phase
     lore_phase = create_lore_phase(features_importer, features_importer_embeddings)
     chunks = lore_phase.parse_and_validate_lore(package_root, manifest_with_hash)
+    
+    # Fix sequence numbers for lore ImportLog entries
+    for chunk in chunks:
+        import_log_entries = chunk.get("import_log_entries", [])
+        for entry in import_log_entries:
+            entry["sequence_no"] = context.next_sequence_number()
+    
     context.record_lore_chunks(chunks)
     
     # Finalization phase
