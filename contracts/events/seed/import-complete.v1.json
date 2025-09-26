@@ -1,0 +1,73 @@
+{
+  "$id": "https://adventorator.dev/contracts/events/seed/import-complete.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Import Complete Event",
+  "description": "Schema for seed.import.complete event payload emitted at finalization",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "package_id",
+    "manifest_hash",
+    "entity_count",
+    "edge_count", 
+    "tag_count",
+    "affordance_count",
+    "chunk_count",
+    "state_digest",
+    "import_duration_ms"
+  ],
+  "properties": {
+    "package_id": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$",
+      "description": "ULID of the imported package"
+    },
+    "manifest_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$", 
+      "description": "SHA-256 hash of the package manifest"
+    },
+    "entity_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of entities imported"
+    },
+    "edge_count": {
+      "type": "integer", 
+      "minimum": 0,
+      "description": "Number of edges imported"
+    },
+    "tag_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of ontology tags imported"
+    },
+    "affordance_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of ontology affordances imported"
+    },
+    "chunk_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of lore chunks imported"
+    },
+    "state_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Deterministic hash of the final import state"
+    },
+    "import_duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total import duration in milliseconds"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Optional list of warnings encountered during import"
+    }
+  }
+}

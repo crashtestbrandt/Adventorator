@@ -17,5 +17,14 @@
     ],
     "optional_attributes": [],
     "validity_required": true
+  },
+  "adjacent_to": {
+    "description": "Spatial adjacency between two stable IDs.",
+    "required_attributes": [],
+    "optional_attributes": [
+      "distance",
+      "connection_type"
+    ],
+    "validity_required": false
   }
 }

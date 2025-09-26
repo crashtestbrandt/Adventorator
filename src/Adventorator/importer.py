@@ -25,6 +25,7 @@ from typing import Any
 
 from Adventorator.manifest_validation import ManifestValidationError, validate_manifest
 from Adventorator.metrics import inc_counter as metrics_inc_counter
+from Adventorator.metrics import observe_histogram
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -282,8 +283,7 @@ class EntityPhase:
             inc_counter("importer.collision", value=1, package_id=package_id)
             raise exc
 
-        # Create ImportLog entries for each entity
-        import_log_entries = []
+        # Create ImportLog entries for each entity and assign them individually
         for i, entity in enumerate(filtered_entities):
             import_log_entry = {
                 "sequence_no": i + 1,
@@ -295,7 +295,8 @@ class EntityPhase:
                 "manifest_hash": manifest.get("manifest_hash", "unknown"),
                 "timestamp": datetime.now(timezone.utc),
             }
-            import_log_entries.append(import_log_entry)
+            # Each entity gets only its own ImportLog entry
+            entity["import_log_entries"] = [import_log_entry]
 
         # Emit metrics with actual counts
         entity_count = len(filtered_entities)
@@ -306,10 +307,6 @@ class EntityPhase:
                 value=entities_skipped_idempotent,
                 package_id=package_id,
             )
-
-        # Store ImportLog entries (would be persisted to database in real implementation)
-        for entity in filtered_entities:
-            entity["import_log_entries"] = import_log_entries
 
         # Log summary
         emit_structured_log(
@@ -863,6 +860,11 @@ class OntologyPhase:
             raise ImporterError("Importer feature flag is disabled (features.importer=false)")
 
         ontology_dir = package_root / "ontology"
+        if not ontology_dir.exists():
+            # Support existing fixture layout using plural directory name
+            alt_dir = package_root / "ontologies"
+            if alt_dir.exists():
+                ontology_dir = alt_dir
         package_id = manifest.get("package_id", "unknown")
         manifest_hash = manifest.get("manifest_hash", "unknown")
 
@@ -1483,8 +1485,7 @@ class LorePhase:
             inc_counter("importer.collision", value=1, package_id=package_id)
             raise exc
 
-        # Create ImportLog entries for each chunk
-        import_log_entries = []
+        # Create ImportLog entries for each chunk and assign them individually
         for i, chunk in enumerate(filtered_chunks):
             import_log_entry = {
                 "sequence_no": i + 1,
@@ -1496,7 +1497,8 @@ class LorePhase:
                 "manifest_hash": manifest_hash,
                 "timestamp": datetime.now(timezone.utc),
             }
-            import_log_entries.append(import_log_entry)
+            # Each chunk gets only its own ImportLog entry
+            chunk["import_log_entries"] = [import_log_entry]
 
         # Emit metrics with actual counts
         chunk_count = len(filtered_chunks)
@@ -1507,10 +1509,6 @@ class LorePhase:
                 value=chunks_skipped_idempotent,
                 package_id=package_id,
             )
-
-        # Store ImportLog entries (would be persisted to database in real implementation)
-        for chunk in filtered_chunks:
-            chunk["import_log_entries"] = import_log_entries
 
         # Log summary
         emit_structured_log(
@@ -1597,6 +1595,186 @@ class LorePhase:
         return events
 
 
+class FinalizationPhase:
+    """Handles importer finalization, completion events, and state digest computation."""
+
+    def __init__(self, features_importer_enabled: bool = False):
+        """Initialize finalization phase.
+        
+        Args:
+            features_importer_enabled: Whether importer features are enabled.
+        """
+        self.features_importer_enabled = features_importer_enabled
+
+    def finalize_import(self, context, start_time: datetime) -> dict[str, Any]:
+        """Finalize import by emitting completion event and computing final state.
+        
+        Args:
+            context: ImporterRunContext with aggregated phase outputs
+            start_time: Import start timestamp for duration calculation
+            
+        Returns:
+            Finalization result with completion event and ImportLog summary
+        """
+        if not self.features_importer_enabled:
+            emit_structured_log("finalization_skipped", reason="features_importer_disabled")
+            return {"skipped": True}
+
+        # Calculate duration
+        end_time = datetime.now(timezone.utc)
+        duration_ms = int((end_time - start_time).total_seconds() * 1000)
+
+        # Get counts from context
+        counts = context.summary_counts()
+        
+        # Compute state digest
+        state_digest = context.compute_state_digest()
+        
+        # Ensure required fields are present
+        if context.package_id is None:
+            raise ValueError("Missing required field: package_id")
+        if context.manifest_hash is None:
+            raise ValueError("Missing required field: manifest_hash")
+
+        # Create completion event payload
+        completion_payload = {
+            "package_id": context.package_id,
+            "manifest_hash": context.manifest_hash,
+            "entity_count": counts["entities"],
+            "edge_count": counts["edges"], 
+            "tag_count": counts["tags"],
+            "affordance_count": counts["affordances"],
+            "chunk_count": counts["chunks"],
+            "state_digest": state_digest,
+            "import_duration_ms": duration_ms,
+        }
+
+        # Add warnings if any (placeholder for future warning collection)
+        warnings = []
+        if warnings:
+            completion_payload["warnings"] = warnings
+
+        # Emit completion event
+        completion_event = self._emit_completion_event(completion_payload)
+        
+        # Create ImportLog summary entry
+        import_log_summary = self._create_import_log_summary(
+            context, state_digest, duration_ms
+        )
+        
+        # Emit structured log with final summary
+        emit_structured_log(
+            "import_finalization_complete",
+            package_id=context.package_id,
+            manifest_hash=context.manifest_hash,
+            entity_count=counts["entities"],
+            edge_count=counts["edges"],
+            tag_count=counts["tags"],
+            affordance_count=counts["affordances"], 
+            chunk_count=counts["chunks"],
+            state_digest=state_digest,
+            duration_ms=duration_ms,
+        )
+        
+        # Record duration metric as histogram
+        observe_histogram("importer.duration_ms", duration_ms)
+        
+        return {
+            "completion_event": completion_event,
+            "import_log_summary": import_log_summary,
+            "state_digest": state_digest,
+            "duration_ms": duration_ms,
+        }
+
+    def _emit_completion_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Emit seed.import.complete event.
+        
+        Args:
+            payload: Event payload
+            
+        Returns:
+            Event envelope dict
+        """
+        event_envelope = {
+            "event_type": "seed.import.complete",
+            "payload": payload,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "replay_ordinal": None,  # Would be assigned by event ledger
+            "idempotency_key": None,  # Would be computed by event ledger
+        }
+        
+        emit_structured_log(
+            "seed_event_emitted",
+            event_type="seed.import.complete",
+            package_id=payload.get("package_id"),
+            manifest_hash=payload.get("manifest_hash"),
+        )
+        
+        return event_envelope
+
+    def _create_import_log_summary(
+        self, context, state_digest: str, duration_ms: int
+    ) -> dict[str, Any]:
+        """Create ImportLog summary entry.
+        
+        Args:
+            context: ImporterRunContext with phase data
+            state_digest: Computed state digest
+            duration_ms: Import duration
+            
+        Returns:
+            ImportLog summary entry dict
+        """
+        import_logs = context.import_log_entries
+        
+        # Find the highest sequence number across all phases
+        max_sequence = 0
+        if import_logs:
+            max_sequence = max(
+                entry.get("sequence_no", 0) 
+                for entry in import_logs 
+                if isinstance(entry.get("sequence_no"), int)
+            )
+        
+        # Verify sequence contiguity and enforce "no gaps" requirement
+        sequences = [
+            entry.get("sequence_no") for entry in import_logs 
+            if isinstance(entry.get("sequence_no"), int)
+        ]
+        if sequences:
+            sequences.sort()
+            expected_sequences = list(range(1, len(sequences) + 1))
+            if sequences != expected_sequences:
+                emit_structured_log(
+                    "import_log_sequence_gap_detected",
+                    expected=expected_sequences,
+                    actual=sequences,
+                    package_id=context.package_id,
+                )
+                # Enforce contiguity requirement - raise error for any sequence mismatch
+                raise ImporterError(
+                    f"ImportLog sequence mismatch detected in package {context.package_id}: "
+                    f"expected {expected_sequences}, actual {sequences}"
+                )
+        
+        summary_entry = {
+            "phase": "finalization",
+            "object_type": "summary",
+            "stable_id": f"summary-{context.package_id}",
+            "file_hash": state_digest,  # Use state digest as summary hash
+            "action": "completed",
+            "manifest_hash": context.manifest_hash or "",
+            "sequence_no": max_sequence + 1,
+            "metadata": {
+                "state_digest": state_digest,
+                "duration_ms": duration_ms,
+                "total_entries": len(import_logs),
+            },
+        }
+        
+        return summary_entry
+
+
 def create_lore_phase(
     features_importer: bool = False, features_importer_embeddings: bool = False
 ) -> LorePhase:
@@ -1613,3 +1791,139 @@ def create_lore_phase(
         features_importer_enabled=features_importer,
         features_importer_embeddings=features_importer_embeddings,
     )
+
+
+def create_finalization_phase(features_importer: bool = False) -> FinalizationPhase:
+    """Factory function to create finalization phase with feature flags.
+
+    Args:
+        features_importer: Value of features.importer feature flag
+
+    Returns:
+        Configured FinalizationPhase instance
+    """
+    return FinalizationPhase(features_importer_enabled=features_importer)
+
+
+def run_complete_import_pipeline(
+    package_root: Path, 
+    features_importer: bool = False, 
+    features_importer_embeddings: bool = False
+) -> dict[str, Any]:
+    """Run the complete import pipeline with finalization.
+    
+    This provides a production call site that demonstrates how the finalization
+    phase integrates with the broader importer flow.
+    
+    Args:
+        package_root: Root directory containing package files
+        features_importer: Whether importer features are enabled
+        features_importer_embeddings: Whether embedding features are enabled
+        
+    Returns:
+        Complete import result including finalization output
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+    
+    from Adventorator.importer_context import ImporterRunContext
+    
+    # Initialize context
+    context = ImporterRunContext()
+    start_time = datetime.now(timezone.utc)
+    
+    # Manifest phase
+    manifest_phase = ManifestPhase(features_importer_enabled=features_importer)
+    manifest_path = package_root / "package.manifest.json"
+    manifest_result = manifest_phase.validate_and_register(manifest_path, package_root)
+    
+    # Add sequence number to manifest ImportLog entry
+    if "import_log_entry" in manifest_result:
+        manifest_result["import_log_entry"]["sequence_no"] = context.next_sequence_number()
+        manifest_result["import_log_entry"]["manifest_hash"] = manifest_result["manifest_hash"]
+    
+    context.record_manifest(manifest_result)
+    
+    manifest_with_hash = dict(manifest_result["manifest"])
+    manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
+    
+    # Entity phase
+    entity_phase = EntityPhase(features_importer_enabled=features_importer)
+    entities = entity_phase.parse_and_validate_entities(package_root, manifest_with_hash)
+    
+    # Fix sequence numbers for entity ImportLog entries
+    for entity in entities:
+        import_log_entries = entity.get("import_log_entries", [])
+        for entry in import_log_entries:
+            entry["sequence_no"] = context.next_sequence_number()
+    
+    context.record_entities(entities)
+    
+    # Edge phase
+    edge_phase = EdgePhase(features_importer_enabled=features_importer)
+    edges = edge_phase.parse_and_validate_edges(package_root, manifest_with_hash, entities)
+    
+    # Fix sequence numbers for edge ImportLog entries
+    for edge in edges:
+        import_log_entry = edge.get("import_log_entry")
+        if import_log_entry:
+            import_log_entry["sequence_no"] = context.next_sequence_number()
+    
+    context.record_edges(edges)
+    
+    # Ontology phase
+    ontology_phase = OntologyPhase(features_importer_enabled=features_importer)
+    tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
+        package_root, manifest_with_hash
+    )
+    
+    # Fix sequence numbers for ontology ImportLog entries
+    for entry in ontology_logs:
+        entry["sequence_no"] = context.next_sequence_number()
+    
+    context.record_ontology(tags, affordances, ontology_logs)
+    
+    # Lore phase
+    lore_phase = create_lore_phase(features_importer, features_importer_embeddings)
+    chunks = lore_phase.parse_and_validate_lore(package_root, manifest_with_hash)
+    
+    # Fix sequence numbers for lore ImportLog entries
+    for chunk in chunks:
+        import_log_entries = chunk.get("import_log_entries", [])
+        for entry in import_log_entries:
+            entry["sequence_no"] = context.next_sequence_number()
+    
+    context.record_lore_chunks(chunks)
+    
+    # Finalization phase
+    finalization_phase = create_finalization_phase(features_importer)
+    finalization_result = finalization_phase.finalize_import(context, start_time)
+    
+    return {
+        "manifest_result": manifest_result,
+        "entities": entities,
+        "edges": edges,
+        "tags": tags,
+        "affordances": affordances,
+        "chunks": chunks,
+        "finalization": finalization_result,
+        "context": context,
+    }
+
+
+__all__ = [
+    "ManifestPhase",
+    "EntityPhase", 
+    "EdgePhase",
+    "OntologyPhase",
+    "LorePhase",
+    "FinalizationPhase",
+    "create_lore_phase",
+    "create_finalization_phase",
+    "run_complete_import_pipeline",
+    "ImporterError",
+    "ManifestValidationError",
+    "EntityValidationError",
+    "EdgeValidationError", 
+    "OntologyValidationError",
+]
