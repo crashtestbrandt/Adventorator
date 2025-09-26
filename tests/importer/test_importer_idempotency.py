@@ -5,6 +5,7 @@ ensuring identical outcomes and proper idempotent skip handling per ARCH-CDA-001
 and ADR-0011.
 """
 
+import json
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,9 +20,14 @@ from Adventorator.importer import (
     LorePhase,
     ManifestPhase,
     OntologyPhase,
+    run_full_import_with_database,
 )
 from Adventorator.importer_context import ImporterRunContext
 from Adventorator.metrics import get_counter, reset_counters
+from Adventorator.db import session_scope
+from Adventorator.models import Event, ImportLog, Campaign
+from Adventorator import repos
+from sqlalchemy import select
 
 
 class TestImporterIdempotency:
@@ -388,4 +394,157 @@ class TestHashChainIntegrity:
         context.record_entities(entity_results)
         
         result = finalization_phase.finalize_import(context, start_time)
+        
         return result
+
+
+class TestImporterIdempotencyDatabaseIntegration:
+    """Database-integrated tests for idempotent re-run behavior.
+    
+    These tests validate actual database state and event emission,
+    addressing the gaps identified in the implementation review.
+    """
+    
+    def setup_method(self):
+        """Reset metrics before each test."""
+        reset_counters()
+
+    @pytest.mark.asyncio
+    async def test_full_importer_idempotent_rerun_database(self, db):
+        """Test running full importer twice produces identical database state.
+        
+        TASK-CDA-IMPORT-RERUN-19A: Replay baseline test with actual database validation.
+        - Validates actual Event emission to database
+        - Validates actual ImportLog persistence
+        - Ensures idempotent runs produce identical database records
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_root = Path(temp_dir)
+            self._create_test_package(package_root)
+            
+            # Create test campaign
+            async with session_scope() as session:
+                campaign = await repos.get_or_create_campaign(session, guild_id=12345, name="Test Campaign")
+                campaign_id = campaign.id
+                await session.commit()
+            
+            # Run 1: First import with database integration
+            result1 = await run_full_import_with_database(package_root, campaign_id)
+            
+            # Query database state after first run
+            async with session_scope() as session:
+                events1_query = await session.execute(
+                    select(Event).where(Event.campaign_id == campaign_id).order_by(Event.replay_ordinal)
+                )
+                events1 = events1_query.scalars().all()
+                
+                import_logs1_query = await session.execute(
+                    select(ImportLog).where(ImportLog.campaign_id == campaign_id).order_by(ImportLog.sequence_no)
+                )
+                import_logs1 = import_logs1_query.scalars().all()
+            
+            # Run 2: Idempotent re-run (should produce identical state)
+            result2 = await run_full_import_with_database(package_root, campaign_id)
+            
+            # Query database state after second run
+            async with session_scope() as session:
+                events2_query = await session.execute(
+                    select(Event).where(Event.campaign_id == campaign_id).order_by(Event.replay_ordinal)
+                )
+                events2 = events2_query.scalars().all()
+                
+                import_logs2_query = await session.execute(
+                    select(ImportLog).where(ImportLog.campaign_id == campaign_id).order_by(ImportLog.sequence_no)
+                )
+                import_logs2 = import_logs2_query.scalars().all()
+            
+            # Assert state digest unchanged - this is the key idempotency proof
+            assert result1["state_digest"] == result2["state_digest"], \
+                "State digest should be identical across idempotent runs"
+            
+            # Assert database state identical
+            assert len(events1) == len(events2), \
+                "Event count should be identical across idempotent runs"
+            
+            assert len(import_logs1) == len(import_logs2), \
+                "ImportLog count should be identical across idempotent runs"
+            
+            # Validate that Events are actually persisted
+            assert len(events1) > 0, "Events should be persisted to database"
+            assert len(import_logs1) > 0, "ImportLog entries should be persisted to database"
+            
+            # Validate Event types expected for import
+            event_types = [e.type for e in events1]
+            assert "seed.manifest.validated" in event_types, \
+                "Manifest validation event should be emitted"
+            assert "seed.import.complete" in event_types, \
+                "Import completion event should be emitted"
+            
+            # Validate ImportLog phases
+            log_phases = [il.phase for il in import_logs1]
+            assert "manifest" in log_phases, "Manifest phase should be logged"
+            assert "finalization" in log_phases, "Finalization phase should be logged"
+            
+            # Validate completion event payloads identical
+            payload1 = result1["completion_event"]["payload"]
+            payload2 = result2["completion_event"]["payload"]
+            
+            for field in ["package_id", "manifest_hash", "entity_count", "edge_count",
+                         "tag_count", "affordance_count", "chunk_count", "state_digest"]:
+                assert payload1[field] == payload2[field], \
+                    f"Completion event field {field} should be identical"
+            
+            # Validate hash chain integrity (actual database values)
+            hash_chain_tip1 = result1["hash_chain_tip"]
+            hash_chain_tip2 = result2["hash_chain_tip"]
+            assert hash_chain_tip1 == hash_chain_tip2, \
+                "Hash chain tip should be unchanged after idempotent run"
+
+    def _create_test_package(self, package_root: Path):
+        """Create a test package with entities and lore for comprehensive testing.""" 
+        (package_root / "entities").mkdir(parents=True)
+        (package_root / "lore").mkdir(parents=True)
+        
+        # Create manifest
+        manifest_data = {
+            "package_id": "01JTEST0000000000000000001",
+            "schema_version": 1,
+            "engine_contract_range": {"min": "1.0.0", "max": "2.0.0"},
+            "dependencies": [],
+            "content_index": {},
+            "ruleset_version": "1.0.0",
+            "recommended_flags": {"features.importer.entities": True},
+            "signatures": []
+        }
+        
+        with open(package_root / "package.manifest.json", "w") as f:
+            json.dump(manifest_data, f, indent=2)
+        
+        # Create test entity
+        entity_data = {
+            "stable_id": "01JTEST0000000000000000002", # 26 chars (ULID format)
+            "kind": "npc",
+            "name": "Test NPC",
+            "tags": ["test"],
+            "affordances": [],
+            "traits": [],
+            "props": {}
+        }
+        
+        with open(package_root / "entities" / "test_npc.json", "w") as f:
+            json.dump(entity_data, f, indent=2)
+        
+        # Create test lore chunk
+        lore_content = """---
+chunk_id: TEST-CHUNK-0001
+title: "Test Lore"
+audience: Player  
+tags:
+  - test:lore
+---
+
+This is test lore content for idempotency testing.
+"""
+        
+        with open(package_root / "lore" / "test_lore.md", "w") as f:
+            f.write(lore_content)

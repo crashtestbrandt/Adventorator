@@ -26,6 +26,9 @@ from typing import Any
 from Adventorator.manifest_validation import ManifestValidationError, validate_manifest
 from Adventorator.metrics import inc_counter as metrics_inc_counter, get_counter
 from Adventorator.metrics import observe_histogram
+from Adventorator.db import session_scope
+from Adventorator import repos, models
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -92,6 +95,134 @@ def record_rollback(phase: str, package_id: str, manifest_hash: str, reason: str
         outcome="rollback",
         reason=reason
     )
+
+
+# Database Integration Functions
+async def persist_import_event(
+    session: AsyncSession,
+    campaign_id: int,
+    scene_id: int | None,
+    event_type: str,
+    payload: dict[str, Any],
+    actor_id: str = "importer"
+) -> models.Event:
+    """Persist an import-related event to the database.
+    
+    Args:
+        session: Database session
+        campaign_id: Campaign ID for the import
+        scene_id: Scene ID (optional, for import events)
+        event_type: Type of event (e.g., 'seed.manifest.validated')
+        payload: Event payload data
+        actor_id: Who triggered the event (default: 'importer')
+        
+    Returns:
+        Created Event record
+    """
+    # For import events, we'll create scene-less events linked to campaign
+    if scene_id is None:
+        # Create a temporary execution request ID for import events
+        request_id = f"import-{campaign_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+        
+        # Get the last event to determine replay_ordinal and prev_hash
+        from sqlalchemy import select
+        last_event = await session.execute(
+            select(models.Event)
+            .where(models.Event.campaign_id == campaign_id)
+            .order_by(models.Event.replay_ordinal.desc())
+            .limit(1)
+        )
+        last_event_row = last_event.scalar_one_or_none()
+        
+        if last_event_row is None:
+            replay_ordinal = 0
+            from Adventorator.events import envelope as event_envelope
+            prev_hash = event_envelope.GENESIS_PREV_EVENT_HASH
+        else:
+            replay_ordinal = last_event_row.replay_ordinal + 1
+            from Adventorator.events import envelope as event_envelope
+            prev_hash = event_envelope.compute_envelope_hash(
+                campaign_id=last_event_row.campaign_id,
+                scene_id=last_event_row.scene_id,
+                replay_ordinal=last_event_row.replay_ordinal,
+                event_type=last_event_row.type,
+                event_schema_version=last_event_row.event_schema_version,
+                world_time=last_event_row.world_time,
+                wall_time_utc=last_event_row.wall_time_utc,
+                prev_event_hash=last_event_row.prev_event_hash,
+                payload_hash=last_event_row.payload_hash,
+                idempotency_key=last_event_row.idempotency_key,
+            )
+        
+        payload_hash = event_envelope.compute_payload_hash(payload)
+        idempotency_key = event_envelope.compute_idempotency_key(
+            campaign_id=campaign_id,
+            event_type=event_type,
+            execution_request_id=request_id,
+            plan_id=None,
+            payload=payload,
+            replay_ordinal=replay_ordinal,
+        )
+        
+        event = models.Event(
+            campaign_id=campaign_id,
+            scene_id=scene_id,
+            replay_ordinal=replay_ordinal,
+            actor_id=actor_id,
+            type=event_type,
+            event_schema_version=event_envelope.GENESIS_SCHEMA_VERSION,
+            world_time=replay_ordinal,
+            prev_event_hash=prev_hash,
+            payload_hash=payload_hash,
+            idempotency_key=idempotency_key,
+            execution_request_id=request_id,
+            payload=payload,
+        )
+        
+        session.add(event)
+        await session.flush()  # Get the ID without committing
+        return event
+    else:
+        # Use existing repos.append_event for scene-based events
+        return await repos.append_event(
+            session,
+            scene_id=scene_id,
+            actor_id=actor_id,
+            type=event_type,
+            payload=payload
+        )
+
+
+async def persist_import_log_entry(
+    session: AsyncSession,
+    campaign_id: int,
+    entry: dict[str, Any]
+) -> models.ImportLog:
+    """Persist an ImportLog entry to the database.
+    
+    Args:
+        session: Database session
+        campaign_id: Campaign ID for the import
+        entry: ImportLog entry data
+        
+    Returns:
+        Created ImportLog record
+    """
+    import_log = models.ImportLog(
+        campaign_id=campaign_id,
+        sequence_no=entry["sequence_no"],
+        phase=entry["phase"],
+        object_type=entry["object_type"],
+        stable_id=entry["stable_id"],
+        file_hash=entry["file_hash"],
+        action=entry["action"],
+        manifest_hash=entry.get("manifest_hash", ""),
+        timestamp=entry.get("timestamp", datetime.now(timezone.utc)),
+    )
+    
+    session.add(import_log)
+    await session.flush()  # Get the ID without committing
+    return import_log
 
 
 class ImporterError(Exception):
@@ -1867,6 +1998,231 @@ def create_finalization_phase(features_importer: bool = False) -> FinalizationPh
         Configured FinalizationPhase instance
     """
     return FinalizationPhase(features_importer_enabled=features_importer)
+
+
+async def run_full_import_with_database(
+    package_root: Path,
+    campaign_id: int,
+    *,
+    features_importer: bool = True,
+    features_importer_embeddings: bool = True
+) -> dict[str, Any]:
+    """Run full package import with database integration.
+    
+    This function integrates the importer phases with the database layer,
+    ensuring that Events and ImportLog entries are actually persisted.
+    This is the production-ready version that validates acceptance criteria.
+    
+    Args:
+        package_root: Root directory of the package to import
+        campaign_id: Campaign ID to import into
+        features_importer: Whether importer is enabled
+        features_importer_embeddings: Whether embeddings are enabled
+        
+    Returns:
+        Dictionary containing import results and database state
+        
+    Raises:
+        ImporterError: If import fails
+    """
+    start_time = datetime.now(timezone.utc)
+    
+    async with session_scope() as session:
+        try:
+            # Initialize phases
+            manifest_phase = ManifestPhase(features_importer_enabled=features_importer)
+            entity_phase = EntityPhase(features_importer_enabled=features_importer)
+            edge_phase = EdgePhase(features_importer_enabled=features_importer)
+            ontology_phase = OntologyPhase(features_importer_enabled=features_importer)
+            lore_phase = create_lore_phase(features_importer, features_importer_embeddings)
+            finalization_phase = FinalizationPhase(features_importer_enabled=features_importer)
+            
+            context = ImporterRunContext()
+            manifest_path = package_root / "package.manifest.json"
+            
+            # Manifest validation and event emission
+            manifest_result = manifest_phase.validate_and_register(manifest_path, package_root)
+            context.record_manifest(manifest_result)
+            
+            # Emit manifest validation event to database
+            manifest_event = await persist_import_event(
+                session, campaign_id, None,
+                "seed.manifest.validated",
+                manifest_result["event_payload"]
+            )
+            
+            # Persist manifest ImportLog entry
+            manifest_log_entry = manifest_result["import_log_entry"].copy()
+            manifest_log_entry["sequence_no"] = context.next_sequence_number()
+            await persist_import_log_entry(session, campaign_id, manifest_log_entry)
+            
+            # Entity ingestion
+            entities_dir = package_root / "entities"
+            if entities_dir.exists():
+                entity_results = entity_phase.parse_and_validate_entities(package_root, manifest_result["manifest"])
+                context.record_entities(entity_results)
+                
+                # Emit entity events and persist ImportLog entries
+                for entity in entity_results:
+                    if "event_payload" in entity:
+                        await persist_import_event(
+                            session, campaign_id, None,
+                            "seed.entity_created",
+                            entity["event_payload"]
+                        )
+                    
+                    # Persist ImportLog entries for this entity
+                    for log_entry in entity.get("import_log_entries", []):
+                        log_entry_copy = log_entry.copy()
+                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            
+            # Edge ingestion  
+            edges_dir = package_root / "edges"
+            if edges_dir.exists():
+                edge_results = edge_phase.parse_and_validate_edges(package_root, manifest_result["manifest"], entity_results)
+                context.record_edges(edge_results)
+                
+                # Emit edge events and persist ImportLog entries
+                for edge in edge_results:
+                    if "event_payload" in edge:
+                        await persist_import_event(
+                            session, campaign_id, None,
+                            "seed.edge_created",
+                            edge["event_payload"]
+                        )
+                    
+                    for log_entry in edge.get("import_log_entries", []):
+                        log_entry_copy = log_entry.copy()
+                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            
+            # Ontology ingestion
+            ontologies_dir = package_root / "ontologies"
+            if ontologies_dir.exists():
+                tags, affordances, import_log_entries = ontology_phase.parse_and_validate_ontology(ontologies_dir, manifest_result["manifest"])
+                context.record_ontology(tags, affordances, import_log_entries)
+                
+                # Persist ontology ImportLog entries
+                for log_entry in import_log_entries:
+                    log_entry_copy = log_entry.copy()
+                    log_entry_copy["sequence_no"] = context.next_sequence_number()
+                    await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            
+            # Lore ingestion
+            lore_dir = package_root / "lore"
+            if lore_dir.exists():
+                lore_results = lore_phase.parse_and_validate_lore(lore_dir, manifest_result["manifest"])
+                context.record_lore_chunks(lore_results)
+                
+                # Emit lore events and persist ImportLog entries
+                for chunk in lore_results:
+                    if "event_payload" in chunk:
+                        await persist_import_event(
+                            session, campaign_id, None,
+                            "seed.lore_chunk_created",
+                            chunk["event_payload"]
+                        )
+                    
+                    for log_entry in chunk.get("import_log_entries", []):
+                        log_entry_copy = log_entry.copy()
+                        log_entry_copy["sequence_no"] = context.next_sequence_number()
+                        await persist_import_log_entry(session, campaign_id, log_entry_copy)
+            
+            # Finalization
+            result = finalization_phase.finalize_import(context, start_time)
+            
+            # Emit completion event
+            completion_event = await persist_import_event(
+                session, campaign_id, None,
+                "seed.import.complete",
+                result["completion_event"]["payload"]
+            )
+            
+            # Persist finalization ImportLog summary
+            summary_entry = result["import_log_summary"].copy()
+            summary_entry["sequence_no"] = context.next_sequence_number()
+            await persist_import_log_entry(session, campaign_id, summary_entry)
+            
+            # Query final database state for validation
+            from sqlalchemy import select, func
+            
+            # Get all events for this campaign
+            events_query = await session.execute(
+                select(models.Event)
+                .where(models.Event.campaign_id == campaign_id)
+                .order_by(models.Event.replay_ordinal)
+            )
+            events = events_query.scalars().all()
+            
+            # Get all ImportLog entries for this campaign
+            import_logs_query = await session.execute(
+                select(models.ImportLog)
+                .where(models.ImportLog.campaign_id == campaign_id)
+                .order_by(models.ImportLog.sequence_no)
+            )
+            import_logs = import_logs_query.scalars().all()
+            
+            # Get hash chain tip (last event hash)
+            hash_chain_tip = None
+            if events:
+                from Adventorator.events import envelope as event_envelope
+                last_event = events[-1]
+                hash_chain_tip = event_envelope.compute_envelope_hash(
+                    campaign_id=last_event.campaign_id,
+                    scene_id=last_event.scene_id,
+                    replay_ordinal=last_event.replay_ordinal,
+                    event_type=last_event.type,
+                    event_schema_version=last_event.event_schema_version,
+                    world_time=last_event.world_time,
+                    wall_time_utc=last_event.wall_time_utc,
+                    prev_event_hash=last_event.prev_event_hash,
+                    payload_hash=last_event.payload_hash,
+                    idempotency_key=last_event.idempotency_key,
+                ).hex()
+            
+            # Commit all changes
+            await session.commit()
+            
+            # Return comprehensive results including database state
+            return {
+                **result,
+                "database_state": {
+                    "events": [
+                        {
+                            "id": e.id,
+                            "replay_ordinal": e.replay_ordinal,
+                            "type": e.type,
+                            "payload": e.payload,
+                            "prev_event_hash": e.prev_event_hash.hex(),
+                            "payload_hash": e.payload_hash.hex(),
+                            "idempotency_key": e.idempotency_key.hex(),
+                        }
+                        for e in events
+                    ],
+                    "import_logs": [
+                        {
+                            "id": il.id,
+                            "sequence_no": il.sequence_no,
+                            "phase": il.phase,
+                            "object_type": il.object_type,
+                            "stable_id": il.stable_id,
+                            "action": il.action,
+                            "file_hash": il.file_hash,
+                            "manifest_hash": il.manifest_hash,
+                        }
+                        for il in import_logs
+                    ],
+                    "hash_chain_tip": hash_chain_tip,
+                    "event_count": len(events),
+                    "import_log_count": len(import_logs),
+                },
+                "hash_chain_tip": hash_chain_tip,
+            }
+            
+        except Exception as e:
+            await session.rollback()
+            raise ImporterError(f"Database import failed: {e}") from e
 
 
 def run_complete_import_pipeline(
