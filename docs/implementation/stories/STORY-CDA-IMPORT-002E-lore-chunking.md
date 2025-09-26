@@ -106,6 +106,13 @@ Process lore markdown files with front-matter metadata, chunk content determinis
 - Contracts: `contracts/content/chunk-front-matter.v1.json`, `contracts/events/seed/content-chunk-ingested.v1.json`.
 - Tests: `tests/importer/test_lore_chunking.py`, `tests/importer/test_lore_seed_events.py`.
 
+## Alignment analysis — IMPORT ↔ CDA CORE and IPD
+- Canonical JSON and hashing (CDA CORE): Front-matter and chunk content hashing must reuse canonical normalization (UTF-8 NFC, sorted keys where applicable) to avoid digest drift. Include golden fixtures demonstrating stability across newline and Unicode variations.
+- Idempotency v2 composition (CDA CORE): `seed.content_chunk_ingested` events should compute idempotency keys from stable identifiers and content digests; exclude replay_ordinal and volatile execution fields so reruns yield identical envelopes.
+- Deterministic ordering (CDA CORE): Establish stable ordering for chunk emission (e.g., by `source_path` and `chunk_index`) and assert `replay_ordinal` stability across runs with tests.
+- Feature flag policy (AIDD/IPD): Keep `features.importer` and `features.importer_embeddings` default-disabled. Tests must verify disabled-path no-ops and that hashing remains deterministic whether embedding metadata is present or ignored.
+- IPD privacy/redaction alignment: Ensure no sensitive lore metadata leaks into logs; align with privacy/redaction guidance for future retrieval integration.
+
 ## Implementation Notes
 - Consider streaming markdown parser to avoid loading large files fully; maintain deterministic ordering by storing tuple `(source_path, chunk_index)`.
 - Reuse canonical JSON helper for front-matter serialization to align hashing across languages/tools.

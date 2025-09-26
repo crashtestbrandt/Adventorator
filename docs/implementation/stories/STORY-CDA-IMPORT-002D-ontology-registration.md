@@ -62,6 +62,13 @@ Load ontology definitions for tags and affordances from package artifacts (`onto
 - Contracts: `contracts/ontology/tag.v1.json`, `contracts/ontology/affordance.v1.json`, `contracts/events/seed/tag-registered.v1.json`.
 - Tests: `tests/importer/test_ontology_ingestion.py`.
 
+## Alignment analysis — IMPORT ↔ CDA CORE and IPD
+- Canonical JSON and hashing (CDA CORE): Tag and affordance definitions must be normalized with the canonical JSON policy before hashing so duplicates vs conflicts are evaluated deterministically across environments.
+- Idempotency v2 composition (CDA CORE): `seed.tag_registered` (and affordance) events should derive idempotency keys from stable definition digests and identifiers, excluding transient fields; repeated imports must not create new envelopes for identical definitions.
+- Deterministic ordering (CDA CORE): Establish and test a stable iteration order across categories/tags to guarantee consistent `replay_ordinal` and event sequences.
+- IPD alignment (ontology consumers): Ensure field names and semantics match the IPD-side models that consume tags/affordances (e.g., NLU/tagging and predicate gating). Provide a contract parity test or mapping doc if names differ.
+- Feature flag policy (AIDD/IPD): Keep importer default-disabled and cover disabled-path tests; document any sub-flag if ontology can roll out independently.
+
 ## Implementation Notes
 - Cache previously seen tag hashes in-memory per import to avoid repeated disk hashing; maintain deterministic iteration order when writing ImportLog entries.
 - For affordances referencing ruleset versions, reuse manifest `ruleset_version` to assert compatibility.

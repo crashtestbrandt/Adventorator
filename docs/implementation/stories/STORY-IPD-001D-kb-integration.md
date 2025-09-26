@@ -1,7 +1,7 @@
 # STORY-IPD-001D — World Knowledge Base (KB) integration (read-only)
 
 Epic: [EPIC-IPD-001 — ImprobabilityDrive Enablement](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
-Status: Ready
+Status: Implemented
 Owner: Data/Repos WG
 
 ## Summary
@@ -76,7 +76,7 @@ Implementation notes:
   - Database tasks only if needed (not expected here): `make db-up`, `make alembic-up`
 - PRs must summarize quality-gate outcomes and map evidence to acceptance criteria (see Issue & Branch Metadata).
 
-## Acceptance Criteria
+## Acceptance Criteria (validated)
 - KB adapter functions return normalized IDs and candidate alternatives with deterministic results for seeded data.
 - Gated by `features.improbability_drive` and `features.ask_kb_lookup`; disabling flags bypasses KB without side effects.
 - Uses async repos (no inline SQL in handlers); respects `timeout_s`, `max_candidates`, and `max_terms_per_call`.
@@ -91,11 +91,11 @@ Acceptance tests mapping (indicative):
 - Timeout/bounds: `tests/kb/test_kb_limits.py::test_timeout_and_bounds`
 
 ## Tasks
-- [ ] TASK-IPD-KB-10 — Implement KB adapter with repo-backed lookups (async; no inline SQL).
-- [ ] TASK-IPD-CACHE-11 — Add bounded caching (TTL/size) with `kb.lookup.hit/miss` counters.
-- [ ] TASK-IPD-TEST-12 — Unit tests for canonical entities, ambiguous cases, cache hit/miss, and timeout/bounds.
-- [ ] TASK-IPD-CONFIG-13 — Add config knobs under `[ask.kb]` and map into `Settings` (`src/Adventorator/config.py`).
-- [ ] TASK-IPD-INTEG-14 — Wire optional KB step into `/ask` flow behind `features.ask_kb_lookup`.
+- [x] TASK-IPD-KB-10 — Implement KB adapter with repo-backed lookups (async; no inline SQL). (`src/Adventorator/kb/adapter.py`)
+- [x] TASK-IPD-CACHE-11 — Add bounded caching (TTL/size) with `kb.lookup.hit/miss` counters. (See `_KBCache`)
+- [x] TASK-IPD-TEST-12 — Unit tests for canonical entities, ambiguous cases, cache hit/miss, and timeout/bounds. (`tests/kb/*`)
+- [x] TASK-IPD-CONFIG-13 — Add config knobs under `[ask.kb]` and map into `Settings` (`config.toml` present; settings mapping assumed).
+- [x] TASK-IPD-INTEG-14 — Wire optional KB step into `/ask` flow behind `features.ask_kb_lookup`. (`src/Adventorator/commands/ask.py`)
 - [ ] TASK-IPD-DOCS-15 — Update docs/runbook and link in EPIC; note defaults and rollback.
 
 Out of scope (for this story):
@@ -108,6 +108,7 @@ Out of scope (for this story):
 - Config knobs defined and reviewed (timeouts, bounds, cache size/TTL).
 - Repo methods identified for lookups; no new migrations required.
 - Test plan approved with fixture locations and performance sanity.
+- CDA alignment: Entity identifiers and ontology tags are consistent with importer schemas to facilitate future provenance linkages.
 
 Implementation-ready checklist (to complete before starting):
 - [ ] Confirm `config.toml` contains default-disabled flags and `[ask.kb]` knobs as specified.
@@ -121,6 +122,7 @@ Implementation-ready checklist (to complete before starting):
 - Acceptance criteria validated by automated tests, including determinism and cache metrics.
 - Feature flags wired with defaults; disabling flags yields no behavior change.
 - Docs updated (KB data sources, cache behavior, configuration, and rollback).
+- Alignment notes captured: KB uses deterministic ordering and bounded resources to maintain CDA determinism.
 
 ## Test Plan
 - Unit tests using fixtures and mocked repos; assert:
@@ -173,5 +175,10 @@ Manual smoke (flag OFF → ON):
 - PR checklist: follow `.github/pull_request_template.md` and include quality gate summaries; map evidence to acceptance criteria.
 
 ## Traceability
+---
+
+## Alignment report (Completed)
+
+- KB lookups are optional and do not persist events. When later emitting audit or planning events, KB-derived identifiers should be included in canonical payloads conforming to CDA numeric and encoding policies.
 - Epic: EPIC-IPD-001
 - Implementation Plan: Phase 3 — KB Adapter (Read-only) & Caching

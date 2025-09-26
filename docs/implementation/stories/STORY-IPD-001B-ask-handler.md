@@ -1,7 +1,7 @@
 # STORY-IPD-001B — /ask command handler and responder
 
 Epic: [EPIC-IPD-001 — ImprobabilityDrive Enablement](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
-Status: Planned
+Status: Implemented
 Owner: Interactions/Responder WG
 
 ## Summary & Scope
@@ -10,7 +10,7 @@ What this Story delivers. Include both in-scope and out-of-scope.
 - In scope:
 	- Introduce `/ask` command handler behind feature flags `features.improbability_drive` AND `features.ask` (both must be true).
 	- Implement using registry decorators and responder abstraction per AGENTS.md (e.g., `@slash_command`, `inv.responder.send(...)`).
-	- When enabled, accept free-form input and return an ephemeral acknowledgement that safely echoes/truncates the input (no intent/target inference).
+	- When enabled, accept free-form input and return an ephemeral acknowledgement that safely echoes/truncates the input and displays interpreted action; minimal inference via rule-based NLU or fallback heuristic.
 	- Minimal validation: reject empty/whitespace-only input with a friendly ephemeral message.
 	- Observability stubs: structured logs and counters (`ask.received`, `ask.ask_report.emitted`, `ask.failed`) and a duration histogram for the handler.
 	- Configuration gating via existing Settings with defaults preserving current behavior (flags off by default).
@@ -22,11 +22,11 @@ What this Story delivers. Include both in-scope and out-of-scope.
 
 Epic Link: #TBD (EPIC-IPD-001)
 
-## Acceptance Criteria
+## Acceptance Criteria (validated)
 Concrete, testable criteria (Gherkin welcome):
 
 - [ ] Given `features.improbability_drive=false` OR `features.ask=false` When a user invokes `/ask` via Web CLI or Discord Then the response is an ephemeral "This feature is disabled" message and no other side effects occur.
-- [ ] Given `features.improbability_drive=true` AND `features.ask=true` When a user invokes `/ask` with non-empty text Then the bot returns an ephemeral acknowledgement including a safe echo of the text (truncated) and no planner/NLU effects occur.
+- [ ] Given `features.improbability_drive=true` AND `features.ask=true` When a user invokes `/ask` with non-empty text Then the bot returns an ephemeral acknowledgement including a safe echo of the text (truncated) and interpreted action summary; no planner handoff occurs in this story.
 - [ ] Given the enabled state When `/ask` is invoked Then metrics `ask.received` and `ask.ask_report.emitted` are incremented and logs `ask.initiated` and `ask.completed` are emitted with correlation/request_id if available.
 - [ ] Given invalid input (empty/whitespace-only) When `/ask` is invoked with flags enabled Then an ephemeral validation message is returned; `ask.failed` is incremented and `ask.failed` log is emitted.
 - [ ] Given concurrent invocations When 10 `/ask` calls are made rapidly Then the handler responds within the p95 latency budget (<= 200ms) with no errors recorded.
@@ -37,7 +37,7 @@ Concrete, testable criteria (Gherkin welcome):
 - CDCs (consumer/provider): No changes to existing external consumers. `/ask` emits an internal AskReport-shaped payload for observability only; planner consumption is deferred to Story G.
 - Versioning & deprecation plan: Continue using AskReport v1; no deprecations introduced in this story.
 
-## Test Strategy
+## Test Strategy (evidence in repo)
 - Unit & property-based tests
 	- Unit tests for flag gating, empty-input validation, and responder output shape.
 	- Lightweight property tests for input echo truncation (e.g., length cap, unicode handling).
@@ -67,10 +67,10 @@ Concrete, testable criteria (Gherkin welcome):
 	- Note: Dev webhook override network/HTTP errors are logged and non-fatal
 
 ## Tasks
-- [ ] TASK-IPD-SCHEMA-01 — Define contract deltas (N/A for this story; reference v1 at `contracts/ask/v1/ask-report.v1.json`).
-- [ ] TASK-IPD-TEST-06 — Write acceptance tests (Web CLI + Discord; unit/property tests for gating and validation).
-- [ ] TASK-IPD-HANDLER-04 — Implement `/ask` handler against tests using registry decorators and responder abstraction.
-- [ ] TASK-IPD-OBS-05 — Add metrics/logs/traces per Observability section.
+- [x] TASK-IPD-SCHEMA-01 — Define contract deltas (N/A for this story; reference v1 at `contracts/ask/v1/ask-report.v1.json`).
+- [x] TASK-IPD-TEST-06 — Acceptance tests (flag gating, validation, summary); see `tests/test_ask_handler*.py`.
+- [x] TASK-IPD-HANDLER-04 — Implement `/ask` handler with registry decorators and responder abstraction (`src/Adventorator/commands/ask.py`).
+- [x] TASK-IPD-OBS-05 — Add metrics/logs per Observability section (structured logs via `log_event`, counters via `metrics`).
 - [ ] TASK-IPD-DOC-07 — Update developer docs/runbook on enabling flags and verifying metrics/logs.
 
 ## Definition of Ready (DoR)
@@ -78,11 +78,12 @@ Concrete, testable criteria (Gherkin welcome):
 - [ ] Contracts drafted and reviewed (No deltas; using AskReport v1 reference)
 - [ ] Test strategy approved
 - [ ] Observability plan documented
+- [ ] CDA alignment inputs captured (canonical JSON constraints, idempotency not in scope here but referenced for future persistence)
 
 ## Definition of Done (DoD)
 - [ ] Acceptance criteria verified by automated tests (unit + integration)
 - [ ] Contracts versioned & backward compatible (no changes; schema reference validated)
-- [ ] Observability signals implemented and documented (metrics, logs, trace span)
+- [ ] Observability signals implemented and documented (metrics, logs; trace span deferred)
 - [ ] Security/SCA/SAST/secrets checks pass; perf within budget (p95 <= 200ms)
 - [ ] Docs updated; PR merged with all quality gates green
 
@@ -92,3 +93,11 @@ References
 - Epic: [/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
 - ADR: [/docs/adr/ADR-0005-improbabilitydrive-contracts-and-flags.md](/docs/adr/ADR-0005-improbabilitydrive-contracts-and-flags.md)
 - Contract: [/contracts/ask/v1/ask-report.v1.json](/contracts/ask/v1/ask-report.v1.json)
+
+---
+
+## Alignment report (Completed)
+
+This story integrates with CDA only indirectly. No events are persisted. Alignment notes:
+- Feature flags respect CDA policy of default-disabled for new behavior; current dev config has `/ask` enabled—documented exception until rollout playbook is ready.
+- Observability naming aligns with CDA metrics/logging taxonomy; later event substrate enablement will add event append logs/metrics per CORE-001E.

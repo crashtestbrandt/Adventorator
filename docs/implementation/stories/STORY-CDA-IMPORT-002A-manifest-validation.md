@@ -63,6 +63,13 @@ Validate and register an immutable campaign package manifest before any entity i
 - Contracts: `contracts/package/manifest.v1.json` (new).
 - Tests: `tests/importer/test_manifest_validation.py`, `tests/fixtures/import/manifest/*`.
 
+## Alignment analysis — IMPORT ↔ CDA CORE and IPD
+- Canonical JSON and hashing (CDA CORE): Manifest normalization and hash computation MUST reuse the canonical JSON policy (UTF-8 NFC, sorted keys, integer-only numerics) from ADR-0007 to ensure parity with ledger hashing. Golden vectors should prove that semantically equivalent inputs produce identical digests.
+- Idempotency v2 composition (CDA CORE): Synthetic `seed.manifest.validated` events must compute idempotency keys using the v2 policy that excludes volatile fields (for example, replay_ordinal or execution context IDs). Event payloads should be stable given the same manifest, producing identical envelopes across re-runs.
+- Deterministic ordering (CDA CORE): If multiple manifest-related events ever occur (e.g., multi-file manifests), define and test a deterministic sort key. For the single-manifest case, assert a fixed `replay_ordinal` and stable envelope hash between runs.
+- Feature flag policy (AIDD/IPD): Ensure `features.importer` defaults to false in config and tests assert the disabled path is a no-op. Any dev-only exceptions must be documented alongside rollback guidance.
+- Observability alignment (IPD/CDA): Use structured logging and metric helpers already present in the repo; emit a minimal counter for successful validations and ensure failure logs do not leak full manifest contents (only stable IDs and hashes).
+
 ## Implementation Notes
 - Leverage existing hash chain helper from event ledger (if available) to ensure consistent SHA-256 outputs.
 - Consider storing manifest hash in ImportLog for faster debugging (subject to schema review in importer finalization story).
