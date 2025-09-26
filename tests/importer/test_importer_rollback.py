@@ -15,6 +15,7 @@ import pytest
 
 from Adventorator.importer import (
     EdgePhase,
+    EntityCollisionError,
     EntityPhase,
     ImporterError,
     LoreCollisionError,
@@ -56,7 +57,7 @@ class FailureInjectionHarness:
         
         # Create two entities with SAME stable_id but DIFFERENT content (collision)
         entity1_data = {
-            "stable_id": "01JCOLLIDE000000000000001",  # Same ID
+            "stable_id": "01JCOLLIDE0000000000000001",  # Same ID - 26 chars (ULID format) 
             "kind": "npc",
             "name": "Original Entity",
             "tags": ["original"],
@@ -66,7 +67,7 @@ class FailureInjectionHarness:
         }
         
         entity2_data = {
-            "stable_id": "01JCOLLIDE000000000000001",  # Same ID, different content
+            "stable_id": "01JCOLLIDE0000000000000001",  # Same ID, different content - 26 chars
             "kind": "npc", 
             "name": "Conflicting Entity",
             "tags": ["conflicting"],
@@ -162,7 +163,7 @@ class TestImporterRollback:
             initial_collisions_counter = get_counter("importer.entities.collisions")
             
             # Attempt import - should fail with collision
-            with pytest.raises(ImporterError, match="collision"):
+            with pytest.raises(EntityCollisionError, match="collision"):
                 self._run_import_expecting_failure(package_root)
             
             # Verify rollback metrics
@@ -385,7 +386,7 @@ tags:
   - test:original
 ---
 
-This is the original content.
+This is the original content that differs from the other file.
 """
         
         lore2_content = """---
@@ -396,7 +397,7 @@ tags:
   - test:conflicting
 ---
 
-This is the conflicting content.
+This is the conflicting content that differs from the original.
 """
         
         with open(package_root / "lore" / "original.md", "w") as f:

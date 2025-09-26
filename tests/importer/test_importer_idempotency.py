@@ -114,9 +114,8 @@ class TestImporterIdempotency:
                 mock_log.side_effect = capture_events_run1
                 result1 = self._run_full_import(package_root)
                 
-                # Clear mock and capture second run
+                # Clear mock and set up for second run
                 mock_log.reset_mock()
-                events_run2.clear()
                 
                 def capture_events_run2(event_type, **kwargs):
                     if 'seed.' in event_type:

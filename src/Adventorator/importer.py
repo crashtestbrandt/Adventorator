@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from Adventorator.manifest_validation import ManifestValidationError, validate_manifest
-from Adventorator.metrics import inc_counter as metrics_inc_counter
+from Adventorator.metrics import inc_counter as metrics_inc_counter, get_counter
 from Adventorator.metrics import observe_histogram
 
 # Set up logging
@@ -317,13 +317,15 @@ class EntityPhase:
             )
         except EntityCollisionError as exc:
             collisions_detected = 1
-            inc_counter("importer.collision", value=1, package_id=package_id)
+            inc_counter("importer.entities.collisions", value=1, package_id=package_id)
+            # Record rollback metrics and logs
+            record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
             raise exc
 
         # Create ImportLog entries for each entity and assign them individually
         for i, entity in enumerate(filtered_entities):
             import_log_entry = {
-                "sequence_no": i + 1,
+                # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                 "phase": "entity",
                 "object_type": entity["kind"],
                 "stable_id": entity["stable_id"],
@@ -337,7 +339,7 @@ class EntityPhase:
 
         # Emit metrics with actual counts
         entity_count = len(filtered_entities)
-        inc_counter("importer.entities.created", value=entity_count, package_id=package_id)
+        inc_counter("importer.entities.ingested", value=entity_count, package_id=package_id)
         if entities_skipped_idempotent > 0:
             inc_counter(
                 "importer.entities.skipped_idempotent",
@@ -650,7 +652,7 @@ class EdgePhase:
         manifest_hash = manifest.get("manifest_hash", "unknown")
         for index, edge in enumerate(parsed_edges, start=1):
             edge["import_log_entry"] = {
-                "sequence_no": index,
+                # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                 "phase": "edge",
                 "object_type": edge["type"],
                 "stable_id": edge["stable_id"],
@@ -662,7 +664,7 @@ class EdgePhase:
 
         created_count = len(parsed_edges)
         if created_count:
-            inc_counter("importer.edges.created", value=created_count, package_id=package_id)
+            inc_counter("importer.edges.ingested", value=created_count, package_id=package_id)
         if skipped_idempotent:
             inc_counter(
                 "importer.edges.skipped_idempotent",
@@ -986,14 +988,13 @@ class OntologyPhase:
         self._validate_taxonomy_invariants(tags, affordances)
 
         # Create ImportLog entries for unique items (after duplicate removal)
-        sequence_no = 1
         unique_tags = self._filter_duplicates_from_list(tags)
         unique_affordances = self._filter_duplicates_from_list(affordances)
 
         for tag in unique_tags:
             import_log_entries.append(
                 {
-                    "sequence_no": sequence_no,
+                    # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                     "phase": "ontology",
                     "object_type": "tag",
                     "stable_id": tag["tag_id"],
@@ -1003,12 +1004,11 @@ class OntologyPhase:
                     "timestamp": datetime.now(timezone.utc),
                 }
             )
-            sequence_no += 1
 
         for affordance in unique_affordances:
             import_log_entries.append(
                 {
-                    "sequence_no": sequence_no,
+                    # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                     "phase": "ontology",
                     "object_type": "affordance",
                     "stable_id": affordance["affordance_id"],
@@ -1018,7 +1018,6 @@ class OntologyPhase:
                     "timestamp": datetime.now(timezone.utc),
                 }
             )
-            sequence_no += 1
 
         emit_structured_log(
             "ontology_parse_complete",
@@ -1519,13 +1518,15 @@ class LorePhase:
             filtered_chunks, chunks_skipped_idempotent = self._check_chunk_id_collisions(chunks)
         except LoreCollisionError as exc:
             collisions_detected = 1
-            inc_counter("importer.collision", value=1, package_id=package_id)
+            inc_counter("importer.lore.collisions", value=1, package_id=package_id)
+            # Record rollback metrics and logs
+            record_rollback("lore", package_id, manifest_hash, str(exc))
             raise exc
 
         # Create ImportLog entries for each chunk and assign them individually
         for i, chunk in enumerate(filtered_chunks):
             import_log_entry = {
-                "sequence_no": i + 1,
+                # sequence_no will be assigned by ImporterRunContext._merge_import_logs
                 "phase": "lore",
                 "object_type": "content_chunk",
                 "stable_id": chunk["chunk_id"],
@@ -1666,6 +1667,22 @@ class FinalizationPhase:
         
         # Compute state digest
         state_digest = context.compute_state_digest()
+        
+        # Check if this was an idempotent re-run by looking at the current run metrics
+        # We'll detect this by seeing if any skipped_idempotent counters were incremented during this run
+        current_entities_skipped = get_counter("importer.entities.skipped_idempotent") 
+        current_edges_skipped = get_counter("importer.edges.skipped_idempotent")
+        current_tags_skipped = get_counter("importer.tags.skipped_idempotent")
+        current_chunks_skipped = get_counter("importer.chunks.skipped_idempotent")
+        
+        # Calculate total skips for this run
+        total_skips = current_entities_skipped + current_edges_skipped + current_tags_skipped + current_chunks_skipped
+        
+        if total_skips > 0:
+            # This appears to be an idempotent re-run
+            record_idempotent_run(context.package_id, context.manifest_hash)
+            # Also emit the idempotent counter directly
+            inc_counter("importer.idempotent", value=1, package_id=context.package_id)
         
         # Ensure required fields are present
         if context.package_id is None:
