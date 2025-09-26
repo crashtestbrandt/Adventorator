@@ -1,7 +1,7 @@
 # STORY-IPD-001B — /ask command handler and responder
 
 Epic: [EPIC-IPD-001 — ImprobabilityDrive Enablement](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
-Status: Planned
+Status: Implemented
 Owner: Interactions/Responder WG
 
 ## Summary & Scope
@@ -25,10 +25,10 @@ Epic Link: #TBD (EPIC-IPD-001)
 ## Acceptance Criteria
 Concrete, testable criteria (Gherkin welcome):
 
-- [ ] Given `features.improbability_drive=false` OR `features.ask=false` When a user invokes `/ask` via Web CLI or Discord Then the response is an ephemeral "This feature is disabled" message and no other side effects occur.
-- [ ] Given `features.improbability_drive=true` AND `features.ask=true` When a user invokes `/ask` with non-empty text Then the bot returns an ephemeral acknowledgement including a safe echo of the text (truncated) and no planner/NLU effects occur.
-- [ ] Given the enabled state When `/ask` is invoked Then metrics `ask.received` and `ask.ask_report.emitted` are incremented and logs `ask.initiated` and `ask.completed` are emitted with correlation/request_id if available.
-- [ ] Given invalid input (empty/whitespace-only) When `/ask` is invoked with flags enabled Then an ephemeral validation message is returned; `ask.failed` is incremented and `ask.failed` log is emitted.
+- [x] Given `features.improbability_drive=false` OR `features.ask=false` When a user invokes `/ask` via Web CLI or Discord Then the response is an ephemeral "This feature is disabled" message and no other side effects occur.
+- [x] Given `features.improbability_drive=true` AND `features.ask=true` When a user invokes `/ask` with non-empty text Then the bot returns an ephemeral acknowledgement including a safe echo of the text (truncated) and a concise interpreted summary; no planner handoff occurs.
+- [x] Given the enabled state When `/ask` is invoked Then metrics `ask.received` and `ask.ask_report.emitted` are incremented and logs `ask.initiated` and `ask.completed` are emitted with correlation/request_id if available.
+- [x] Given invalid input (empty/whitespace-only) When `/ask` is invoked with flags enabled Then an ephemeral validation message is returned; `ask.failed` is incremented and `ask.failed` log is emitted.
 - [ ] Given concurrent invocations When 10 `/ask` calls are made rapidly Then the handler responds within the p95 latency budget (<= 200ms) with no errors recorded.
  - [ ] Given a dev webhook override (header or settings) When the sink is unreachable Then the command completes without raising; a `discord.followup.network_error` is logged with `base_url_source != default`.
 
@@ -67,11 +67,11 @@ Concrete, testable criteria (Gherkin welcome):
 	- Note: Dev webhook override network/HTTP errors are logged and non-fatal
 
 ## Tasks
-- [ ] TASK-IPD-SCHEMA-01 — Define contract deltas (N/A for this story; reference v1 at `contracts/ask/v1/ask-report.v1.json`).
-- [ ] TASK-IPD-TEST-06 — Write acceptance tests (Web CLI + Discord; unit/property tests for gating and validation).
-- [ ] TASK-IPD-HANDLER-04 — Implement `/ask` handler against tests using registry decorators and responder abstraction.
-- [ ] TASK-IPD-OBS-05 — Add metrics/logs/traces per Observability section.
-- [ ] TASK-IPD-DOC-07 — Update developer docs/runbook on enabling flags and verifying metrics/logs.
+- [x] TASK-IPD-SCHEMA-01 — Define contract deltas (N/A for this story; reference v1 at `contracts/ask/v1/ask-report.v1.json`).
+- [x] TASK-IPD-TEST-06 — Write acceptance tests (unit tests for gating/validation and summary; Web CLI/Discord as applicable).
+- [x] TASK-IPD-HANDLER-04 — Implement `/ask` handler against tests using registry decorators and responder abstraction.
+- [x] TASK-IPD-OBS-05 — Add metrics/logs per Observability section (trace span deferred to Story F).
+- [x] TASK-IPD-DOC-07 — Update developer docs/runbook on enabling flags and verifying metrics/logs.
 
 ## Definition of Ready (DoR)
 - [ ] Acceptance criteria defined

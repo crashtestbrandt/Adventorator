@@ -1,7 +1,7 @@
 # STORY-IPD-001F — Logging, metrics, and ActivityLog linkage
 
 Epic: [EPIC-IPD-001 — ImprobabilityDrive Enablement](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
-Status: Planned
+Status: Partially Done (not properly initiated)
 Owner: Observability WG
 
 ## Summary
@@ -12,9 +12,9 @@ Standardize logs and counters for /ask and tagging; integrate with ActivityLog w
 - ActivityLog story linkage mirrors AVA Phase 6 patterns; tests assert metric increments.
 
 ## Tasks
-- [ ] TASK-IPD-LOG-16 — Add structured logging via repo helpers.
-- [ ] TASK-IPD-METRIC-17 — Add counters and reset/get helpers in tests.
-- [ ] TASK-IPD-ACTLOG-18 — Wire ActivityLog entries when feature enabled.
+- [x] TASK-IPD-LOG-16 — Add structured logging via repo helpers. (Implemented in `/ask` handler and KB adapter.)
+- [x] TASK-IPD-METRIC-17 — Add counters and reset/get helpers in tests. (Counters like `ask.received`, `ask.ask_report.emitted`, `ask.failed`, `kb.lookup.*` in place.)
+- [ ] TASK-IPD-ACTLOG-18 — Wire ActivityLog entries when feature enabled. (Pending linkage.)
 
 ## Definition of Ready
 - Observability acceptance criteria reviewed.
@@ -29,6 +29,8 @@ Standardize logs and counters for /ask and tagging; integrate with ActivityLog w
 - Counters: ask.*, kb.*; Structured log events at INFO with keys.
 - Traces
 	- add span `interactions/ask.handle` with tracing backend.
+
+Note on status: This story was not formally initiated; metrics/logging were implemented opportunistically alongside other work. ActivityLog linkage and tracing remain open.
 
 ## Risks & Mitigations
 - Over-logging PII: use redaction filters from Story H; review log keys.

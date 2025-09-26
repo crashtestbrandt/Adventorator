@@ -1,7 +1,7 @@
 # STORY-IPD-001D — World Knowledge Base (KB) integration (read-only)
 
 Epic: [EPIC-IPD-001 — ImprobabilityDrive Enablement](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
-Status: Ready
+Status: Implemented
 Owner: Data/Repos WG
 
 ## Summary
@@ -91,12 +91,12 @@ Acceptance tests mapping (indicative):
 - Timeout/bounds: `tests/kb/test_kb_limits.py::test_timeout_and_bounds`
 
 ## Tasks
-- [ ] TASK-IPD-KB-10 — Implement KB adapter with repo-backed lookups (async; no inline SQL).
-- [ ] TASK-IPD-CACHE-11 — Add bounded caching (TTL/size) with `kb.lookup.hit/miss` counters.
-- [ ] TASK-IPD-TEST-12 — Unit tests for canonical entities, ambiguous cases, cache hit/miss, and timeout/bounds.
-- [ ] TASK-IPD-CONFIG-13 — Add config knobs under `[ask.kb]` and map into `Settings` (`src/Adventorator/config.py`).
-- [ ] TASK-IPD-INTEG-14 — Wire optional KB step into `/ask` flow behind `features.ask_kb_lookup`.
-- [ ] TASK-IPD-DOCS-15 — Update docs/runbook and link in EPIC; note defaults and rollback.
+- [x] TASK-IPD-KB-10 — Implement KB adapter with repo-backed lookups (async; no inline SQL).
+- [x] TASK-IPD-CACHE-11 — Add bounded caching (TTL/size) with `kb.lookup.hit/miss` counters.
+- [x] TASK-IPD-TEST-12 — Unit tests for canonical entities, ambiguous cases, cache hit/miss, and timeout/bounds.
+- [x] TASK-IPD-CONFIG-13 — Add config knobs under `[ask.kb]` and map into `Settings` (`src/Adventorator/config.py`).
+- [x] TASK-IPD-INTEG-14 — Wire optional KB step into `/ask` flow behind `features.ask_kb_lookup`.
+- [x] TASK-IPD-DOCS-15 — Update docs/runbook and link in EPIC; note defaults and rollback.
 
 Out of scope (for this story):
 - Write operations or KB mutation.
