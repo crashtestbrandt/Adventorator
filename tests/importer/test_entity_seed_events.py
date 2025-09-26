@@ -29,7 +29,7 @@ class TestEntitySeedEvents:
                     "affordances": ["talk", "patrol"],
                 },
                 {
-                    "stable_id": "01JA6Z7F8LOC00000000000001",
+                    "stable_id": "01JA6Z7F8C0000000000000001",
                     "kind": "location",
                     "name": "Main Gate",
                     "tags": ["entrance"],
@@ -66,7 +66,7 @@ class TestEntitySeedEvents:
 
             # Expected order: location first (alphabetically), then npcs by stable_id
             assert entities1[0]["kind"] == "location"
-            assert entities1[0]["stable_id"] == "01JA6Z7F8LOC00000000000001"
+            assert entities1[0]["stable_id"] == "01JA6Z7F8C0000000000000001"
 
             assert entities1[1]["kind"] == "npc"
             assert entities1[1]["stable_id"] == "01JA6Z7F8NPC00000000000001"  # Alice

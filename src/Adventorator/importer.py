@@ -459,7 +459,7 @@ class EntityPhase:
             )
         except EntityCollisionError as exc:
             collisions_detected = 1
-            inc_counter("importer.entities.collisions", value=1, package_id=package_id)
+            inc_counter("importer.collision", value=1, package_id=package_id)
             # Record rollback metrics and logs
             record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
             raise exc
@@ -481,7 +481,7 @@ class EntityPhase:
 
         # Emit metrics with actual counts
         entity_count = len(filtered_entities)
-        inc_counter("importer.entities.ingested", value=entity_count, package_id=package_id)
+        inc_counter("importer.entities.created", value=entity_count, package_id=package_id)
         if entities_skipped_idempotent > 0:
             inc_counter(
                 "importer.entities.skipped_idempotent",
@@ -759,7 +759,7 @@ class EdgePhase:
                     existing_hash, existing_path = seen_edges[stable_id]
                     if file_hash != existing_hash:
                         inc_counter(
-                            "importer.edges.collision",
+                            "importer.collision",
                             value=1,
                             package_id=package_id,
                         )
@@ -806,7 +806,7 @@ class EdgePhase:
 
         created_count = len(parsed_edges)
         if created_count:
-            inc_counter("importer.edges.ingested", value=created_count, package_id=package_id)
+            inc_counter("importer.edges.created", value=created_count, package_id=package_id)
         if skipped_idempotent:
             inc_counter(
                 "importer.edges.skipped_idempotent",
@@ -903,10 +903,7 @@ def validate_event_payload_schema(payload: dict[str, Any], event_type: str = "ma
         # Skip validation if jsonschema not available
         return
 
-    # Only apply strict schema validation to content_chunk events for now
-    # to avoid breaking existing tests with invalid ULIDs
-    if event_type != "content_chunk":
-        return
+    # Apply schema validation to all event types for deterministic payload enforcement
 
     if event_type == "manifest":
         schema_path = Path("contracts/events/seed/manifest-validated.v1.json")
@@ -959,10 +956,6 @@ def validate_entity_schema(entity_data: dict[str, Any]) -> None:
     except (json.JSONDecodeError, OSError):
         return
 
-    # Skip strict validation to avoid breaking existing tests
-    # TODO: Fix test data and re-enable validation
-    return
-
     try:
         jsonschema.validate(entity_data, schema)
     except jsonschema.ValidationError as exc:
@@ -1001,10 +994,6 @@ def validate_edge_schema(edge_data: dict[str, Any]) -> None:
             schema = json.load(f)
     except (json.JSONDecodeError, OSError):
         return
-
-    # Skip strict validation to avoid breaking existing tests
-    # TODO: Fix test data and re-enable validation
-    return
 
     try:
         jsonschema.validate(edge_data, schema)
@@ -1660,7 +1649,7 @@ class LorePhase:
             filtered_chunks, chunks_skipped_idempotent = self._check_chunk_id_collisions(chunks)
         except LoreCollisionError as exc:
             collisions_detected = 1
-            inc_counter("importer.lore.collisions", value=1, package_id=package_id)
+            inc_counter("importer.collision", value=1, package_id=package_id)
             # Record rollback metrics and logs
             record_rollback("lore", package_id, manifest_hash, str(exc))
             raise exc
@@ -1948,7 +1937,7 @@ class FinalizationPhase:
                 )
                 # Enforce contiguity requirement - raise error for any sequence mismatch
                 raise ImporterError(
-                    f"ImportLog sequence mismatch detected in package {context.package_id}: "
+                    f"ImportLog sequence gaps detected in package {context.package_id}: "
                     f"expected {expected_sequences}, actual {sequences}"
                 )
         
@@ -2004,8 +1993,8 @@ async def run_full_import_with_database(
     package_root: Path,
     campaign_id: int,
     *,
-    features_importer: bool = True,
-    features_importer_embeddings: bool = True
+    features_importer: bool = False,
+    features_importer_embeddings: bool = False
 ) -> dict[str, Any]:
     """Run full package import with database integration and idempotent detection.
     

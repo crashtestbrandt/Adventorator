@@ -169,6 +169,10 @@ def _toml_settings_source() -> dict[str, Any]:
     ops_cfg = t.get("ops", {}) or {}
     out["metrics_endpoint_enabled"] = ops_cfg.get("metrics_endpoint_enabled", False)
 
+    # Importer feature flags (EPIC-CDA-IMPORT-002) — default disabled per governance
+    out["features_importer"] = t.get("features", {}).get("importer", False)
+    out["features_importer_embeddings"] = t.get("features", {}).get("importer_embeddings", False)
+
     return out
 
 
@@ -260,6 +264,10 @@ class Settings(BaseSettings):
 
     # --- Ops ---
     metrics_endpoint_enabled: bool = False
+
+    # --- Importer (EPIC-CDA-IMPORT-002) - default disabled per governance ---
+    features_importer: bool = False
+    features_importer_embeddings: bool = False
 
     # Prefer .env.local if present for host development; fall back to .env (legacy)
     import os as _os

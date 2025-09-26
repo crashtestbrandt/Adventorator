@@ -34,7 +34,7 @@ class TestEntityMetrics:
                     "affordances": ["cast_spell"],
                 },
                 {
-                    "stable_id": "01JA6Z7F8LOC00000000000001",
+                    "stable_id": "01JA6Z7F8C0000000000000001",
                     "kind": "location",
                     "name": "Tower",
                     "tags": ["building"],
