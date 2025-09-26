@@ -1106,7 +1106,7 @@ def validate_entity_schema(entity_data: dict[str, Any]) -> None:
 def load_edge_taxonomy() -> dict[str, Any]:
     """Load the edge type taxonomy declared under contracts."""
 
-    taxonomy_path = Path("contracts/edges/edge-type-taxonomy.json")
+    taxonomy_path = Path("contracts/edges/edge-type-taxonomy-v1.json")
     if not taxonomy_path.exists():
         return {}
 

@@ -23,5 +23,6 @@ pythonpath = ["src", "."]
 asyncio_mode = "auto"
 markers = [
 	"smoke: small, fast end-to-end checks hitting the most critical paths",
+    "slow: long-running tests that are skipped by default",
 ]
 

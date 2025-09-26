@@ -22,7 +22,7 @@ Early work briefly placed Pydantic models under `src/Adventorator/ask/`, conflic
 - Component placement
   - `/ask` command handler belongs under `src/Adventorator/commands/`, using existing registry decorators and responder abstraction.
   - Rule-based NLU and KB adapters will follow existing service/module patterns under `src/Adventorator` (no network/ML dependencies; deterministic and testable). Exact module paths are left to Story C/D implementation but must avoid introducing new architectural layers without an ADR.
-  - Ontology governance artifacts will be versioned and validated per Story E under repo-managed locations (`prompts/` or `contracts/` as decided in that story), integrating with `scripts/validate_prompts_and_contracts.py`.
+  - Ontology governance artifacts will be versioned and validated per Story E under repo-managed locations (`prompts/` or `contracts/` as decided in that story), integrating with `scripts/validate_contracts.py`.
   - Branch hygiene: this ADR branch is documentation-only; code for `/ask` and NLU/tagging will land in Story B/C branches.
 - Feature flags and rollout
   - Flags (defaults preserve current behavior):
@@ -83,5 +83,5 @@ Alternatives considered:
   - [../implementation/stories/STORY-IPD-001I-operational-rollout.md](../implementation/stories/STORY-IPD-001I-operational-rollout.md)
 - Contract: [../../contracts/ask/v1/ask-report.v1.json](../../contracts/ask/v1/ask-report.v1.json)
 - Runtime models: [../../src/Adventorator/schemas.py](../../src/Adventorator/schemas.py)
-- Validation: [../../scripts/validate_prompts_and_contracts.py](../../scripts/validate_prompts_and_contracts.py)
+- Validation: [../../scripts/validate_contracts.py](../../scripts/validate_contracts.py)
 - Smoke runbook: [../smoke/validation-runbook-ipd-001a.md](../smoke/validation-runbook-ipd-001a.md)

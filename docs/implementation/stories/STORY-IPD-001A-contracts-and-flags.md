@@ -78,7 +78,7 @@ Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and Affordanc
 	- `[features]` keys: `improbability_drive`, `ask`
 	- `[features.ask]` keys: `nlu_rule_based`, `kb_lookup`, `planner_handoff`, `nlu_debug`
 - Contracts module (runtime models): `src/Adventorator/schemas.py` (AskReport, IntentFrame, AffordanceTag)
-- Contract registry (artifact): `contracts/ask/v1/` JSON schema, validated by `scripts/validate_prompts_and_contracts.py`
+- Contract registry (artifact): `contracts/ask/v1/` JSON schema, validated by `scripts/validate_contracts.py`
 - Tests: `tests/ask/` with golden round-trip fixtures
 
 Follow-ups realized:

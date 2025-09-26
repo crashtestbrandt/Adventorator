@@ -24,6 +24,10 @@ If "Yes," summarize:
 - [ ] AI evals run (if applicable)
 - [ ] Coverage ≥ target
 - [ ] Mutation score ≥ target
+ - [ ] Contracts validated (scripts/validate_contracts.py)
+
+### Contracts Validation Summary
+<!-- Paste the output of `PYTHONPATH=./src python scripts/validate_contracts.py` here, or summarize any failures and resolutions. -->
 
 ## Observability & Ops
 - [ ] Metrics/logs/traces updated

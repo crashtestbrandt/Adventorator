@@ -14,5 +14,5 @@ edge_package/
 ```
 
 The manifest enables both entity and edge importer phases. Entity files provide deterministic stable IDs used by the sample edges
-in `edges/edges.json`. The edge records reference the taxonomy declared in `contracts/edges/edge-type-taxonomy.json` and include
+in `edges/edges.json`. The edge records reference the taxonomy declared in `contracts/edges/edge-type-taxonomy-v1.json` and include
 both attribute mappings and a temporal validity example.

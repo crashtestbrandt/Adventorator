@@ -147,7 +147,7 @@ Status: In Progress
 
 - Summary. Define ontology files under `prompts/` or `contracts/` with versioning, validation script, and governance.
 - Acceptance criteria.
-  - Ontology schema and linter in place; changes validated via CI script (`scripts/validate_prompts_and_contracts.py`).
+  - Ontology schema and linter in place; changes validated via CI script (`scripts/validate_contracts.py`).
   - Tags referenced by NLU and planner documented with migration guidance.
 - Tasks.
   - [x] `TASK-IPD-ONTO-13` — Author ontology schema and seed ontology.
@@ -267,7 +267,7 @@ max_terms_per_call = 20
 Module placement:
 
 - Contracts (Pydantic models for app use): `src/Adventorator/schemas.py` (AskReport, IntentFrame, AffordanceTag).
-- Contract artifacts (registry): `contracts/ask/v1/` (JSON schema or OpenAPI component), validated by `scripts/validate_prompts_and_contracts.py`.
+- Contract artifacts (registry): `contracts/ask/v1/` (JSON schema or OpenAPI component), validated by `scripts/validate_contracts.py`.
 - Tests and fixtures: `tests/ask/` with golden round-trip fixtures.
 *Epic linkage:* Safe staged enablement of /ask and tagging.
 
