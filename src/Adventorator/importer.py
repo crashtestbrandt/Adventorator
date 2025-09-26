@@ -132,6 +132,9 @@ class ManifestPhase:
         try:
             manifest, manifest_hash = validate_manifest(manifest_path, package_root)
         except ManifestValidationError as exc:
+            # Record rollback for manifest validation failure  
+            package_id = getattr(exc, 'package_id', 'unknown')
+            record_rollback("manifest", package_id, "unknown", str(exc))
             raise ImporterError(f"Manifest validation failed: {exc}") from exc
 
         # Prepare event payload for seed.manifest.validated
@@ -269,8 +272,13 @@ class EntityPhase:
                 entity_data = json.loads(normalized_content)
 
                 # Validate against JSON schema first, then basic fields
-                validate_entity_schema(entity_data)
-                self._validate_entity_schema(entity_data, rel_path)
+                try:
+                    validate_entity_schema(entity_data)
+                    self._validate_entity_schema(entity_data, rel_path)
+                except EntityValidationError as exc:
+                    # Record rollback for entity schema validation failure
+                    record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
+                    raise
 
                 # Compute file hash
                 file_hash = self._compute_file_hash(normalized_content)
@@ -297,6 +305,8 @@ class EntityPhase:
                 parsed_entities.append(entity_with_provenance)
 
             except (json.JSONDecodeError, OSError) as exc:
+                # Record rollback for entity parsing/validation failure
+                record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
                 raise EntityValidationError(
                     f"Failed to parse entity file {rel_path}: {exc}"
                 ) from exc

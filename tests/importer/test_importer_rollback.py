@@ -239,11 +239,11 @@ class TestImporterRollback:
                 "No chunks should be ingested after collision failure"
                 
             # Verify collision tracked
-            assert get_counter("importer.chunks.collisions") > 0, \
-                "Chunk collision should be tracked in metrics"
+            assert get_counter("importer.lore.collisions") > 0, \
+                "Lore collision should be tracked in metrics"
             
             # Verify rollback counter incremented
-            assert get_counter("importer.rollback") > 0, \
+            assert get_counter("importer.rollback.lore") > 0, \
                 "Rollback counter should increment on lore collision"
 
     def test_rollback_structured_logging(self):
@@ -260,7 +260,7 @@ class TestImporterRollback:
                 })
                 
                 # Attempt import that will fail
-                with pytest.raises(ImporterError):
+                with pytest.raises(EntityCollisionError):
                     self._run_import_expecting_failure(package_root)
             
             # Verify rollback logs were emitted
@@ -325,10 +325,7 @@ class TestImporterRollback:
                 # This should fail before context.record_entities is called
                 
         except Exception as e:
-            # Increment rollback counter when failure occurs
-            from Adventorator.importer import inc_counter
-            inc_counter("importer.rollback")
-            inc_counter("importer.rollback.entity")  # Phase-specific counter
+            # Remove artificial counter increments - let the real business logic handle this
             raise
 
     def _run_lore_import_expecting_failure(self, package_root: Path):
@@ -346,16 +343,12 @@ class TestImporterRollback:
             context.record_manifest(manifest_result)
             
             # Lore ingestion - collision will be detected
-            lore_dir = package_root / "lore"
-            if lore_dir.exists():
-                lore_results = lore_phase.parse_and_validate_lore(lore_dir, manifest_result["manifest"])
-                # This should fail at collision detection
+            # Note: parse_and_validate_lore expects package_root, not lore_dir
+            lore_results = lore_phase.parse_and_validate_lore(package_root, manifest_result["manifest"])
+            # This should fail at collision detection
                 
         except Exception as e:
-            # Increment rollback counters
-            from Adventorator.importer import inc_counter
-            inc_counter("importer.rollback")
-            inc_counter("importer.rollback.lore")
+            # Remove artificial counter increments - let the real business logic handle this
             raise
 
     def _create_lore_collision_package(self, package_root: Path):

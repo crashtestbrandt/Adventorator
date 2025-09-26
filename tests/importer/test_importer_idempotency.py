@@ -82,19 +82,19 @@ class TestImporterIdempotency:
             
             with patch('Adventorator.importer.emit_structured_log') as mock_log:
                 # Track emitted events by capturing log calls
-                def capture_events_run1(event_type, **kwargs):
-                    if 'seed.' in event_type:
-                        events_run1.append({'type': event_type, **kwargs})
-                
+                def capture_events_run1(event, **kwargs):
+                    if 'seed.' in event:
+                        events_run1.append({'type': event, **kwargs})
+
                 mock_log.side_effect = capture_events_run1
                 result1 = self._run_full_import(package_root)
                 
                 # Clear mock and set up for second run
                 mock_log.reset_mock()
                 
-                def capture_events_run2(event_type, **kwargs):
-                    if 'seed.' in event_type:
-                        events_run2.append({'type': event_type, **kwargs})
+                def capture_events_run2(event, **kwargs):
+                    if 'seed.' in event:
+                        events_run2.append({'type': event, **kwargs})
                 
                 mock_log.side_effect = capture_events_run2
                 result2 = self._run_full_import(package_root)
