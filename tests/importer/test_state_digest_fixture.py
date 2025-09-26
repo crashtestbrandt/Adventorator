@@ -13,7 +13,6 @@ from Adventorator.importer import (
 )
 from Adventorator.importer_context import ImporterRunContext
 
-
 FIXTURE_ROOT = Path("tests/fixtures/import/manifest/happy-path")
 EXPECTED_DIGEST_PATH = FIXTURE_ROOT / "state_digest.txt"
 

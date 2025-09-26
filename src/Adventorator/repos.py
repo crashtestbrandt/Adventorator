@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import time
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -709,6 +710,11 @@ async def append_event(
     type: str,
     payload: dict[str, Any] | None,
     request_id: str | None = None,
+    plan_id: str | None = None,
+    tool_name: str | None = None,
+    ruleset_version: str | None = None,
+    idempotency_args: Mapping[str, Any] | None = None,
+    idempotency_key: bytes | None = None,
 ) -> models.Event:
     # Start timing for latency histogram
     start_time_ms = time.time() * 1000
@@ -728,6 +734,7 @@ async def append_event(
     if actor_norm is None and actor_id is not None:
         actor_norm = str(actor_id)
     payload_dict = payload or {}
+    idempotency_payload = dict(idempotency_args) if idempotency_args is not None else payload_dict
     async with _event_lock_for_campaign(campaign_id):
         # Determine ordinal & linkage inside lock to prevent race producing gaps
         last_event = await s.execute(
@@ -742,7 +749,6 @@ async def append_event(
             prev_hash = event_envelope.GENESIS_PREV_EVENT_HASH
         else:
             replay_ordinal = last_event_row.replay_ordinal + 1
-            # Derive full envelope hash of the prior event to strengthen chain linkage.
             prev_hash = event_envelope.compute_envelope_hash(
                 campaign_id=last_event_row.campaign_id,
                 scene_id=last_event_row.scene_id,
@@ -755,18 +761,59 @@ async def append_event(
                 payload_hash=last_event_row.payload_hash,
                 idempotency_key=last_event_row.idempotency_key,
             )
+
         execution_request_id = request_id or (
             f"evt-{scene_id}-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
         )
+
+        reuse_supported = False
+        computed_key = idempotency_key
+        if computed_key is None:
+            if (
+                plan_id is not None
+                or tool_name is not None
+                or ruleset_version is not None
+                or idempotency_args is not None
+            ):
+                computed_key = event_envelope.compute_idempotency_key_v2(
+                    plan_id=plan_id,
+                    campaign_id=campaign_id,
+                    event_type=type,
+                    tool_name=tool_name,
+                    ruleset_version=ruleset_version,
+                    args_json=idempotency_payload,
+                )
+                reuse_supported = True
+            else:
+                computed_key = event_envelope.compute_idempotency_key(
+                    campaign_id=campaign_id,
+                    event_type=type,
+                    execution_request_id=execution_request_id,
+                    plan_id=plan_id,
+                    payload=payload_dict,
+                    replay_ordinal=replay_ordinal,
+                )
+        else:
+            reuse_supported = True
+
+        if reuse_supported:
+            existing = await s.execute(
+                select(models.Event)
+                .where(models.Event.campaign_id == campaign_id)
+                .where(models.Event.idempotency_key == computed_key)
+                .limit(1)
+            )
+            existing_event = existing.scalar_one_or_none()
+            if existing_event is not None:
+                event_envelope.log_idempotent_reuse(
+                    event_id=existing_event.id,
+                    campaign_id=campaign_id,
+                    idempotency_key=computed_key,
+                    plan_id=plan_id,
+                )
+                return existing_event
+
         payload_hash = event_envelope.compute_payload_hash(payload_dict)
-        idempotency_key = event_envelope.compute_idempotency_key(
-            campaign_id=campaign_id,
-            event_type=type,
-            execution_request_id=execution_request_id,
-            plan_id=None,
-            payload=payload_dict,
-            replay_ordinal=replay_ordinal,
-        )
         ev = models.Event(
             campaign_id=campaign_id,
             scene_id=scene_id,
@@ -777,8 +824,8 @@ async def append_event(
             world_time=replay_ordinal,
             prev_event_hash=prev_hash,
             payload_hash=payload_hash,
-            idempotency_key=idempotency_key,
-            plan_id=None,
+            idempotency_key=computed_key,
+            plan_id=plan_id,
             execution_request_id=execution_request_id,
             approved_by=None,
             payload=payload_dict,
@@ -786,36 +833,25 @@ async def append_event(
         )
         s.add(ev)
         await _flush_retry(s)
-    inc_counter("events.append.ok")  # legacy naming kept
-    inc_counter("events.applied")  # HR-004 new canonical counter
 
-    # Record latency histogram for observability (STORY-CDA-CORE-001E)
+    inc_counter("events.append.ok")
+
     end_time_ms = time.time() * 1000
-    latency_ms = int(end_time_ms - start_time_ms)
+    latency_ms = max(int(end_time_ms - start_time_ms), 0)
     observe_histogram("event.apply.latency_ms", latency_ms)
 
-    # Structured log for observability (HR-003): include identifiers & hash prefixes
-    try:  # Best-effort: logging must not break persistence path
-        from Adventorator.action_validation.logging_utils import (
-            log_event as _log_event,
-        )  # lazy import
+    event_envelope.log_event_applied(
+        event_id=ev.id,
+        campaign_id=campaign_id,
+        replay_ordinal=ev.replay_ordinal,
+        event_type=ev.type,
+        idempotency_key=ev.idempotency_key,
+        payload_hash=ev.payload_hash,
+        plan_id=ev.plan_id,
+        execution_request_id=ev.execution_request_id,
+        latency_ms=latency_ms,
+    )
 
-        _log_event(
-            "events",
-            "appended",
-            campaign_id=campaign_id,
-            scene_id=scene_id,
-            event_id=getattr(ev, "id", None),
-            replay_ordinal=replay_ordinal,
-            chain_tip_hash=prev_hash.hex()[:16],  # Current chain tip (what this event links to)
-            idempotency_key_hex=idempotency_key.hex()[:16],  # Fixed field name
-            plan_id=getattr(ev, "plan_id", None),  # If provided
-            execution_request_id=execution_request_id,  # If provided
-            type=type,
-            payload_hash=payload_hash.hex()[:16],
-        )
-    except Exception:
-        pass
     return ev
 
 

@@ -49,7 +49,7 @@ Authoritative sources of truth:
 | Content Retrieval (Phase 6) | ✅ Complete | Retrieval context bundling (pre-CDA; superseded by ARCH-CDA-001 package import model). |
 | Map Rendering MVP (Phase 12) | 🛣️ Planned | Static rendered encounter map via Pillow with cache invalidation. |
 | Modal Scenes (Phase 13) | 🛣️ Planned | Exploration ↔ combat branching & merge semantics. |
-| Campaign Package Import (EPIC-CDA-IMPORT-002) | 🔄 In Progress | Deterministic manifest/entity/edge/tag/chunk import + synthetic seed events (see ADR-0011, ARCH-CDA-001). |
+| Campaign Package Import (EPIC-CDA-IMPORT-002) | ✅ Complete | Deterministic manifest/entity/edge/tag/chunk import with ledger-backed seed events (ADR-0011, ARCH-CDA-001). |
 | Character Import / Sheet Normalization (Phase 14) | 🛣️ Planned | Structured character sheet ingestion building atop provenance & ImportLog patterns. |
 
 ## 6. GM Controls & Operational Hardening (Phases 15–16) — 🛣️ Planned
@@ -63,8 +63,8 @@ Authoritative sources of truth:
 |------|--------|---------|
 | Action Validation (EPIC-AVA-001) | 🔄 Maturing | Planner → Orchestrator → Executor validation chain (ADR-0001, ADR-0003, ADR-0004) with ActivityLog dependency. |
 | Mechanics Activity Log (EPIC-ACTLOG-001) | 🛣️ Planned | Unified auditable mechanics ledger (taxonomy, schema, determinism, metrics). |
-| Deterministic Event Substrate (EPIC-CDA-CORE-001) | 🔄 In Progress | Canonical JSON encoder, hash chain, idempotency, metrics (ADR-0006, ADR-0007, ARCH-CDA-001). |
-| Campaign Package Import & Provenance (EPIC-CDA-IMPORT-002) | 🔄 In Progress | Deterministic package ingest + synthetic seed events + ImportLog (ADR-0011, ARCH-CDA-001). |
+| Deterministic Event Substrate (EPIC-CDA-CORE-001) | ✅ Complete | Canonical JSON encoder, hash chain, idempotency, metrics (ADR-0006, ADR-0007, ARCH-CDA-001). |
+| Campaign Package Import & Provenance (EPIC-CDA-IMPORT-002) | ✅ Complete | Deterministic package ingest + ledger-backed seed events + ImportLog (ADR-0011, ARCH-CDA-001). |
 | Campaign Data Architecture (ARCH-CDA-001) | 🛣️ Planned | Unified event-sourced world model (ledger, importer, RNG, snapshots, provenance). |
 
 ## 8. Feature Flag Overview
@@ -81,8 +81,8 @@ Authoritative sources of truth:
 | (See `config.toml` for authoritative list) |  |  |
 
 ## 9. Current Focus & Near-Term Priorities
-1. Advance EPIC-CDA-CORE-001 (hash chain logic, canonical encoder vectors, idempotency helper tests).
-2. Execute EPIC-CDA-IMPORT-002 phases (manifest → entities → edges → ontology → lore → finalize) with deterministic ordering & seed events.
+1. Monitor EPIC-CDA-CORE-001 deployment (hash chain + idempotency telemetry) and socialize executor reuse patterns.
+2. Roll out EPIC-CDA-IMPORT-002 importer tooling to staged campaigns and document operational runbooks.
 3. Stand up ActivityLog (EPIC-ACTLOG-001) issue scaffolding to unblock Action Validation audit requirements.
 4. Prepare map rendering MVP (benchmark render latency + snapshot tests).
 5. Define character import schema (Phase 14) leveraging provenance & ImportLog patterns.

@@ -19,6 +19,7 @@ class TestStateFoldVerification:
 
     def test_deterministic_state_digest_clean_database(self):
         """Test that consecutive imports on clean database produce identical state digest."""
+
         # Simulate identical import runs
         def create_test_context():
             context = ImporterRunContext()
@@ -27,32 +28,26 @@ class TestStateFoldVerification:
             context.entities = [
                 {
                     "stable_id": "01JA6Z7F8NPC00000000000001",
-                    "provenance": {"file_hash": "entity1hash" + "0" * 54}
+                    "provenance": {"file_hash": "entity1hash" + "0" * 54},
                 }
             ]
             context.edges = [
                 {
-                    "stable_id": "01JA6Z7F8EDG00000000000001", 
-                    "provenance": {"file_hash": "edge1hash" + "0" * 56}
+                    "stable_id": "01JA6Z7F8EDG00000000000001",
+                    "provenance": {"file_hash": "edge1hash" + "0" * 56},
                 }
             ]
             context.ontology_tags = [
-                {
-                    "tag_id": "tag.test.example",
-                    "provenance": {"file_hash": "tag1hash" + "0" * 56}
-                }
+                {"tag_id": "tag.test.example", "provenance": {"file_hash": "tag1hash" + "0" * 56}}
             ]
             context.ontology_affordances = [
                 {
                     "affordance_id": "affordance.test.example",
-                    "provenance": {"file_hash": "aff1hash" + "0" * 56}
+                    "provenance": {"file_hash": "aff1hash" + "0" * 56},
                 }
             ]
             context.lore_chunks = [
-                {
-                    "chunk_id": "CHUNK-TEST-001",
-                    "content_hash": "chunk1hash" + "0" * 54
-                }
+                {"chunk_id": "CHUNK-TEST-001", "content_hash": "chunk1hash" + "0" * 54}
             ]
             return context
 
@@ -71,6 +66,7 @@ class TestStateFoldVerification:
 
     def test_state_digest_different_for_mutated_data(self):
         """Test that mutated data produces different state digest."""
+
         # Create base context
         def create_base_context():
             context = ImporterRunContext()
@@ -79,7 +75,7 @@ class TestStateFoldVerification:
             context.entities = [
                 {
                     "stable_id": "01JA6Z7F8NPC00000000000001",
-                    "provenance": {"file_hash": "entity1hash" + "0" * 54}
+                    "provenance": {"file_hash": "entity1hash" + "0" * 54},
                 }
             ]
             return context
@@ -98,6 +94,7 @@ class TestStateFoldVerification:
 
     def test_state_digest_ordering_independence(self):
         """Test that state digest is independent of input ordering."""
+
         # Create contexts with same data in different orders
         def create_context_ordered():
             context = ImporterRunContext()
@@ -148,16 +145,16 @@ class TestStateFoldVerification:
             ManifestPhase,
             OntologyPhase,
         )
-        
+
         fixture_root = Path("tests/fixtures/import/manifest/happy-path")
-        
+
         # Run the actual phases like in the golden fixture test
         manifest_phase = ManifestPhase(features_importer_enabled=True)
         manifest_path = fixture_root / "package.manifest.json"
-        
+
         if not manifest_path.exists():
             pytest.skip("Golden manifest fixture not available")
-            
+
         manifest_result = manifest_phase.validate_and_register(manifest_path, fixture_root)
 
         context = ImporterRunContext()
@@ -186,19 +183,18 @@ class TestStateFoldVerification:
 
         # Compute the digest
         computed_digest = context.compute_state_digest()
-        
+
         # Verify digest format
         assert len(computed_digest) == 64
         assert all(c in "0123456789abcdef" for c in computed_digest)
-        
+
         # Validate against golden fixture
         assert computed_digest == expected_digest
-        
 
     def test_replay_idempotency_verification(self):
-        """Test that replay on existing data maintains idempotency.""" 
+        """Test that replay on existing data maintains idempotency."""
         phase = FinalizationPhase(features_importer_enabled=True)
-        
+
         # Simulate first import
         context1 = ImporterRunContext()
         context1.package_id = TEST_PACKAGE_ID
@@ -206,10 +202,10 @@ class TestStateFoldVerification:
         context1.entities = [
             {"stable_id": "entity1", "provenance": {"file_hash": "hash1" + "0" * 59}}
         ]
-        
+
         start_time1 = datetime.now(timezone.utc)
         result1 = phase.finalize_import(context1, start_time1)
-        
+
         # Simulate second import (replay) with identical data
         context2 = ImporterRunContext()
         context2.package_id = TEST_PACKAGE_ID
@@ -217,20 +213,28 @@ class TestStateFoldVerification:
         context2.entities = [
             {"stable_id": "entity1", "provenance": {"file_hash": "hash1" + "0" * 59}}
         ]
-        
+
         start_time2 = datetime.now(timezone.utc)
         result2 = phase.finalize_import(context2, start_time2)
-        
+
         # State digests should be identical (idempotent)
         assert result1["state_digest"] == result2["state_digest"]
-        
+
         # Completion event payloads should have same core data
         payload1 = result1["completion_event"]["payload"]
         payload2 = result2["completion_event"]["payload"]
-        
+
         # These fields should be identical for idempotent replay
-        for field in ["package_id", "manifest_hash", "entity_count", "edge_count", 
-                     "tag_count", "affordance_count", "chunk_count", "state_digest"]:
+        for field in [
+            "package_id",
+            "manifest_hash",
+            "entity_count",
+            "edge_count",
+            "tag_count",
+            "affordance_count",
+            "chunk_count",
+            "state_digest",
+        ]:
             assert payload1[field] == payload2[field]
 
     def test_state_digest_components_canonical_ordering(self):
@@ -239,23 +243,23 @@ class TestStateFoldVerification:
         context.package_id = TEST_PACKAGE_ID
         context.manifest = {"package_id": TEST_PACKAGE_ID}
         context.manifest_hash = "manifesthash" + "0" * 52
-        
+
         # Add components in random order
         context.entities = [
             {"stable_id": "z_entity", "provenance": {"file_hash": "hash_z" + "0" * 58}},
             {"stable_id": "a_entity", "provenance": {"file_hash": "hash_a" + "0" * 58}},
             {"stable_id": "m_entity", "provenance": {"file_hash": "hash_m" + "0" * 58}},
         ]
-        
+
         components = context.state_digest_components()
-        
+
         # Verify components are sorted by (phase, stable_id, content_hash)
         prev_sort_key = None
         for component in components:
             current_sort_key = (
-                component["phase"], 
-                component["stable_id"], 
-                component["content_hash"]
+                component["phase"],
+                component["stable_id"],
+                component["content_hash"],
             )
             if prev_sort_key is not None:
                 assert current_sort_key >= prev_sort_key, "Components not in canonical order"
@@ -264,7 +268,7 @@ class TestStateFoldVerification:
     def test_failure_injection_digest_mismatch_detection(self):
         """Test that intentional data mutation is detected via digest mismatch."""
         # This simulates the scenario where ledger data is modified between runs
-        
+
         # Create baseline context
         context_baseline = ImporterRunContext()
         context_baseline.package_id = TEST_PACKAGE_ID
@@ -272,43 +276,44 @@ class TestStateFoldVerification:
         context_baseline.entities = [
             {"stable_id": "entity1", "provenance": {"file_hash": "baseline_entity_hash" + "0" * 46}}
         ]
-        
+
         baseline_digest = context_baseline.compute_state_digest()
-        
+
         # Create "corrupted" context (simulating modified ledger data)
         context_corrupted = ImporterRunContext()
         context_corrupted.package_id = TEST_PACKAGE_ID
         context_corrupted.manifest_hash = "baseline_hash" + "0" * 51  # Same manifest
         context_corrupted.entities = [
             {
-                "stable_id": "entity1", 
-                "provenance": {"file_hash": "corrupted_entity_hash" + "0" * 43}
+                "stable_id": "entity1",
+                "provenance": {"file_hash": "corrupted_entity_hash" + "0" * 43},
             }  # Different hash
         ]
-        
+
         corrupted_digest = context_corrupted.compute_state_digest()
-        
+
         # Digests should be different, indicating corruption detection
         assert baseline_digest != corrupted_digest
-        
+
         # In a real implementation, this would trigger an alert/error log
-        with patch('Adventorator.importer.emit_structured_log') as mock_log:
+        with patch("Adventorator.importer.emit_structured_log") as mock_log:
             # Simulate detecting mismatch during validation
             if baseline_digest != corrupted_digest:
                 from Adventorator.importer import emit_structured_log
+
                 emit_structured_log(
                     "state_digest_mismatch_detected",
                     expected=baseline_digest,
                     actual=corrupted_digest,
-                    package_id=TEST_PACKAGE_ID
+                    package_id=TEST_PACKAGE_ID,
                 )
-            
+
             # Verify error was logged
             mock_log.assert_called_with(
                 "state_digest_mismatch_detected",
                 expected=baseline_digest,
                 actual=corrupted_digest,
-                package_id=TEST_PACKAGE_ID
+                package_id=TEST_PACKAGE_ID,
             )
 
     def test_full_pipeline_replay_idempotency(self):
@@ -316,62 +321,72 @@ class TestStateFoldVerification:
         # This is the comprehensive replay integration test mentioned in the story
         fixture_root = Path("tests/fixtures/import/manifest/happy-path")
         fixture_path = fixture_root / "package.manifest.json"
-        
+
         if not fixture_path.exists():
             pytest.skip("Golden manifest fixture not available")
-        
+
         from Adventorator.importer import run_complete_import_pipeline
-        
+
         def run_full_import():
             """Run complete import pipeline using production code path."""
             return run_complete_import_pipeline(
-                fixture_root, 
-                features_importer=True, 
-                features_importer_embeddings=True
+                fixture_root, features_importer=True, features_importer_embeddings=True
             )
-        
+
         # First run
         result1 = run_full_import()
-        
+
         # Second run (replay)
         result2 = run_full_import()
-        
+
         # Assert identical state digests (idempotency)
         assert result1["finalization"]["state_digest"] == result2["finalization"]["state_digest"]
-        
+
         # Assert identical counts (no duplicates in second run)
         counts1 = result1["context"].summary_counts()
         counts2 = result2["context"].summary_counts()
         assert counts1 == counts2
-        
+
         # Assert completion events have same core data (deterministic payload)
         payload1 = result1["finalization"]["completion_event"]["payload"]
         payload2 = result2["finalization"]["completion_event"]["payload"]
-        
-        for field in ["package_id", "manifest_hash", "entity_count", "edge_count", 
-                     "tag_count", "affordance_count", "chunk_count", "state_digest"]:
+
+        for field in [
+            "package_id",
+            "manifest_hash",
+            "entity_count",
+            "edge_count",
+            "tag_count",
+            "affordance_count",
+            "chunk_count",
+            "state_digest",
+        ]:
             assert payload1[field] == payload2[field]
-        
+
         # Verify that in a real ledger scenario, the second run would produce
         # no new ledger events (this test simulates by checking event determinism)
         # The production pipeline properly manages ImportLog entries and sequence numbers
-        
+
         # Verify ImportLog entries are properly sequenced in both runs
         logs1 = result1["context"].import_log_entries
         logs2 = result2["context"].import_log_entries
-        
+
         # Both runs should have the same ImportLog structure
         assert len(logs1) == len(logs2)
-        
+
         # Verify sequence numbers are contiguous (no gaps)
-        sequences1 = [entry.get("sequence_no") for entry in logs1 if isinstance(entry.get("sequence_no"), int)]
-        sequences2 = [entry.get("sequence_no") for entry in logs2 if isinstance(entry.get("sequence_no"), int)]
-        
+        sequences1 = [
+            entry.get("sequence_no") for entry in logs1 if isinstance(entry.get("sequence_no"), int)
+        ]
+        sequences2 = [
+            entry.get("sequence_no") for entry in logs2 if isinstance(entry.get("sequence_no"), int)
+        ]
+
         if sequences1:
             sequences1.sort()
             expected_sequences = list(range(1, len(sequences1) + 1))
             assert sequences1 == expected_sequences, f"First run has sequence gaps: {sequences1}"
-            
+
         if sequences2:
             sequences2.sort()
             expected_sequences = list(range(1, len(sequences2) + 1))

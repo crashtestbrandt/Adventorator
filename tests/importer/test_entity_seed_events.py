@@ -193,9 +193,10 @@ class TestEntitySeedEvents:
             for filename in ["entity1.json", "entity2.json"]:
                 entity_file = entities_dir / filename
                 with open(entity_file, "w", encoding="utf-8") as f:
-                    # Use compact separators in json.dump to ensure that the JSON output is byte-for-byte identical
-                    # across files. This is necessary because hash-based duplicate detection relies on deterministic
-                    # output; any difference in whitespace or formatting would result in different hashes for otherwise
+                    # Use compact separators in json.dump to ensure that the JSON output is
+                    # byte-for-byte identical across files. This is necessary because hash-based
+                    # duplicate detection relies on deterministic output; any difference in
+                    # whitespace or formatting would result in different hashes for otherwise
                     # identical entities.
                     json.dump(entity_data, f, separators=(",", ":"))
 

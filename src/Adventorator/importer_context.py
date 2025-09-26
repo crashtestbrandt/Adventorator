@@ -21,8 +21,9 @@ golden fixture digest is asserted by
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from Adventorator.canonical_json import compute_canonical_hash
 
@@ -64,9 +65,7 @@ class ImporterRunContext:
     ontology_affordances: list[dict[str, Any]] = field(default_factory=list)
     lore_chunks: list[dict[str, Any]] = field(default_factory=list)
     _import_logs: list[dict[str, Any]] = field(default_factory=list)
-    _log_identities: set[tuple[str, str, str | None]] = field(
-        default_factory=set, init=False
-    )
+    _log_identities: set[tuple[str, str, str | None]] = field(default_factory=set, init=False)
     _sequence_counter: int = field(default=0, init=False)
 
     def next_sequence_number(self) -> int:
@@ -108,12 +107,15 @@ class ImporterRunContext:
             self.package_id = provenance.get("package_id")
 
         # Collect ImportLog entries from all entities, not just the first one
-        all_log_entries = []
+        all_log_entries: list[Mapping[str, Any]] = []
         for entity in self.entities:
             log_entries = entity.get("import_log_entries")
-            if isinstance(log_entries, Iterable):
-                all_log_entries.extend(log_entries)
-        
+            if not isinstance(log_entries, Iterable):
+                continue
+            for log_entry in log_entries:
+                if isinstance(log_entry, Mapping):
+                    all_log_entries.append(log_entry)
+
         if all_log_entries:
             self._merge_import_logs(all_log_entries)
 
@@ -124,11 +126,11 @@ class ImporterRunContext:
         if not self.edges:
             return
 
-        log_entries = [
-            edge.get("import_log_entry")
-            for edge in self.edges
-            if isinstance(edge.get("import_log_entry"), Mapping)
-        ]
+        log_entries: list[Mapping[str, Any]] = []
+        for edge in self.edges:
+            entry = edge.get("import_log_entry")
+            if isinstance(entry, Mapping):
+                log_entries.append(entry)
         self._merge_import_logs(log_entries)
 
     def record_ontology(
@@ -152,12 +154,15 @@ class ImporterRunContext:
             return
 
         # Collect ImportLog entries from all chunks, not just the first one
-        all_log_entries = []
+        all_log_entries: list[Mapping[str, Any]] = []
         for chunk in self.lore_chunks:
             log_entries = chunk.get("import_log_entries")
-            if isinstance(log_entries, Iterable):
-                all_log_entries.extend(log_entries)
-        
+            if not isinstance(log_entries, Iterable):
+                continue
+            for log_entry in log_entries:
+                if isinstance(log_entry, Mapping):
+                    all_log_entries.append(log_entry)
+
         if all_log_entries:
             self._merge_import_logs(all_log_entries)
 
@@ -264,9 +269,7 @@ class ImporterRunContext:
                     }
                 )
 
-        components.sort(
-            key=lambda item: (item["phase"], item["stable_id"], item["content_hash"])
-        )
+        components.sort(key=lambda item: (item["phase"], item["stable_id"], item["content_hash"]))
         return components
 
     def compute_state_digest(self) -> str:
@@ -276,9 +279,7 @@ class ImporterRunContext:
         digest_bytes = compute_canonical_hash(payload)
         return digest_bytes.hex()
 
-    def _merge_import_logs(
-        self, entries: Iterable[Mapping[str, Any]] | None
-    ) -> None:
+    def _merge_import_logs(self, entries: Iterable[Mapping[str, Any]] | None) -> None:
         if entries is None:
             return
         for entry in entries:
@@ -288,7 +289,7 @@ class ImporterRunContext:
             if identity in self._log_identities:
                 continue
             self._log_identities.add(identity)
-            
+
             # Create a copy and assign sequence number if not already set
             entry_dict = dict(entry)
             if "sequence_no" not in entry_dict or entry_dict["sequence_no"] is None:
@@ -299,9 +300,8 @@ class ImporterRunContext:
                 current_seq = entry_dict["sequence_no"]
                 if isinstance(current_seq, int) and current_seq > self._sequence_counter:
                     self._sequence_counter = current_seq
-            
+
             self._import_logs.append(entry_dict)
 
 
 __all__ = ["ImporterRunContext"]
-

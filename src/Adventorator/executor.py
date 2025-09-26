@@ -62,8 +62,12 @@ class ToolCallChain:
     steps: list[ToolStep] = field(default_factory=list)
     items: list[ToolCallItem] | None = None
     actor_id: str | None = None
+    plan_id: str | None = None
+    ruleset_version: str | None = None
 
     def __post_init__(self) -> None:
+        if self.plan_id is None:
+            self.plan_id = self.request_id
         if self.steps and self.items:
             raise ValueError(
                 "ToolCallChain cannot be constructed with both steps and items; "
@@ -117,6 +121,10 @@ async def execute_tool_call_chain(chain: ToolCallChain) -> Preview:
                             type=f"executor.{item.tool}",
                             payload=payload,
                             request_id=chain.request_id,
+                            plan_id=chain.plan_id,
+                            tool_name=item.tool,
+                            ruleset_version=chain.ruleset_version,
+                            idempotency_args=payload,
                         )
                     except Exception:
                         inc_counter("events.append.error")
@@ -737,13 +745,20 @@ class Executor:
                         if evs:
                             for ev in evs:
                                 try:
+                                    ev_payload = dict(ev.get("payload", {}))
+                                    ev_plan_id = ev.get("plan_id") or chain.plan_id
+                                    tool_for_idem = str(ev.get("tool_name", item.tool))
                                     await repos.append_event(
                                         s,
                                         scene_id=chain.scene_id,
                                         actor_id=chain.actor_id,
                                         type=str(ev.get("type", f"executor.{item.tool}")),
-                                        payload=dict(ev.get("payload", {})),
+                                        payload=ev_payload,
                                         request_id=chain.request_id,
+                                        plan_id=ev_plan_id,
+                                        tool_name=tool_for_idem,
+                                        ruleset_version=chain.ruleset_version,
+                                        idempotency_args=ev_payload,
                                     )
                                 except Exception:
                                     inc_counter("events.append.error")
@@ -758,6 +773,10 @@ class Executor:
                                     type=f"executor.{item.tool}",
                                     payload=payload,
                                     request_id=chain.request_id,
+                                    plan_id=chain.plan_id,
+                                    tool_name=item.tool,
+                                    ruleset_version=chain.ruleset_version,
+                                    idempotency_args=payload,
                                 )
                             except Exception:
                                 inc_counter("events.append.error")

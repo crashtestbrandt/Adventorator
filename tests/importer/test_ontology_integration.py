@@ -28,7 +28,9 @@ class TestOntologyIntegration:
                     "revision": "2025-02-21",
                     "provenance": {
                         "manifest_path": "packages/test/package.manifest.json",
-                        "sha256": "aaaa111111111111111111111111111111111111111111111111111111111111",
+                        "sha256": (
+                            "aaaa1111111111111111111111111111111111111111111111111111111111"
+                        ),
                     },
                 },
                 "tags": [

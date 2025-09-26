@@ -29,7 +29,9 @@ class TestOntologyIngestion:
                     "revision": "2025-02-21",
                     "provenance": {
                         "manifest_path": "packages/test/package.manifest.json",
-                        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                        "sha256": (
+                            "1111111111111111111111111111111111111111111111111111111111111111"
+                        ),
                     },
                 },
                 "tags": [

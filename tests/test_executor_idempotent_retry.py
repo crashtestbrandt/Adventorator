@@ -50,12 +50,13 @@ async def test_executor_idempotent_retry_same_request_id(db, monkeypatch):
         request_id="req-repeat",
         items=[ToolCallItem(tool="roll", mechanics="d20", narration="n")],
     )
-    # Execute twice with same request id expecting two sequential events.
-    # Current idempotency key includes replay_ordinal so duplicate request IDs
-    # do not collapse yet. This documents existing behavior (not collapsing)
-    # and sets a guard for future stricter idempotency policy changes.
+
+    reset_counters()
+
     await execute_tool_call_chain(chain1)
     await execute_tool_call_chain(chain2)
     evs = await repos.list_events(db, scene_id=scene.id)
-    assert len(evs) == 2
-    assert [e.replay_ordinal for e in evs] == [0, 1]
+
+    assert len(evs) == 1
+    assert [e.replay_ordinal for e in evs] == [0]
+    assert get_counter("events.idempotent_reuse") == 1
