@@ -63,26 +63,33 @@ See `contracts/events/seed/tag-registered.v1.json` and `affordance-registered.v1
 
 New ontology definitions should use the v1 schema format for package import integration.
 
-## Migration & Evolution Guidance (Draft)
+## Migration & Evolution Guidance
 
-This draft section is introduced by STORY-IPD-001E and will be finalized before story closure.
+Authoritative governance rules for evolving ontology definitions. All changes MUST follow this process.
 
 ### Versioning & Deprecation
-- Additive changes (new tags / affordances) are allowed without bumping schema version if they do not alter existing semantics.
-- Breaking changes (renaming `tag_id`, changing category, removing required fields) are not permitted; instead:
-  - Introduce a new tag/affordance with the updated meaning.
-  - Mark the old one as deprecated (future field: `deprecated: true`) and retain synonyms pointing to the canonical successor.
-- Synonyms list is additive; removals should be justified in a Migration Note.
+- Additive changes (new tags / affordances, extra synonyms, metadata descriptions) DO NOT require a schema version bump.
+- Breaking changes (renaming `tag_id`, altering category semantics, removing required fields) are DISALLOWED in-place:
+  - Create a new tag/affordance with the desired semantics.
+  - Mark the predecessor deprecated (once `deprecated` field is introduced) and add its slug to the successor's synonyms.
+- Synonyms are append-only; removal requires a documented Migration Note demonstrating harm in keeping it.
+- Future `deprecated: true` field (planned) will trigger:
+  - Validator warning if referenced by new affordances.
+  - Planner ignore unless explicitly configured for legacy support.
 
 ### Canonical Affordance Mapping
-- Tags intended for planner or ImprobabilityDrive actions SHOULD reference a `canonical_affordance` in metadata.
-- Multiple affordances invoking the same planner action should nominate one canonical and list others as aliases (planned enhancement).
+- Tags used in planner / ImprobabilityDrive flows SHOULD include `metadata.canonical_affordance` referencing an affordance id.
+- If multiple affordances drive the same planner intent, pick one canonical; others MAY later declare `aliases` (future enhancement).
+- Omit the canonical reference only if the tag is purely descriptive or passive.
 
 ### Change Proposal Workflow
-1. Open a PR updating ontology JSON plus this README's Migration Log.
-2. Run validator locally: `make quality-artifacts ARGS="--only-ontology"`.
-3. Capture the timing summary line for performance tracking.
-4. Add a Migration Note (template below) summarizing rationale and impact.
+1. Open a PR updating ontology JSON and append a Migration Log entry (see below).
+2. Run validator locally:
+  - `make quality-artifacts ARGS="--only-ontology"`
+3. Ensure no duplicate/conflict errors; if re-defining an existing id identically, confirm intent (idempotent).
+4. Capture timing summary for PR (performance traceability).
+5. Request review from Ontology/Contracts WG (at least one reviewer).
+6. Merge only after Migration Log entry is approved.
 
 ### Migration Note Template
 ```
@@ -96,7 +103,7 @@ Follow-up: <cleanup or removal date>
 ```
 
 ### Validator Usage
-Only ontology validation:
+Quick ontology-only validation:
 ```
 make quality-artifacts ARGS="--only-ontology"
 ```
@@ -104,13 +111,18 @@ Full gates:
 ```
 make quality-gates
 ```
-Example timing output:
+Example timing output (values illustrative):
 ```
 ontology.validate summary: files=3 items=120 avg_ms=4.12 p95_ms=6.30
 ```
 
 ### Planned Enhancements
-- Stable SHA-256 digest in conflict messages (replace Python hash())
-- Deprecation field with enforcement rules
+- Deprecation field with validator warning semantics
 - Aggregated ontology metrics (counts by category, deprecated ratio)
 - Migration Log auto-extraction script
+- Affordance alias support with canonical reference verification
+
+## Migration Log
+| Date | Change Type | Files | Summary | Impact | Backward Compatibility | Follow-up |
+|------|-------------|-------|---------|--------|------------------------|-----------|
+| 2025-09-26 | Add | `__synthetic_medium_benchmark.json` | Added synthetic benchmark collection for validator perf evidence | Validator perf tracking | Does not affect importer (test artifact) | Replace or remove before production release |

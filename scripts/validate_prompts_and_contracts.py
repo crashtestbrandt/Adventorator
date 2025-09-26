@@ -8,6 +8,7 @@ import json
 import re
 import sys
 import time
+import hashlib
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Tuple
@@ -218,8 +219,10 @@ def validate_ontology(only_contracts: bool = False) -> list[str]:
                 tag_source[tag_id] = file_path
             else:
                 if prev != canon:
+                    prev_digest = hashlib.sha256(prev.encode("utf-8")).hexdigest()[:12]
+                    new_digest = hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12]
                     errors.append(
-                        f"conflict tag_id '{tag_id}' between {tag_source[tag_id].name} and {file_path.name} (hashes {hash(prev)} != {hash(canon)})"
+                        f"conflict tag_id '{tag_id}' between {tag_source[tag_id].name} and {file_path.name} (sha256 {prev_digest} != {new_digest})"
                     )
         # Validate affordances
         for i, afford in enumerate(affords):
@@ -243,8 +246,10 @@ def validate_ontology(only_contracts: bool = False) -> list[str]:
                 afford_source[afford_id] = file_path
             else:
                 if prev != canon:
+                    prev_digest = hashlib.sha256(prev.encode("utf-8")).hexdigest()[:12]
+                    new_digest = hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12]
                     errors.append(
-                        f"conflict affordance_id '{afford_id}' between {afford_source[afford_id].name} and {file_path.name} (hashes {hash(prev)} != {hash(canon)})"
+                        f"conflict affordance_id '{afford_id}' between {afford_source[afford_id].name} and {file_path.name} (sha256 {prev_digest} != {new_digest})"
                     )
         elapsed = (time.perf_counter() - start) * 1000
         timings.append(elapsed)

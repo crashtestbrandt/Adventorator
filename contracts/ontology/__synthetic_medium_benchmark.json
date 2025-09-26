@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "tags": [
+    {"tag_id": "action.synthetic_001", "category": "action", "slug": "synthetic-001", "display_name": "Synthetic Action 001", "synonyms": ["syn001"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_002", "category": "action", "slug": "synthetic-002", "display_name": "Synthetic Action 002", "synonyms": ["syn002"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_003", "category": "action", "slug": "synthetic-003", "display_name": "Synthetic Action 003", "synonyms": ["syn003"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_004", "category": "action", "slug": "synthetic-004", "display_name": "Synthetic Action 004", "synonyms": ["syn004"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_005", "category": "action", "slug": "synthetic-005", "display_name": "Synthetic Action 005", "synonyms": ["syn005"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_006", "category": "action", "slug": "synthetic-006", "display_name": "Synthetic Action 006", "synonyms": ["syn006"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_007", "category": "action", "slug": "synthetic-007", "display_name": "Synthetic Action 007", "synonyms": ["syn007"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_008", "category": "action", "slug": "synthetic-008", "display_name": "Synthetic Action 008", "synonyms": ["syn008"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_009", "category": "action", "slug": "synthetic-009", "display_name": "Synthetic Action 009", "synonyms": ["syn009"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_010", "category": "action", "slug": "synthetic-010", "display_name": "Synthetic Action 010", "synonyms": ["syn010"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_011", "category": "action", "slug": "synthetic-011", "display_name": "Synthetic Action 011", "synonyms": ["syn011"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_012", "category": "action", "slug": "synthetic-012", "display_name": "Synthetic Action 012", "synonyms": ["syn012"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_013", "category": "action", "slug": "synthetic-013", "display_name": "Synthetic Action 013", "synonyms": ["syn013"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_014", "category": "action", "slug": "synthetic-014", "display_name": "Synthetic Action 014", "synonyms": ["syn014"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_015", "category": "action", "slug": "synthetic-015", "display_name": "Synthetic Action 015", "synonyms": ["syn015"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_016", "category": "action", "slug": "synthetic-016", "display_name": "Synthetic Action 016", "synonyms": ["syn016"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_017", "category": "action", "slug": "synthetic-017", "display_name": "Synthetic Action 017", "synonyms": ["syn017"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_018", "category": "action", "slug": "synthetic-018", "display_name": "Synthetic Action 018", "synonyms": ["syn018"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_019", "category": "action", "slug": "synthetic-019", "display_name": "Synthetic Action 019", "synonyms": ["syn019"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}},
+    {"tag_id": "action.synthetic_020", "category": "action", "slug": "synthetic-020", "display_name": "Synthetic Action 020", "synonyms": ["syn020"], "audience": ["player"], "gating": {"ruleset_version": "v1.0"}}
+  ],
+  "affordances": [
+    {"affordance_id": "affordance.combat.synthetic_001", "category": "combat", "slug": "aff-synthetic-001", "applies_to": ["tag:action.synthetic_001"], "gating": {"audience": "player", "ruleset_version": "v1.0"}},
+    {"affordance_id": "affordance.combat.synthetic_002", "category": "combat", "slug": "aff-synthetic-002", "applies_to": ["tag:action.synthetic_002"], "gating": {"audience": "player", "ruleset_version": "v1.0"}},
+    {"affordance_id": "affordance.combat.synthetic_003", "category": "combat", "slug": "aff-synthetic-003", "applies_to": ["tag:action.synthetic_003"], "gating": {"audience": "player", "ruleset_version": "v1.0"}},
+    {"affordance_id": "affordance.combat.synthetic_004", "category": "combat", "slug": "aff-synthetic-004", "applies_to": ["tag:action.synthetic_004"], "gating": {"audience": "player", "ruleset_version": "v1.0"}},
+    {"affordance_id": "affordance.combat.synthetic_005", "category": "combat", "slug": "aff-synthetic-005", "applies_to": ["tag:action.synthetic_005"], "gating": {"audience": "player", "ruleset_version": "v1.0"}}
+  ]
+}
