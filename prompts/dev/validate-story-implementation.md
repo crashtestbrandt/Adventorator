@@ -5,4 +5,4 @@ author: Brandt
 purpose: TODO
 ---
 
-Conduct a code-level analysis and validation of implementation progress against <STORY_ID>. 
+Conduct a detailed, systematic, code-level analysis and end-to-end validation of implementation progress against <AIDD_ITEM>
