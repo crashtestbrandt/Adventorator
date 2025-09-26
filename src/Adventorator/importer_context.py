@@ -67,6 +67,12 @@ class ImporterRunContext:
     _log_identities: set[tuple[str, str, str | None]] = field(
         default_factory=set, init=False
     )
+    _sequence_counter: int = field(default=0, init=False)
+
+    def next_sequence_number(self) -> int:
+        """Get the next sequence number for ImportLog entries."""
+        self._sequence_counter += 1
+        return self._sequence_counter
 
     def record_manifest(self, manifest_result: Mapping[str, Any]) -> None:
         """Record manifest metadata from the manifest phase.
@@ -101,9 +107,15 @@ class ImporterRunContext:
         if isinstance(provenance, Mapping) and not self.package_id:
             self.package_id = provenance.get("package_id")
 
-        log_entries = self.entities[0].get("import_log_entries")
-        if isinstance(log_entries, Iterable):
-            self._merge_import_logs(log_entries)
+        # Collect ImportLog entries from all entities, not just the first one
+        all_log_entries = []
+        for entity in self.entities:
+            log_entries = entity.get("import_log_entries")
+            if isinstance(log_entries, Iterable):
+                all_log_entries.extend(log_entries)
+        
+        if all_log_entries:
+            self._merge_import_logs(all_log_entries)
 
     def record_edges(self, edges: Iterable[Mapping[str, Any]]) -> None:
         """Store edge phase output and associated ImportLog entries."""
@@ -139,9 +151,15 @@ class ImporterRunContext:
         if not self.lore_chunks:
             return
 
-        log_entries = self.lore_chunks[0].get("import_log_entries")
-        if isinstance(log_entries, Iterable):
-            self._merge_import_logs(log_entries)
+        # Collect ImportLog entries from all chunks, not just the first one
+        all_log_entries = []
+        for chunk in self.lore_chunks:
+            log_entries = chunk.get("import_log_entries")
+            if isinstance(log_entries, Iterable):
+                all_log_entries.extend(log_entries)
+        
+        if all_log_entries:
+            self._merge_import_logs(all_log_entries)
 
     def summary_counts(self) -> dict[str, int]:
         """Return deterministic counts for each phase output."""
