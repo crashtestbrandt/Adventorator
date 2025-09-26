@@ -24,7 +24,7 @@ Adventorator organizes delivery using the AI-Driven Development (AIDD) pipeline.
 ### Manage Prompts, Contracts, and Evaluations
 - Store AI prompt updates in the [`prompts/`](./prompts) registry and follow the [versioning workflow](./prompts/README.md). Pair prompt changes with evaluation fixtures (for example the assets under [`prompts/evals/`](./prompts/evals/)) so quality gates can exercise them.
 - Capture API or schema deltas in [`contracts/`](./contracts) and document compatibility in the [contract workspace README](./contracts/README.md). Link Stories/Tasks to these artifacts for contract-first delivery.
-- When automation requires additional validation (e.g., ADR linting or prompt checks), use the scripts in [`scripts/`](./scripts) such as [`validate_prompts_and_contracts.py`](./scripts/validate_prompts_and_contracts.py).
+- When automation requires additional validation (e.g., ADR linting or prompt checks), use the scripts in [`scripts/`](./scripts) such as [`validate_contracts.py`](./scripts/validate_contracts.py).
 
 ### Satisfy Quality Gates
 - Pull requests should include the Story/Task references and quality results requested by [`.github/pull_request_template.md`](./.github/pull_request_template.md). Reviewers will block merges when gates are missing.

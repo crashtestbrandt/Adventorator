@@ -16,7 +16,7 @@ Validate and register an immutable campaign package manifest before any entity i
 
 ## Tasks
 - [ ] **TASK-CDA-IMPORT-MAN-01A — Contract authoring & review.** Draft `contracts/package/manifest.v1.json` covering required fields, numeric/string formats, and optional sections; hold review with ontology + persistence maintainers to confirm alignment with ARCH-CDA-001 data shapes.
-- [ ] **TASK-CDA-IMPORT-MAN-01B — Validator integration.** Extend `scripts/validate_prompts_and_contracts.py` (or sibling tooling) to include manifest schema validation, with failing samples demonstrating descriptive messaging; wire into CI quality gates.
+- [ ] **TASK-CDA-IMPORT-MAN-01B — Validator integration.** Extend `scripts/validate_contracts.py` (or sibling tooling) to include manifest schema validation, with failing samples demonstrating descriptive messaging; wire into CI quality gates.
 - [ ] **TASK-CDA-IMPORT-HASH-02A — Canonical serialization helper.** Implement manifest hashing utility reusing canonical JSON policy from ADR-0007; include unit tests for ordering, whitespace, and Unicode normalization edge cases.
 - [ ] **TASK-CDA-IMPORT-HASH-02B — Golden manifest fixtures.** Create positive and tampered manifest fixtures under `tests/fixtures/import/manifest/` to drive hashing + validation tests; include expected digest text files.
 - [ ] **TASK-CDA-IMPORT-SEED-03A — Synthetic event contract.** Define event schema (if absent) for `seed.manifest.validated` under `contracts/events/seed/` and add parity tests ensuring payload serialization matches schema.
@@ -35,7 +35,7 @@ Validate and register an immutable campaign package manifest before any entity i
 - Story documentation cross-links imported manifest schema in contracts README.
 
 ## Test Plan
-- **Contract tests:** Run `scripts/validate_prompts_and_contracts.py` against new manifest schema + fixtures (expected pass/fail recorded).
+- **Contract tests:** Run `scripts/validate_contracts.py` against new manifest schema + fixtures (expected pass/fail recorded).
 - **Unit tests:** Add `tests/importer/test_manifest_validation.py` covering success, missing field, mismatched hash, Unicode, idempotent re-run.
 - **Event emission tests:** Replay importer phase twice ensuring identical event_idempotency key and ImportLog entries (use database transaction fixtures).
 - **CLI integration tests:** (Optional) Add `pytest` invocation for manifest validation command to assert CLI exit codes and messaging.

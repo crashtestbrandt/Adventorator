@@ -2,6 +2,9 @@
 id: PROMPT-AIDD-DIVERGENCE
 version: 1
 author: Brandt
+model: local
+owner: aidd
+adr: docs/adr/ADR-0001-planner-routing.md
 purpose: Analyze local AIDD implementation vs upstream AIDD framework; classify deviations.
 ---
 
@@ -17,39 +20,39 @@ Perform a structured comparative analysis between this repository's AI-Driven De
 - Improbability Drive implementation guide: `docs/implementation/improbability-drive-implementation.md`
 - Action Validation epic & architecture linkage: `docs/implementation/epics/EPIC-AVA-001-action-validation-architecture.md`
 - Core architecture specs:
-  - `docs/architecture/ARCH-AVA-001-action-validation-architecture.md`
-  - `docs/architecture/ARCH-CDA-001-campaign-data-architecture.md`
+	- `docs/architecture/ARCH-AVA-001-action-validation-architecture.md`
+	- `docs/architecture/ARCH-CDA-001-campaign-data-architecture.md`
 - ADR Set (governance & mechanisms):
-  - `docs/adr/ADR-0001-planner-routing.md`
-  - `docs/adr/ADR-0002-orchestrator-defenses.md`
-  - `docs/adr/ADR-0003-executor-preview-apply.md`
-  - `docs/adr/ADR-0004-mcp-adapter-architecture.md`
-  - `docs/adr/ADR-0005-improbabilitydrive-contracts-and-flags.md`
-  - `docs/adr/ADR-0006-event-envelope-and-hash-chain.md`
-  - `docs/adr/ADR-0007-canonical-json-numeric-policy.md`
-  - `docs/adr/ADR-0008-rng-streams-seed-derivation.md`
-  - `docs/adr/ADR-0009-capability-approval-enforcement.md`
-  - `docs/adr/ADR-0010-snapshot-fork-lineage.md`
-  - `docs/adr/ADR-0011-package-import-provenance.md`
-  - `docs/adr/ADR-0012-event-versioning-migration-protocol.md`
-  - Template: `docs/adr/ADR-TEMPLATE.md`
+	- `docs/adr/ADR-0001-planner-routing.md`
+	- `docs/adr/ADR-0002-orchestrator-defenses.md`
+	- `docs/adr/ADR-0003-executor-preview-apply.md`
+	- `docs/adr/ADR-0004-mcp-adapter-architecture.md`
+	- `docs/adr/ADR-0005-improbabilitydrive-contracts-and-flags.md`
+	- `docs/adr/ADR-0006-event-envelope-and-hash-chain.md`
+	- `docs/adr/ADR-0007-canonical-json-numeric-policy.md`
+	- `docs/adr/ADR-0008-rng-streams-seed-derivation.md`
+	- `docs/adr/ADR-0009-capability-approval-enforcement.md`
+	- `docs/adr/ADR-0010-snapshot-fork-lineage.md`
+	- `docs/adr/ADR-0011-package-import-provenance.md`
+	- `docs/adr/ADR-0012-event-versioning-migration-protocol.md`
+	- Template: `docs/adr/ADR-TEMPLATE.md`
 - Epic documents (sample):
-  - `docs/implementation/epics/EPIC-IPD-001-improbability-drive.md`
-  - `docs/implementation/epics/EPIC-CDA-CORE-001-deterministic-event-substrate.md`
-  - `docs/implementation/epics/EPIC-CDA-IMPORT-002-package-import-and-provenance.md`
-  - `docs/implementation/epics/EPIC-ACTLOG-001-activitylog-mechanics-ledger.md`
+	- `docs/implementation/epics/EPIC-IPD-001-improbability-drive.md`
+	- `docs/implementation/epics/EPIC-CDA-CORE-001-deterministic-event-substrate.md`
+	- `docs/implementation/epics/EPIC-CDA-IMPORT-002-package-import-and-provenance.md`
+	- `docs/implementation/epics/EPIC-ACTLOG-001-activitylog-mechanics-ledger.md`
 - Story documents (sample set):
-  - `docs/implementation/stories/STORY-IPD-001A-contracts-and-flags.md` … through `STORY-IPD-001I-operational-rollout.md`
+	- `docs/implementation/stories/STORY-IPD-001A-contracts-and-flags.md` … through `STORY-IPD-001I-operational-rollout.md`
 - Governance / traceability automation scripts:
-  - `scripts/adr_lint.py`
-  - `scripts/update_action_validation_traceability.py`
-  - `scripts/validate_contracts.py`
- - Contract validation integration via `scripts/validate_contracts.py`
+	- `scripts/adr_lint.py`
+	- `scripts/update_action_validation_traceability.py`
+	- `scripts/validate_contracts.py`
+- Contract validation integration via `scripts/validate_contracts.py`
 - Local directory structures (derive during run):
-  - `docs/adr/*`
-  - `docs/architecture/*`
-  - `docs/implementation/{epics,stories}/*`
-  - `scripts/*.py` (governance-related subset above)
+	- `docs/adr/*`
+	- `docs/architecture/*`
+	- `docs/implementation/{epics,stories}/*`
+	- `scripts/*.py` (governance-related subset above)
 - CI / Quality references (status, guardrails) as presented in root `README.md`
 - Naming conventions & ID taxonomy (EPIC-*, STORY-*, ADR-*) implied by filenames and enforced by linting scripts
 
@@ -63,21 +66,21 @@ Fetch (read-only) from upstream AIDD repo:
 
 ## Methodology (Agent MUST Follow)
 1. Inventory Collection
-   - Load local artifacts (list + short purpose notes)
-   - Load upstream artifacts
+	 - Load local artifacts (list + short purpose notes)
+	 - Load upstream artifacts
 2. Concept Extraction
-   - Principles, lifecycle stages, artifact types, naming patterns, automation hooks, quality gates
+	 - Principles, lifecycle stages, artifact types, naming patterns, automation hooks, quality gates
 3. Mapping Matrix Construction
-   - For each concept dimension: classify relation (aligned | extended | diverged | novel | missing-local)
+	 - For each concept dimension: classify relation (aligned | extended | diverged | novel | missing-local)
 4. Deviation Classification
-   - Heuristics:
-     - Generalizable & low coupling → Candidate Upstream (Cat 1)
-     - Domain/branding/runtime-specific coupling → Project-Specific (Cat 2)
-     - Redundant/conflicting with upstream principle → Misalignment (Cat 3)
+	 - Heuristics:
+		 - Generalizable & low coupling → Candidate Upstream (Cat 1)
+		 - Domain/branding/runtime-specific coupling → Project-Specific (Cat 2)
+		 - Redundant/conflicting with upstream principle → Misalignment (Cat 3)
 5. Impact Assessment
-   - Cat 1: value (High/Med/Low), adoption friction, suggested upstream description
-   - Cat 2: rationale, dependency summary
-   - Cat 3: remediation steps & expected benefit
+	 - Cat 1: value (High/Med/Low), adoption friction, suggested upstream description
+	 - Cat 2: rationale, dependency summary
+	 - Cat 3: remediation steps & expected benefit
 6. Risk & Opportunity Summary
 7. Actionable Recommendations & Sequenced Roadmap
 8. Produce structured outputs (Markdown ONLY; no JSON payload)
@@ -97,9 +100,9 @@ Fetch (read-only) from upstream AIDD repo:
 1. Inventory Table: `Scope (local|upstream) | Path | Type | Summary`
 2. Mapping Matrix: `Dimension | Concept | Local | Upstream | Relationship | Notes`
 3. Category Tables:
-   - Candidate Upstream: `Concept | Justification | Value (H/M/L) | Adoption Friction (L/M/H) | Suggested Change`
-   - Project-Specific: `Concept | Rationale | Key Dependencies | Risk If Upstreamed`
-   - Misalignments: `Concept | Issue | Remediation | Benefit`
+	 - Candidate Upstream: `Concept | Justification | Value (H/M/L) | Adoption Friction (L/M/H) | Suggested Change`
+	 - Project-Specific: `Concept | Rationale | Key Dependencies | Risk If Upstreamed`
+	 - Misalignments: `Concept | Issue | Remediation | Benefit`
 4. Summary Metrics: `Metric | Count/Value`
 5. Recommendations: `# | Action | Category | Priority (H/M/L) | ETA | Owner (placeholder)`
 

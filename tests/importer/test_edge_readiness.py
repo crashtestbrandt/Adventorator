@@ -8,7 +8,7 @@ from pathlib import Path
 from Adventorator.importer import EntityPhase
 
 FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "fixtures" / "import" / "edge_package"
-TAXONOMY_PATH = Path("contracts/edges/edge-type-taxonomy.json")
+TAXONOMY_PATH = Path("contracts/edges/edge-type-taxonomy-v1.json")
 
 
 def load_manifest() -> dict:

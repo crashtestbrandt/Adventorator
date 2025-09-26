@@ -23,16 +23,16 @@ class TestFinalizationPhase:
         phase = FinalizationPhase(features_importer_enabled=False)
         context = ImporterRunContext()
         start_time = datetime.now(timezone.utc)
-        
+
         result = phase.finalize_import(context, start_time)
-        
+
         assert result["skipped"] is True
 
     def test_finalization_creates_completion_event(self):
         """Test that finalization creates proper completion event."""
         phase = FinalizationPhase(features_importer_enabled=True)
         context = ImporterRunContext()
-        
+
         # Set up context with test data
         context.package_id = TEST_PACKAGE_ID
         context.manifest_hash = TEST_MANIFEST_HASH
@@ -43,18 +43,18 @@ class TestFinalizationPhase:
         context.lore_chunks = [{"chunk_id": "chunk1", "content": "Test content"}]
 
         start_time = datetime.now(timezone.utc)
-        
-        with patch('Adventorator.importer.datetime') as mock_datetime:
+
+        with patch("Adventorator.importer.datetime") as mock_datetime:
             mock_now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
             mock_datetime.now.return_value = mock_now
             mock_datetime.fromtimestamp = datetime.fromtimestamp
-            
+
             result = phase.finalize_import(context, start_time)
-        
+
         # Verify completion event structure
         completion_event = result["completion_event"]
         assert completion_event["event_type"] == "seed.import.complete"
-        
+
         payload = completion_event["payload"]
         assert payload["package_id"] == TEST_PACKAGE_ID
         assert payload["manifest_hash"] == TEST_MANIFEST_HASH
@@ -71,7 +71,7 @@ class TestFinalizationPhase:
         """Test ImportLog summary entry creation."""
         phase = FinalizationPhase(features_importer_enabled=True)
         context = ImporterRunContext()
-        
+
         # Set up context with ImportLog entries
         context.package_id = TEST_PACKAGE_ID
         context.manifest_hash = TEST_MANIFEST_HASH
@@ -80,10 +80,10 @@ class TestFinalizationPhase:
             {"phase": "entity", "sequence_no": 2, "stable_id": "entity1"},
             {"phase": "edge", "sequence_no": 3, "stable_id": "edge1"},
         ]
-        
+
         start_time = datetime.now(timezone.utc)
         result = phase.finalize_import(context, start_time)
-        
+
         # Verify ImportLog summary
         summary = result["import_log_summary"]
         assert summary["phase"] == "finalization"
@@ -99,22 +99,22 @@ class TestFinalizationPhase:
         """Test that state digest is computed consistently."""
         phase = FinalizationPhase(features_importer_enabled=True)
         context = ImporterRunContext()
-        
+
         # Set up identical context twice
         for _ in range(2):
             context.package_id = TEST_PACKAGE_ID
             context.manifest_hash = TEST_MANIFEST_HASH
-            
+
             start_time = datetime.now(timezone.utc)
             result1 = phase.finalize_import(context, start_time)
-            
+
             # Reset and compute again
             context = ImporterRunContext()
             context.package_id = TEST_PACKAGE_ID
             context.manifest_hash = TEST_MANIFEST_HASH
-            
+
             result2 = phase.finalize_import(context, start_time)
-            
+
             # State digests should be identical for identical inputs
             assert result1["state_digest"] == result2["state_digest"]
 
@@ -122,7 +122,7 @@ class TestFinalizationPhase:
         """Test detection and enforcement of sequence number gaps in ImportLog."""
         phase = FinalizationPhase(features_importer_enabled=True)
         context = ImporterRunContext()
-        
+
         # Set up context with gap in sequence numbers
         context.package_id = TEST_PACKAGE_ID
         context.manifest_hash = TEST_MANIFEST_HASH
@@ -131,20 +131,23 @@ class TestFinalizationPhase:
             {"phase": "entity", "sequence_no": 3, "stable_id": "entity1"},  # Gap: missing 2
             {"phase": "edge", "sequence_no": 4, "stable_id": "edge1"},
         ]
-        
+
         # Import the ImporterError for the test
         from Adventorator.importer import ImporterError
-        
-        with patch('Adventorator.importer.emit_structured_log') as mock_log:
+
+        with patch("Adventorator.importer.emit_structured_log") as mock_log:
             start_time = datetime.now(timezone.utc)
-            
+
             # Should raise ImporterError due to sequence gap
             with pytest.raises(ImporterError, match="ImportLog sequence gaps detected"):
                 phase.finalize_import(context, start_time)
-            
+
             # Verify gap detection was also logged
-            gap_logs = [call for call in mock_log.call_args_list 
-                       if call[0][0] == "import_log_sequence_gap_detected"]
+            gap_logs = [
+                call
+                for call in mock_log.call_args_list
+                if call[0][0] == "import_log_sequence_gap_detected"
+            ]
             assert len(gap_logs) == 1
 
     @pytest.mark.asyncio
@@ -154,22 +157,23 @@ class TestFinalizationPhase:
         context = ImporterRunContext()
         context.package_id = TEST_PACKAGE_ID
         context.manifest_hash = TEST_MANIFEST_HASH
-        
+
         # Use a fixed start time to control duration
         start_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        
-        with patch('Adventorator.importer.datetime') as mock_datetime, \
-             patch('Adventorator.importer.observe_histogram') as mock_histogram:
-            
+
+        with (
+            patch("Adventorator.importer.datetime") as mock_datetime,
+            patch("Adventorator.importer.observe_histogram") as mock_histogram,
+        ):
             end_time = datetime(2024, 1, 1, 12, 0, 1, tzinfo=timezone.utc)  # 1 second later
             mock_datetime.now.return_value = end_time
-            
+
             result = phase.finalize_import(context, start_time)
-            
+
             # Verify duration calculation
             expected_duration = 1000  # 1 second = 1000ms
             assert result["duration_ms"] == expected_duration
-            
+
             # Verify histogram metric was recorded
             mock_histogram.assert_called_once_with("importer.duration_ms", expected_duration)
 
@@ -180,20 +184,18 @@ class TestProductionIntegration:
     def test_complete_pipeline_integration(self):
         """Test the complete pipeline integration via production call site."""
         from Adventorator.importer import run_complete_import_pipeline
-        
+
         # Verify the production call site exists and is importable
         assert callable(run_complete_import_pipeline)
-        
+
         # Test with golden fixture if available
         fixture_root = Path("tests/fixtures/import/manifest/happy-path")
         if fixture_root.exists() and (fixture_root / "package.manifest.json").exists():
             try:
                 result = run_complete_import_pipeline(
-                    fixture_root, 
-                    features_importer=True, 
-                    features_importer_embeddings=False
+                    fixture_root, features_importer=True, features_importer_embeddings=False
                 )
-                
+
                 # Verify result structure
                 assert "manifest_result" in result
                 assert "entities" in result
@@ -203,23 +205,23 @@ class TestProductionIntegration:
                 assert "chunks" in result
                 assert "finalization" in result
                 assert "context" in result
-                
+
                 # Verify finalization result
                 finalization = result["finalization"]
                 assert "completion_event" in finalization
                 assert "state_digest" in finalization
                 assert "duration_ms" in finalization
-                
+
                 # Verify completion event structure
                 completion_event = finalization["completion_event"]
                 assert completion_event["event_type"] == "seed.import.complete"
                 assert "payload" in completion_event
-                
+
                 payload = completion_event["payload"]
                 assert "package_id" in payload
                 assert "state_digest" in payload
                 assert isinstance(payload["import_duration_ms"], int)
-                
+
             except Exception as e:
                 # If the integration fails due to fixture issues, that's acceptable
                 # since the main goal is verifying the interface exists
@@ -236,39 +238,46 @@ class TestFinalizationContractValidation:
         # Load the schema
         schema_path = Path("contracts/events/seed/import-complete.v1.json")
         assert schema_path.exists(), "Contract schema must exist"
-        
+
         with open(schema_path, encoding="utf-8") as f:
             schema = json.load(f)
-        
+
         # Create a completion event
         phase = FinalizationPhase(features_importer_enabled=True)
         context = ImporterRunContext()
         context.package_id = TEST_PACKAGE_ID
         context.manifest_hash = TEST_MANIFEST_HASH
-        
+
         start_time = datetime.now(timezone.utc)
         result = phase.finalize_import(context, start_time)
-        
+
         payload = result["completion_event"]["payload"]
-        
+
         # Validate against schema
         try:
             import jsonschema
+
             jsonschema.validate(payload, schema)
         except ImportError:
             # If jsonschema is not available, do basic validation
             required_fields = [
-                "package_id", "manifest_hash", "entity_count", "edge_count",
-                "tag_count", "affordance_count", "chunk_count", "state_digest",
-                "import_duration_ms"
+                "package_id",
+                "manifest_hash",
+                "entity_count",
+                "edge_count",
+                "tag_count",
+                "affordance_count",
+                "chunk_count",
+                "state_digest",
+                "import_duration_ms",
             ]
             for field in required_fields:
                 assert field in payload, f"Required field {field} missing"
-                
+
             # Check types and patterns
             assert isinstance(payload["package_id"], str)
             assert len(payload["package_id"]) == 26  # ULID length
-            assert isinstance(payload["manifest_hash"], str) 
+            assert isinstance(payload["manifest_hash"], str)
             assert len(payload["manifest_hash"]) == 64  # SHA-256 hex length
             assert isinstance(payload["state_digest"], str)
             assert len(payload["state_digest"]) == 64  # SHA-256 hex length

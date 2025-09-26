@@ -13,7 +13,7 @@ This document collates the readiness artifacts required by the Definition of Rea
 ## Edge type taxonomy
 - Approved edge types and their required attributes are documented in
   [`edge-type-taxonomy.md`](./edge-type-taxonomy.md) with a machine-readable source of truth in
-  [`contracts/edges/edge-type-taxonomy.json`](../../../contracts/edges/edge-type-taxonomy.json).
+  [`contracts/edges/edge-type-taxonomy-v1.json`](../../../contracts/edges/edge-type-taxonomy-v1.json).
 - The readiness test asserts that every fixture edge conforms to this taxonomy and that edge types requiring temporal validity
   include a populated `validity` block.
 

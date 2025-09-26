@@ -108,7 +108,7 @@ Validation Steps (include at end of output):
 2. Ensure CHANGELOG.md updated for user-visible behavior doc changes.
 3. If ADR status transitions, append supersedes/obsoletes references in both ADR files.
 4. Confirm all new cross-links resolve.
-5. Run validate_prompts_and_contracts.py if touching prompts or contracts.
+5. Run scripts/validate_contracts.py if touching contracts.
 
 Style & Tone for Replacements:
 - Present tense, active voice, reproducible phrasing (avoid “should maybe”).

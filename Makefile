@@ -79,7 +79,7 @@ security:
 	. .venv/bin/activate && bandit -q -r src -ll
 
 quality-artifacts:
-	. .venv/bin/activate && python scripts/validate_prompts_and_contracts.py
+	. .venv/bin/activate && python scripts/validate_contracts.py
 
 ai-evals:
 	. .venv/bin/activate && python scripts/run_ai_evals.py

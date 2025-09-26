@@ -588,7 +588,7 @@ Adventorator now follows the AI-Driven Development (AIDD) pipeline that anchors 
 
 ### Quality Gates for Humans and AI Assistants
 - Run `make quality-gates` locally to exercise coverage, mutation, security, artifact validation, and AI evaluation checks before opening a PR. CI mirrors these gates through [`tests.yml`](./.github/workflows/tests.yml) and [`pr-quality-gates.yml`](./.github/workflows/pr-quality-gates.yml).
-- When updating prompts or contracts, accompany the change with the relevant validation scripts (see [`scripts/validate_prompts_and_contracts.py`](./scripts/validate_prompts_and_contracts.py)) and note results in the PR template.
+- When updating contracts, accompany the change with the relevant validation script (see [`scripts/validate_contracts.py`](./scripts/validate_contracts.py)) and note results in the PR template.
 - Ensure DoR/DoD checklists remain satisfied throughout delivery; blockers should be captured in the linked issue templates for asynchronous hand-offs between humans and agents.
 
 -----

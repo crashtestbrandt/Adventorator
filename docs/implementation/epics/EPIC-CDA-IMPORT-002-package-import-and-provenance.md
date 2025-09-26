@@ -46,9 +46,9 @@ Implementation plan: [STORY-CDA-IMPORT-002A — Manifest validation & package_id
   - Invalid schema_version or missing file hash fails with descriptive error.
   - Event payload includes canonical subset: `{package_id, manifest_hash, schema_version, ruleset_version}`.
 - **Tasks.**
-  - [ ] `TASK-CDA-IMPORT-MAN-01` — Manifest schema + validator.
-  - [ ] `TASK-CDA-IMPORT-HASH-02` — Manifest hashing + test.
-  - [ ] `TASK-CDA-IMPORT-SEED-03` — Emit `seed.manifest.validated` event.
+  - [x] `TASK-CDA-IMPORT-MAN-01` — Manifest schema + validator.
+  - [x] `TASK-CDA-IMPORT-HASH-02` — Manifest hashing + test.
+  - [x] `TASK-CDA-IMPORT-SEED-03` — Emit `seed.manifest.validated` event.
 - **DoR.**
   - Manifest fields list stabilized (ADR alignment).
 - **DoD.**
@@ -65,9 +65,9 @@ Implementation plan: [STORY-CDA-IMPORT-002B — Entity ingestion & synthetic eve
   - Payload includes: `stable_id, kind, name, tags[], affordances[], provenance{package_id, source_path, file_hash}`.
   - Collision (same stable_id different hash) aborts phase; identical hash skip counts toward idempotency metric.
 - **Tasks.**
-  - [ ] `TASK-CDA-IMPORT-ENT-04` — Entity parser & validation.
-  - [ ] `TASK-CDA-IMPORT-PROV-05` — Provenance capture & ImportLog entries.
-  - [ ] `TASK-CDA-IMPORT-SEED-06` — Emit entity seed events + ordering test.
+  - [x] `TASK-CDA-IMPORT-ENT-04` — Entity parser & validation.
+  - [x] `TASK-CDA-IMPORT-PROV-05` — Provenance capture & ImportLog entries.
+  - [x] `TASK-CDA-IMPORT-SEED-06` — Emit entity seed events + ordering test.
 - **DoR.**
   - Entity file schema agreed & documented.
 - **DoD.**
@@ -84,9 +84,9 @@ Implementation plan: [STORY-CDA-IMPORT-002C — Edge ingestion & temporal validi
   - Payload includes `stable_id, type, src_ref, dst_ref, provenance{...}`.
   - ImportLog entries reflect edges with phase tagging.
 - **Tasks.**
-  - [ ] `TASK-CDA-IMPORT-EDGE-07` — Edge parser & referential validation.
-  - [ ] `TASK-CDA-IMPORT-SEED-08` — Emit edge seed events.
-  - [ ] `TASK-CDA-IMPORT-LOG-09` — ImportLog persistence test.
+  - [x] `TASK-CDA-IMPORT-EDGE-07` — Edge parser & referential validation.
+  - [x] `TASK-CDA-IMPORT-SEED-08` — Emit edge seed events.
+  - [x] `TASK-CDA-IMPORT-LOG-09` — ImportLog persistence test.
 - **DoR.**
   - Edge file schema stable.
 - **DoD.**
@@ -103,9 +103,9 @@ Implementation plan: [STORY-CDA-IMPORT-002D — Ontology (tags & affordances) re
   - Payload: `tag_id, category, version, provenance{...}`.
   - Metrics: `importer.tags.registered` increments per unique registration.
 - **Tasks.**
-  - [ ] `TASK-CDA-IMPORT-ONTO-10` — Ontology parser & validation.
-  - [ ] `TASK-CDA-IMPORT-SEED-11` — Emit tag seed events.
-  - [ ] `TASK-CDA-IMPORT-METRIC-12` — Metrics & tests.
+  - [x] `TASK-CDA-IMPORT-ONTO-10` — Ontology parser & validation.
+  - [x] `TASK-CDA-IMPORT-SEED-11` — Emit tag seed events.
+  - [x] `TASK-CDA-IMPORT-METRIC-12` — Metrics & tests.
 - **DoR.**
   - Ontology schema accepted.
 - **DoD.**
@@ -122,9 +122,9 @@ Implementation plan: [STORY-CDA-IMPORT-002E — Lore content chunking & ingestio
   - Payload includes `chunk_id, title, audience, tags[], source_path, content_hash`.
   - Deterministic chunk ordering test ensures stable event sequence.
 - **Tasks.**
-  - [ ] `TASK-CDA-IMPORT-CHUNK-13` — Chunker implementation & hash.
-  - [ ] `TASK-CDA-IMPORT-SEED-14` — Emit content chunk seed events.
-  - [ ] `TASK-CDA-IMPORT-AUD-15` — Audience enforcement tests.
+  - [x] `TASK-CDA-IMPORT-CHUNK-13` — Chunker implementation & hash.
+  - [x] `TASK-CDA-IMPORT-SEED-14` — Emit content chunk seed events.
+  - [x] `TASK-CDA-IMPORT-AUD-15` — Audience enforcement tests.
 - **DoR.**
   - Front-matter schema frozen.
 - **DoD.**
@@ -141,9 +141,9 @@ Implementation plan: [STORY-CDA-IMPORT-002F — Finalization & ImportLog consoli
   - Post-import fold produces deterministic `state_digest`; stored for downstream snapshot reference.
   - Metric `importer.duration_ms` recorded (start → finalize).
 - **Tasks.**
-  - [ ] `TASK-CDA-IMPORT-SUM-16` — Import completion event & counts.
-  - [ ] `TASK-CDA-IMPORT-FOLD-17` — Fold & state_digest verification test.
-  - [ ] `TASK-CDA-IMPORT-METRIC-18` — Duration metric + structured log.
+  - [x] `TASK-CDA-IMPORT-SUM-16` — Import completion event & counts.
+  - [x] `TASK-CDA-IMPORT-FOLD-17` — Fold & state_digest verification test.
+  - [x] `TASK-CDA-IMPORT-METRIC-18` — Duration metric + structured log.
 - **DoR.**
   - Digest computation helper available (or stub planned in CORE epic).
 - **DoD.**
@@ -160,9 +160,9 @@ Implementation plan: [STORY-CDA-IMPORT-002G — Idempotent re-run & rollback tes
   - Simulated failure mid-phase (entity collision) rolls back transaction; no partial events persisted.
   - Metrics include `importer.idempotent` counter.
 - **Tasks.**
-  - [ ] `TASK-CDA-IMPORT-RERUN-19` — Re-run test & assertion.
-  - [ ] `TASK-CDA-IMPORT-FAIL-20` — Failure injection harness.
-  - [ ] `TASK-CDA-IMPORT-METRIC-21` — Idempotent metric registration.
+  - [x] `TASK-CDA-IMPORT-RERUN-19` — Re-run test & assertion.
+  - [x] `TASK-CDA-IMPORT-FAIL-20` — Failure injection harness.
+  - [x] `TASK-CDA-IMPORT-METRIC-21` — Idempotent metric registration.
 - **DoR.**
   - Failure cases enumerated (collision, missing dependency file, invalid YAML/JSON).
 - **DoD.**

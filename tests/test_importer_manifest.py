@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from Adventorator import models
+from Adventorator.db import session_scope
 from Adventorator.importer import (
     ImporterError,
     ManifestPhase,
@@ -79,8 +81,9 @@ class TestManifestPhase:
         with pytest.raises(ImporterError, match="Manifest validation failed"):
             phase.validate_and_register(manifest_path)
 
-    def test_emit_seed_event(self):
-        """Test synthetic event emission."""
+    @pytest.mark.asyncio
+    async def test_emit_seed_event(self):
+        """Test synthetic event emission persists to the ledger."""
         phase = ManifestPhase(features_importer_enabled=True)
 
         event_payload = {
@@ -90,14 +93,17 @@ class TestManifestPhase:
             "ruleset_version": "1.2.3",
         }
 
-        event_envelope = phase.emit_seed_event(event_payload)
+        campaign_id = 9001
+        async with session_scope() as session:
+            session.add(models.Campaign(id=campaign_id, name="Test Campaign"))
+            await session.flush()
+            event = await phase.emit_seed_event(session, campaign_id, event_payload)
 
-        assert event_envelope["event_type"] == "seed.manifest.validated"
-        assert event_envelope["payload"] == event_payload
-        assert "timestamp" in event_envelope
-        # replay_ordinal and idempotency_key are None in placeholder implementation
-        assert event_envelope["replay_ordinal"] is None
-        assert event_envelope["idempotency_key"] is None
+        assert event.type == "seed.manifest.validated"
+        assert event.payload == event_payload
+        assert event.campaign_id == campaign_id
+        assert event.replay_ordinal >= 0
+        assert len(event.idempotency_key) == 16
 
     def test_nonexistent_manifest_file(self):
         """Test handling of nonexistent manifest file."""
@@ -161,7 +167,8 @@ class TestEventPayloadValidation:
 class TestIntegrationFlow:
     """Test complete manifest phase integration."""
 
-    def test_complete_manifest_validation_flow(self):
+    @pytest.mark.asyncio
+    async def test_complete_manifest_validation_flow(self):
         """Test complete flow from validation to event emission."""
         phase = ManifestPhase(features_importer_enabled=True)
         manifest_path = Path("tests/fixtures/import/manifest/happy-path/package.manifest.json")
@@ -173,12 +180,16 @@ class TestIntegrationFlow:
         validate_event_payload_schema(result["event_payload"])
 
         # Step 3: Emit synthetic event
-        event_envelope = phase.emit_seed_event(result["event_payload"])
+        campaign_id = 9002
+        async with session_scope() as session:
+            session.add(models.Campaign(id=campaign_id, name="Validation Flow"))
+            await session.flush()
+            event = await phase.emit_seed_event(session, campaign_id, result["event_payload"])
 
         # Verify complete flow
-        assert event_envelope["event_type"] == "seed.manifest.validated"
-        assert event_envelope["payload"]["package_id"] == result["manifest"]["package_id"]
-        assert event_envelope["payload"]["manifest_hash"] == result["manifest_hash"]
+        assert event.type == "seed.manifest.validated"
+        assert event.payload["package_id"] == result["manifest"]["package_id"]
+        assert event.payload["manifest_hash"] == result["manifest_hash"]
 
     def test_deterministic_replay_same_manifest(self):
         """Test that same manifest produces same hash for replay determinism."""

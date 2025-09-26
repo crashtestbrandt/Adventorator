@@ -1,0 +1,33 @@
+{
+  "$id": "https://adventorator/contracts/edges/edge-type-taxonomy-v1.json",
+  "title": "Edge Type Taxonomy v1",
+  "description": "Machine-readable mapping of edge types to required/optional attributes and validity policy.",
+  "npc.resides_in.location": {
+    "description": "NPC lives or is stationed at a specific location.",
+    "required_attributes": [
+      "relationship_context"
+    ],
+    "optional_attributes": [
+      "duty_schedule"
+    ],
+    "validity_required": false
+  },
+  "organization.controls.location": {
+    "description": "Organization exerts operational control over a location.",
+    "required_attributes": [
+      "charter_clause",
+      "oversight"
+    ],
+    "optional_attributes": [],
+    "validity_required": true
+  },
+  "adjacent_to": {
+    "description": "Spatial adjacency between two stable IDs.",
+    "required_attributes": [],
+    "optional_attributes": [
+      "distance",
+      "connection_type"
+    ],
+    "validity_required": false
+  }
+}
