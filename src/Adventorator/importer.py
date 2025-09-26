@@ -1745,13 +1745,11 @@ class FinalizationPhase:
                     actual=sequences,
                     package_id=context.package_id,
                 )
-                # Enforce contiguity requirement - raise error for gaps
-                missing_sequences = set(expected_sequences) - set(sequences)
-                if missing_sequences:
-                    raise ImporterError(
-                        f"ImportLog sequence gaps detected in package {context.package_id}: "
-                        f"missing sequences {sorted(missing_sequences)}"
-                    )
+                # Enforce contiguity requirement - raise error for any sequence mismatch
+                raise ImporterError(
+                    f"ImportLog sequence mismatch detected in package {context.package_id}: "
+                    f"expected {expected_sequences}, actual {sequences}"
+                )
         
         summary_entry = {
             "phase": "finalization",
