@@ -90,8 +90,175 @@ quality-gates: coverage mutation-guard security quality-artifacts ai-evals
 expire-pending:
 	. .venv/bin/activate && python -m Adventorator.scripts.expire_pending
 
-clean:
+# -------------- CLEANING & RESET --------------
+.PHONY: clean clean-local clean-build clean-pyc clean-venv clean-logs clean-sqlite clean-caches \
+	clean-docker clean-compose clean-docker-related clean-docker-prune clean-warning \
+	clean-docker-all-images clean-docker-unused-images clean-docker-images-project \
+	list-docker-images-project list-docker-volumes-project clean-docker-volumes-project \
+	clean-docker-volumes-all clean-docker-build-cache clean-docker-build-cache-all \
+	docker local prune
+
+# Print a warning if there are unstaged/uncommitted changes.
+clean-warning:
+	@if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
+	  if git status --porcelain | grep -q .; then \
+	    echo "[WARN] You have unstaged/uncommitted changes. 'make clean' will remove local envs, Docker resources, and caches, but won't delete your files."; \
+	    git status --short; \
+	  else \
+	    echo "Working tree clean."; \
+	  fi; \
+	else \
+	  echo "Not a git repository; proceeding."; \
+	fi
+
+# Local-only cleanup: virtualenv, build artifacts, caches, logs, sqlite
+clean-local: clean-venv clean-build clean-pyc clean-caches clean-logs clean-sqlite
+
+# Comprehensive local + Docker cleanup
+clean: clean-warning clean-local clean-docker
+	@echo "Clean complete."
+
+# Build and packaging artifacts
+clean-build:
+	@echo "Removing build artifacts..."
+	rm -rf build/ dist/ *.egg-info */*.egg-info **/*.egg-info
+	rm -rf .coverage htmlcov coverage.xml .pytest_cache .mypy_cache .ruff_cache .cache
+
+# Bytecode and __pycache__
+clean-pyc:
+	@echo "Removing Python bytecode and __pycache__..."
+	find . -name "*.pyc" -delete || true
+	find . -name "*.pyo" -delete || true
+	find . -name "*~" -delete || true
+	find . -name "__pycache__" -type d -exec rm -rf {} + || true
+
+# Caches not covered elsewhere
+clean-caches:
+	@echo "Removing tool caches..."
+	rm -rf .pytest_cache .mypy_cache .ruff_cache .cache || true
+
+# Logs
+clean-logs:
+	@echo "Removing logs..."
+	rm -rf logs/*.jsonl* || true
+
+# SQLite test DBs and other local databases stored as files
+clean-sqlite:
+	@echo "Removing local SQLite databases..."
+	rm -f adventorator_test.sqlite3 || true
+
+# Virtual environment
+clean-venv:
+	@echo "Removing virtual environment..."
 	rm -rf .venv
+
+# Docker/Compose teardown for this project
+clean-docker: clean-compose clean-docker-related
+
+# Compose down with full cleanup: containers, orphans, volumes, images
+clean-compose:
+	@echo "Docker Compose: tear down containers/images/volumes/orphans..."
+	@if [ -f docker-compose.yml ] || [ -f compose.yml ]; then \
+	  docker compose down --remove-orphans --volumes --rmi all || true; \
+	else \
+	  echo "No compose file present, skipping docker compose down."; \
+	fi
+
+# Remove any stray containers, volumes, and networks associated with this project name
+clean-docker-related:
+	@echo "Removing stray Docker resources for this project..."
+	@PROJECT_NAME=$${COMPOSE_PROJECT_NAME:-$$(basename $$PWD)}; \
+	PNLOW=$$(echo $$PROJECT_NAME | tr '[:upper:]' '[:lower:]'); \
+	# Containers (names usually include project name)
+	cons=$$(docker ps -a --format '{{.Names}}' | grep -i "$$PNLOW" || true); \
+	# Also include ad-hoc DB container started via 'make db-up'
+	if docker ps -a --format '{{.Names}}' | grep -q '^advdb$$'; then cons="$$cons advdb"; fi; \
+	if [ -n "$$cons" ]; then echo "Removing containers: $$cons"; echo "$$cons" | xargs docker rm -f || true; else echo "No matching containers."; fi; \
+	# Volumes (named volumes are typically <project>_<volume>)
+	vols=$$(docker volume ls -q | grep -i "$$PNLOW" || true); \
+	if [ -n "$$vols" ]; then echo "Removing volumes: $$vols"; echo "$$vols" | xargs docker volume rm -f || true; else echo "No matching volumes."; fi; \
+	# Networks (compose default is <project>_default)
+	nets=$$(docker network ls --format '{{.Name}}' | grep -i "$$PNLOW" || true); \
+	if [ -n "$$nets" ]; then echo "Removing networks: $$nets"; echo "$$nets" | xargs docker network rm || true; else echo "No matching networks."; fi
+
+# Optional: global prune of dangling images/volumes/networks (DANGEROUS if other projects rely on them)
+clean-docker-prune:
+	@echo "Pruning dangling Docker resources (images, containers, networks, build cache, and volumes)..."
+	docker system prune -f --volumes || true
+
+# Convenience aliases so you can run: `make clean docker` or just `make local`
+docker: clean-docker
+local: clean-local
+prune: clean-docker-prune
+
+# EXTREMELY DESTRUCTIVE: Remove ALL Docker images on this machine.
+# Usage: CONFIRM=YES make clean-docker-all-images
+# This will:
+#  1) Stop and remove all containers (any project)
+#  2) Remove all images (any project)
+clean-docker-all-images:
+	@if [ "$(CONFIRM)" != "YES" ]; then \
+	  echo "Refusing to proceed. To confirm, run: CONFIRM=YES make clean-docker-all-images"; \
+	  exit 1; \
+	fi
+	@echo "Stopping and removing ALL containers..."
+	@ids=$$(docker ps -aq || true); if [ -n "$$ids" ]; then docker rm -f $$ids || true; else echo "No containers found."; fi
+	@echo "Removing ALL images..."
+	@imgs=$$(docker images -q || true); if [ -n "$$imgs" ]; then docker rmi -f $$imgs || true; else echo "No images found."; fi
+
+# Safer middle-ground: remove images that are not used by any container (across machine)
+clean-docker-unused-images:
+	@echo "Removing all UNUSED Docker images (keeps images used by at least one container)..."
+	docker image prune -a -f || true
+
+# Scoped cleanup: remove only images that look like they belong to this project
+# Heuristic: repository name starts with <project>- or <project>_
+clean-docker-images-project:
+	@PROJECT_NAME=$${COMPOSE_PROJECT_NAME:-$$(basename $$PWD)}; \
+	PNLOW=$$(echo $$PROJECT_NAME | tr '[:upper:]' '[:lower:]'); \
+	imgs=$$(docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | awk -v p="$$PNLOW" 'tolower($$1) ~ "^" p "[-_]" {print $$2}' | sort -u); \
+	if [ -n "$$imgs" ]; then echo "Removing project images: $$imgs"; echo "$$imgs" | xargs docker rmi -f || true; else echo "No project images found."; fi
+
+# Helper: list candidate project images that would be removed by clean-docker-images-project
+list-docker-images-project:
+	@PROJECT_NAME=$${COMPOSE_PROJECT_NAME:-$$(basename $$PWD)}; \
+	PNLOW=$$(echo $$PROJECT_NAME | tr '[:upper:]' '[:lower:]'); \
+	docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | awk -v p="$$PNLOW" 'tolower($$1) ~ "^" p "[-_]" {print $$0}' | sort || true
+
+# Volumes: list project-labeled/likely volumes and remove them
+list-docker-volumes-project:
+	@PROJECT_NAME=$${COMPOSE_PROJECT_NAME:-$$(basename $$PWD)}; \
+	PNLOW=$$(echo $$PROJECT_NAME | tr '[:upper:]' '[:lower:]'); \
+	docker volume ls -q | grep -i "^$$PNLOW[_-]" || true
+
+clean-docker-volumes-project:
+	@PROJECT_NAME=$${COMPOSE_PROJECT_NAME:-$$(basename $$PWD)}; \
+	PNLOW=$$(echo $$PROJECT_NAME | tr '[:upper:]' '[:lower:]'); \
+	vols=$$(docker volume ls -q | grep -i "^$$PNLOW[_-]" || true); \
+	if [ -n "$$vols" ]; then echo "Removing project volumes: $$vols"; echo "$$vols" | xargs docker volume rm -f || true; else echo "No project volumes found."; fi
+
+# Danger: remove ALL volumes on this machine (requires confirmation)
+clean-docker-volumes-all:
+	@if [ "$(CONFIRM)" != "YES" ]; then \
+	  echo "Refusing to proceed. To confirm, run: CONFIRM=YES make clean-docker-volumes-all"; \
+	  exit 1; \
+	fi
+	@echo "Removing ALL volumes..."
+	@vols=$$(docker volume ls -q || true); if [ -n "$$vols" ]; then echo "$$vols" | xargs docker volume rm -f || true; else echo "No volumes found."; fi
+
+# Build cache: prune safely (dangling cache only)
+clean-docker-build-cache:
+	@echo "Pruning Docker build cache (safe: dangling only)..."
+	docker builder prune -f || true
+
+# Build cache: nuke all cache (requires confirmation)
+clean-docker-build-cache-all:
+	@if [ "$(CONFIRM)" != "YES" ]; then \
+	  echo "Refusing to proceed. To confirm, run: CONFIRM=YES make clean-docker-build-cache-all"; \
+	  exit 1; \
+	fi
+	@echo "Pruning ALL Docker build cache (includes in-use cache for all builders)..."
+	docker builder prune -a -f || true
 
 db-up:
 	docker run --rm -d --name advdb -e POSTGRES_PASSWORD=adventorator \
