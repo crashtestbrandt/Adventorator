@@ -194,9 +194,6 @@ class TestStateFoldVerification:
         # Validate against golden fixture
         assert computed_digest == expected_digest
         
-        # If this fails, the golden fixture may need updating or test data adjustment
-        # In a real scenario, this would validate against known-good fixture data
-        # assert computed_digest == expected_digest
 
     def test_replay_idempotency_verification(self):
         """Test that replay on existing data maintains idempotency.""" 
