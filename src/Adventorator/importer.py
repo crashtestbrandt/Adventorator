@@ -468,7 +468,7 @@ class EntityPhase:
         except EntityCollisionError as exc:
             collisions_detected = 1
             inc_counter("importer.collision", value=1, package_id=package_id)
-            inc_counter("importer.entities.collision", value=1, package_id=package_id)
+            inc_counter("importer.entities.collisions", value=1, package_id=package_id)
             # Record rollback metrics and logs
             record_rollback("entity", package_id, manifest.get("manifest_hash", "unknown"), str(exc))
             raise exc
@@ -1680,7 +1680,7 @@ class LorePhase:
         except LoreCollisionError as exc:
             collisions_detected = 1
             inc_counter("importer.collision", value=1, package_id=package_id)
-            inc_counter("importer.lore.collision", value=1, package_id=package_id)
+            inc_counter("importer.lore.collisions", value=1, package_id=package_id)
             # Record rollback metrics and logs
             record_rollback("lore", package_id, manifest_hash, str(exc))
             raise exc
@@ -2307,7 +2307,7 @@ async def run_full_import_with_database(
                     if "event_payload" in chunk:
                         await persist_import_event(
                             session, campaign_id, None,
-                            "seed.lore_chunk_created",
+                            "seed.content_chunk_ingested",
                             chunk["event_payload"],
                             package_id=package_id
                         )

@@ -42,7 +42,7 @@ class FailureInjectionHarness:
         
         # Create manifest
         manifest_data = {
-            "package_id": "01JCOLLISION000000000000001",
+            "package_id": "01JC000SSSN000000000000001",
             "schema_version": 1,
             "engine_contract_range": {"min": "1.0.0", "max": "2.0.0"},
             "dependencies": [],
@@ -57,7 +57,7 @@ class FailureInjectionHarness:
         
         # Create two entities with SAME stable_id but DIFFERENT content (collision)
         entity1_data = {
-            "stable_id": "01JCOLLIDE0000000000000001",  # Same ID - 26 chars (ULID format) 
+            "stable_id": "01JC00KYDE0000000000000001",  # Same ID - 26 chars (ULID format) 
             "kind": "npc",
             "name": "Original Entity",
             "tags": ["original"],
@@ -67,7 +67,7 @@ class FailureInjectionHarness:
         }
         
         entity2_data = {
-            "stable_id": "01JCOLLIDE0000000000000001",  # Same ID, different content - 26 chars
+            "stable_id": "01JC00KYDE0000000000000001",  # Same ID, different content - 26 chars
             "kind": "npc", 
             "name": "Conflicting Entity",
             "tags": ["conflicting"],
@@ -357,7 +357,7 @@ class TestImporterRollback:
         
         # Create manifest
         manifest_data = {
-            "package_id": "01JLORECOLL000000000000001",
+            "package_id": "01JCX0XCX00000000000000001",
             "schema_version": 1,
             "engine_contract_range": {"min": "1.0.0", "max": "2.0.0"},
             "dependencies": [],

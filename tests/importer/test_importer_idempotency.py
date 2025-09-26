@@ -222,8 +222,7 @@ class TestImporterIdempotency:
             "dst_ref": "01JC0C00000000000000000001",
             "attributes": {
                 "relationship_context": "workplace"
-            },
-            "tags": ["employment"]
+            }
         }
         
         with open(package_root / "edges" / "relationship.json", "w") as f:
@@ -363,7 +362,7 @@ class TestHashChainIntegrity:
         
         # Single entity
         entity_data = {
-            "stable_id": "01JTEST0ENTITY000000000001",
+            "stable_id": "01JTEST1ENTTTY000000000001",
             "kind": "item",
             "name": "Test Item",
             "tags": [],
