@@ -240,7 +240,9 @@ class ImporterRunContext:
             if isinstance(chunk_id, str) and isinstance(content_hash, str):
                 components.append(
                     {
-                        "phase": "lore", "stable_id": chunk_id, "content_hash": content_hash
+                        "phase": "lore",
+                        "stable_id": chunk_id,
+                        "content_hash": content_hash,
                     }
                 )
 
