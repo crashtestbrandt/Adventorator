@@ -7,8 +7,10 @@ import argparse
 import json
 import re
 import sys
+import time
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any, Tuple
 
 PROMPT_EXTS = {".md"}
 CONTRACT_EXTS = {".json", ".yaml", ".yml"}
@@ -76,7 +78,7 @@ def validate_prompts() -> list[str]:
     return errors
 
 
-def validate_contracts() -> list[str]:
+def validate_contracts(skip_manifest: bool = False) -> list[str]:
     errors: list[str] = []
     contracts_dir = Path("contracts")
     if not contracts_dir.exists():
@@ -117,8 +119,144 @@ def validate_contracts() -> list[str]:
             if "openapi" not in text:
                 errors.append(f"{path}: expected to mention 'openapi' for schema traceability")
     
-    # Validate manifest fixtures against schema
-    errors.extend(validate_manifest_fixtures())
+    if not skip_manifest:
+        # Validate manifest fixtures against schema
+        errors.extend(validate_manifest_fixtures())
+    return errors
+def _load_json(path: Path) -> Tuple[dict[str, Any] | list[Any], str | None]:
+    try:
+        text = path.read_text(encoding="utf-8")
+        return json.loads(text), None
+    except Exception as exc:  # noqa: BLE001
+        return {}, f"{path}: failed to load JSON - {exc}"
+
+
+def validate_ontology(only_contracts: bool = False) -> list[str]:
+    """Validate ontology artifacts under contracts/ontology.
+
+    Rules:
+    - Each *.json (excluding README) in contracts/ontology is a collection object with optional version
+      and arrays: tags[], affordances[] (either may be absent or empty).
+    - Each tag validates against tag.v1.json; each affordance validates against affordance.v1.json.
+    - Unknown top-level keys in tag / affordance objects rejected (schema has additionalProperties=false).
+    - Duplicate IDs with identical canonical JSON (excluding ordering/whitespace) are idempotent.
+    - Duplicate IDs with differing canonical forms produce hard error with short hash diff.
+    Timing summary emitted for observability.
+    """
+    errors: list[str] = []
+    ontology_dir = Path("contracts/ontology")
+    if not ontology_dir.exists():
+        return ["contracts/ontology directory is missing"]
+
+    try:
+        import jsonschema  # type: ignore
+    except ImportError:
+        return ["jsonschema not installed; cannot validate ontology"]
+
+    tag_schema_path = ontology_dir / "tag.v1.json"
+    afford_schema_path = ontology_dir / "affordance.v1.json"
+    if not tag_schema_path.exists() or not afford_schema_path.exists():
+        missing = [p.name for p in [tag_schema_path, afford_schema_path] if not p.exists()]
+        return [f"missing ontology schema(s): {', '.join(missing)}"]
+
+    tag_schema = json.loads(tag_schema_path.read_text(encoding="utf-8"))
+    afford_schema = json.loads(afford_schema_path.read_text(encoding="utf-8"))
+
+    collection_files = [
+        p for p in sorted(ontology_dir.glob("*.json")) if p.name not in {"tag.v1.json", "affordance.v1.json"}
+    ]
+    if not collection_files:
+        print("No ontology collection files found (ok if not yet authored).")
+        return errors
+
+    def canonical(obj: Any) -> str:
+        return json.dumps(obj, sort_keys=True, separators=(",", ":"))
+
+    tag_index: dict[str, str] = {}
+    tag_source: dict[str, Path] = {}
+    afford_index: dict[str, str] = {}
+    afford_source: dict[str, Path] = {}
+
+    timings: list[float] = []
+    total_items = 0
+    for file_path in collection_files:
+        start = time.perf_counter()
+        data, load_err = _load_json(file_path)
+        if load_err:
+            errors.append(load_err)
+            continue
+        if not isinstance(data, dict):
+            errors.append(f"{file_path}: collection root must be an object")
+            continue
+        tags = data.get("tags", [])
+        affords = data.get("affordances", [])
+        if tags and not isinstance(tags, list):
+            errors.append(f"{file_path}: 'tags' must be an array")
+            tags = []
+        if affords and not isinstance(affords, list):
+            errors.append(f"{file_path}: 'affordances' must be an array")
+            affords = []
+        # Validate tags
+        for i, tag in enumerate(tags):
+            total_items += 1
+            if not isinstance(tag, dict):
+                errors.append(f"{file_path}: tags[{i}] must be an object")
+                continue
+            try:
+                jsonschema.validate(tag, tag_schema)
+            except jsonschema.ValidationError as exc:  # type: ignore
+                errors.append(f"{file_path}: tags[{i}] schema violation - {exc.message}")
+                continue
+            tag_id = tag.get("tag_id")
+            if not isinstance(tag_id, str):
+                errors.append(f"{file_path}: tags[{i}] missing tag_id")
+                continue
+            canon = canonical(tag)
+            prev = tag_index.get(tag_id)
+            if prev is None:
+                tag_index[tag_id] = canon
+                tag_source[tag_id] = file_path
+            else:
+                if prev != canon:
+                    errors.append(
+                        f"conflict tag_id '{tag_id}' between {tag_source[tag_id].name} and {file_path.name} (hashes {hash(prev)} != {hash(canon)})"
+                    )
+        # Validate affordances
+        for i, afford in enumerate(affords):
+            total_items += 1
+            if not isinstance(afford, dict):
+                errors.append(f"{file_path}: affordances[{i}] must be an object")
+                continue
+            try:
+                jsonschema.validate(afford, afford_schema)
+            except jsonschema.ValidationError as exc:  # type: ignore
+                errors.append(f"{file_path}: affordances[{i}] schema violation - {exc.message}")
+                continue
+            afford_id = afford.get("affordance_id")
+            if not isinstance(afford_id, str):
+                errors.append(f"{file_path}: affordances[{i}] missing affordance_id")
+                continue
+            canon = canonical(afford)
+            prev = afford_index.get(afford_id)
+            if prev is None:
+                afford_index[afford_id] = canon
+                afford_source[afford_id] = file_path
+            else:
+                if prev != canon:
+                    errors.append(
+                        f"conflict affordance_id '{afford_id}' between {afford_source[afford_id].name} and {file_path.name} (hashes {hash(prev)} != {hash(canon)})"
+                    )
+        elapsed = (time.perf_counter() - start) * 1000
+        timings.append(elapsed)
+
+    if timings:
+        timings_sorted = sorted(timings)
+        p95_index = int(len(timings_sorted) * 0.95) - 1
+        p95_ms = timings_sorted[max(p95_index, 0)]
+        avg_ms = sum(timings_sorted) / len(timings_sorted)
+        print(
+            f"ontology.validate summary: files={len(collection_files)} items={total_items} avg_ms={avg_ms:.2f} p95_ms={p95_ms:.2f}"
+        )
     return errors
 
 
@@ -185,14 +323,30 @@ def main() -> int:
     parser.add_argument(
         "--only-contracts",
         action="store_true",
-        help="Validate only contracts and skip prompt validation",
+        help="Validate only contracts (includes ontology & manifest) and skip prompt validation",
+    )
+    parser.add_argument(
+        "--only-ontology",
+        action="store_true",
+        help="Validate only ontology collections (skips prompts, other contracts & manifest fixtures)",
+    )
+    parser.add_argument(
+        "--skip-manifest-fixtures",
+        action="store_true",
+        help="Skip manifest fixture validation (useful during fixture edits)",
     )
     args = parser.parse_args()
 
     errors: list[str] = []
-    if not args.only_contracts:
-        errors.extend(validate_prompts())
-    errors.extend(validate_contracts())
+    if args.only_ontology:
+        errors.extend(validate_ontology(only_contracts=True))
+    else:
+        if not args.only_contracts:
+            errors.extend(validate_prompts())
+        # contracts (optionally skipping manifest fixtures)
+        errors.extend(validate_contracts(skip_manifest=args.skip_manifest_fixtures))
+        # Always include ontology when running full or only-contracts validation
+        errors.extend(validate_ontology())
 
     if errors:
         print("Artifact validation failed:", file=sys.stderr)

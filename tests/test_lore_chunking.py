@@ -218,7 +218,9 @@ Test content with embedding hint.
 
         # Test with flag disabled
         chunker_disabled = LoreChunker(features_importer_embeddings=False)
-        chunks_disabled = chunker_disabled.parse_lore_file(test_file, "test-pkg", TEST_MANIFEST_HASH)
+        chunks_disabled = chunker_disabled.parse_lore_file(
+            test_file, "test-pkg", TEST_MANIFEST_HASH
+        )
         assert chunks_disabled[0].embedding_hint is None
 
         # Test with flag enabled
@@ -709,9 +711,12 @@ class TestGoldenHashFixtures:
                     content="Min",
                     source_path="min.md",
                     chunk_index=0,
-                    provenance={"package_id": TEST_PACKAGE_ID, "manifest_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+                    provenance={
+                        "package_id": TEST_PACKAGE_ID,
+                        "manifest_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    },
                 ),
-                "expected": "b66704778153305000381ee9cf0d79cc02f3f945d7f6a87fd5f8dc6dd8537b78"
+                "expected": "b66704778153305000381ee9cf0d79cc02f3f945d7f6a87fd5f8dc6dd8537b78",
             },
             {
                 "name": "maximal",
@@ -719,20 +724,30 @@ class TestGoldenHashFixtures:
                     chunk_id="MAX-COMPLEX-CHUNK-ID-999",
                     title="Very Complex Maximal Test Case With Long Title That Tests Length Limits",
                     audience="Adult",
-                    tags=["category:complex", "difficulty:maximal", "type:comprehensive", "status:testing"],
+                    tags=[
+                        "category:complex",
+                        "difficulty:maximal",
+                        "type:comprehensive",
+                        "status:testing",
+                    ],
                     content="This is a very long and complex content block that includes multiple sentences, Unicode characters like café and naïve, and tests the limits of our chunking algorithm. It should produce a stable hash regardless of the complexity.",
                     source_path="complex/maximal/test.md",
                     chunk_index=42,
-                    provenance={"package_id": TEST_PACKAGE_ID, "manifest_hash": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"},
-                    embedding_hint="focus:complexity,depth:comprehensive,tone:analytical"
+                    provenance={
+                        "package_id": TEST_PACKAGE_ID,
+                        "manifest_hash": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+                    },
+                    embedding_hint="focus:complexity,depth:comprehensive,tone:analytical",
                 ),
-                "expected": "ca00fbe1a094d858e6ee58dc7a3cd621481d8a651583757735663b431eca1347"
-            }
+                "expected": "ca00fbe1a094d858e6ee58dc7a3cd621481d8a651583757735663b431eca1347",
+            },
         ]
 
         for case in test_cases:
             actual_hash = case["chunk"].content_hash
-            assert actual_hash == case["expected"], f"Hash regression detected for {case['name']} case"
+            assert actual_hash == case["expected"], (
+                f"Hash regression detected for {case['name']} case"
+            )
 
 
 class TestEndToEndIdempotency:
@@ -932,7 +947,7 @@ Invalid audience value.
         test_file.write_text(content, encoding="utf-8")
 
         chunker = LoreChunker()
-        # This should fail at parser validation (before schema validation)  
+        # This should fail at parser validation (before schema validation)
         with pytest.raises(FrontMatterValidationError, match="Invalid audience"):
             chunker.parse_lore_file(test_file, TEST_PACKAGE_ID, TEST_MANIFEST_HASH)
 
@@ -949,7 +964,7 @@ tags:
 
 Invalid tag format.
 """
-        test_file = tmp_path / "invalid_tag.md" 
+        test_file = tmp_path / "invalid_tag.md"
         test_file.write_text(content, encoding="utf-8")
 
         chunker = LoreChunker()
@@ -1013,7 +1028,7 @@ Content with valid provenance metadata.
             "chunk_id": "TEST-SCHEMA",
             "title": "Schema Test",
             "audience": "Player",
-            "tags": ["test:validation"]
+            "tags": ["test:validation"],
         }
         # Should not raise any exception
         validate_front_matter_against_schema(valid_fm)
@@ -1023,7 +1038,9 @@ Content with valid provenance metadata.
             "chunk_id": "invalid-id",  # lowercase not allowed by schema
             "title": "Invalid Schema Test",
             "audience": "Player",
-            "tags": ["test:validation"]
+            "tags": ["test:validation"],
         }
-        with pytest.raises(FrontMatterValidationError, match="Front-matter schema validation failed"):
+        with pytest.raises(
+            FrontMatterValidationError, match="Front-matter schema validation failed"
+        ):
             validate_front_matter_against_schema(invalid_fm)

@@ -24,7 +24,9 @@ import yaml
 from Adventorator.canonical_json import compute_canonical_hash
 
 
-def validate_front_matter_against_schema(front_matter: dict[str, Any], schema_path: Path | None = None) -> None:
+def validate_front_matter_against_schema(
+    front_matter: dict[str, Any], schema_path: Path | None = None
+) -> None:
     """Validate front-matter against the JSON schema contract.
 
     Args:
@@ -55,7 +57,9 @@ def validate_front_matter_against_schema(front_matter: dict[str, Any], schema_pa
     try:
         jsonschema.validate(front_matter, schema)
     except jsonschema.ValidationError as exc:
-        raise FrontMatterValidationError(f"Front-matter schema validation failed: {exc.message}") from exc
+        raise FrontMatterValidationError(
+            f"Front-matter schema validation failed: {exc.message}"
+        ) from exc
 
 
 class LoreChunkerError(Exception):
@@ -349,9 +353,7 @@ class LoreChunker:
             FrontMatterValidationError: If provenance validation fails
         """
         if not isinstance(provenance, dict):
-            raise FrontMatterValidationError(
-                f"provenance must be an object in {file_path}"
-            )
+            raise FrontMatterValidationError(f"provenance must be an object in {file_path}")
 
         # Check required fields
         required_fields = ["manifest_hash", "source_path"]
@@ -363,7 +365,9 @@ class LoreChunker:
 
         # Validate manifest_hash format (64 hex chars)
         manifest_hash = provenance["manifest_hash"]
-        if not isinstance(manifest_hash, str) or not self.MANIFEST_HASH_PATTERN.match(manifest_hash):
+        if not isinstance(manifest_hash, str) or not self.MANIFEST_HASH_PATTERN.match(
+            manifest_hash
+        ):
             raise FrontMatterValidationError(
                 f"Invalid manifest_hash format '{manifest_hash}' in provenance of {file_path}. "
                 "Must be a 64-character lowercase hexadecimal string."
@@ -373,8 +377,7 @@ class LoreChunker:
         source_path = provenance["source_path"]
         if not isinstance(source_path, str) or not source_path.strip():
             raise FrontMatterValidationError(
-                f"Invalid source_path in provenance of {file_path}. "
-                "Must be a non-empty string."
+                f"Invalid source_path in provenance of {file_path}. Must be a non-empty string."
             )
 
     def _enforce_audience_gating(self, audience: str, file_path: Path) -> None:

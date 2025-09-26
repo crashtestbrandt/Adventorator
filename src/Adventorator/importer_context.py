@@ -64,9 +64,7 @@ class ImporterRunContext:
     ontology_affordances: list[dict[str, Any]] = field(default_factory=list)
     lore_chunks: list[dict[str, Any]] = field(default_factory=list)
     _import_logs: list[dict[str, Any]] = field(default_factory=list)
-    _log_identities: set[tuple[str, str, str | None]] = field(
-        default_factory=set, init=False
-    )
+    _log_identities: set[tuple[str, str, str | None]] = field(default_factory=set, init=False)
     _sequence_counter: int = field(default=0, init=False)
 
     def next_sequence_number(self) -> int:
@@ -113,7 +111,7 @@ class ImporterRunContext:
             log_entries = entity.get("import_log_entries")
             if isinstance(log_entries, Iterable):
                 all_log_entries.extend(log_entries)
-        
+
         if all_log_entries:
             self._merge_import_logs(all_log_entries)
 
@@ -157,7 +155,7 @@ class ImporterRunContext:
             log_entries = chunk.get("import_log_entries")
             if isinstance(log_entries, Iterable):
                 all_log_entries.extend(log_entries)
-        
+
         if all_log_entries:
             self._merge_import_logs(all_log_entries)
 
@@ -264,9 +262,7 @@ class ImporterRunContext:
                     }
                 )
 
-        components.sort(
-            key=lambda item: (item["phase"], item["stable_id"], item["content_hash"])
-        )
+        components.sort(key=lambda item: (item["phase"], item["stable_id"], item["content_hash"]))
         return components
 
     def compute_state_digest(self) -> str:
@@ -276,9 +272,7 @@ class ImporterRunContext:
         digest_bytes = compute_canonical_hash(payload)
         return digest_bytes.hex()
 
-    def _merge_import_logs(
-        self, entries: Iterable[Mapping[str, Any]] | None
-    ) -> None:
+    def _merge_import_logs(self, entries: Iterable[Mapping[str, Any]] | None) -> None:
         if entries is None:
             return
         for entry in entries:
@@ -292,4 +286,3 @@ class ImporterRunContext:
 
 
 __all__ = ["ImporterRunContext"]
-

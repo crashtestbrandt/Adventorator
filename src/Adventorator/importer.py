@@ -1600,7 +1600,7 @@ class FinalizationPhase:
 
     def __init__(self, features_importer_enabled: bool = False):
         """Initialize finalization phase.
-        
+
         Args:
             features_importer_enabled: Whether importer features are enabled.
         """
@@ -1608,11 +1608,11 @@ class FinalizationPhase:
 
     def finalize_import(self, context, start_time: datetime) -> dict[str, Any]:
         """Finalize import by emitting completion event and computing final state.
-        
+
         Args:
             context: ImporterRunContext with aggregated phase outputs
             start_time: Import start timestamp for duration calculation
-            
+
         Returns:
             Finalization result with completion event and ImportLog summary
         """
@@ -1626,10 +1626,10 @@ class FinalizationPhase:
 
         # Get counts from context
         counts = context.summary_counts()
-        
+
         # Compute state digest
         state_digest = context.compute_state_digest()
-        
+
         # Ensure required fields are present
         if context.package_id is None:
             raise ValueError("Missing required field: package_id")
@@ -1641,7 +1641,7 @@ class FinalizationPhase:
             "package_id": context.package_id,
             "manifest_hash": context.manifest_hash,
             "entity_count": counts["entities"],
-            "edge_count": counts["edges"], 
+            "edge_count": counts["edges"],
             "tag_count": counts["tags"],
             "affordance_count": counts["affordances"],
             "chunk_count": counts["chunks"],
@@ -1656,12 +1656,10 @@ class FinalizationPhase:
 
         # Emit completion event
         completion_event = self._emit_completion_event(completion_payload)
-        
+
         # Create ImportLog summary entry
-        import_log_summary = self._create_import_log_summary(
-            context, state_digest, duration_ms
-        )
-        
+        import_log_summary = self._create_import_log_summary(context, state_digest, duration_ms)
+
         # Emit structured log with final summary
         emit_structured_log(
             "import_finalization_complete",
@@ -1670,15 +1668,15 @@ class FinalizationPhase:
             entity_count=counts["entities"],
             edge_count=counts["edges"],
             tag_count=counts["tags"],
-            affordance_count=counts["affordances"], 
+            affordance_count=counts["affordances"],
             chunk_count=counts["chunks"],
             state_digest=state_digest,
             duration_ms=duration_ms,
         )
-        
+
         # Record duration metric as histogram
         observe_histogram("importer.duration_ms", duration_ms)
-        
+
         return {
             "completion_event": completion_event,
             "import_log_summary": import_log_summary,
@@ -1688,10 +1686,10 @@ class FinalizationPhase:
 
     def _emit_completion_event(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Emit seed.import.complete event.
-        
+
         Args:
             payload: Event payload
-            
+
         Returns:
             Event envelope dict
         """
@@ -1702,43 +1700,44 @@ class FinalizationPhase:
             "replay_ordinal": None,  # Would be assigned by event ledger
             "idempotency_key": None,  # Would be computed by event ledger
         }
-        
+
         emit_structured_log(
             "seed_event_emitted",
             event_type="seed.import.complete",
             package_id=payload.get("package_id"),
             manifest_hash=payload.get("manifest_hash"),
         )
-        
+
         return event_envelope
 
     def _create_import_log_summary(
         self, context, state_digest: str, duration_ms: int
     ) -> dict[str, Any]:
         """Create ImportLog summary entry.
-        
+
         Args:
             context: ImporterRunContext with phase data
             state_digest: Computed state digest
             duration_ms: Import duration
-            
+
         Returns:
             ImportLog summary entry dict
         """
         import_logs = context.import_log_entries
-        
+
         # Find the highest sequence number across all phases
         max_sequence = 0
         if import_logs:
             max_sequence = max(
-                entry.get("sequence_no", 0) 
-                for entry in import_logs 
+                entry.get("sequence_no", 0)
+                for entry in import_logs
                 if isinstance(entry.get("sequence_no"), int)
             )
-        
+
         # Verify sequence contiguity and enforce "no gaps" requirement
         sequences = [
-            entry.get("sequence_no") for entry in import_logs 
+            entry.get("sequence_no")
+            for entry in import_logs
             if isinstance(entry.get("sequence_no"), int)
         ]
         if sequences:
@@ -1756,7 +1755,7 @@ class FinalizationPhase:
                     f"ImportLog sequence mismatch detected in package {context.package_id}: "
                     f"expected {expected_sequences}, actual {sequences}"
                 )
-        
+
         summary_entry = {
             "phase": "finalization",
             "object_type": "summary",
@@ -1771,7 +1770,7 @@ class FinalizationPhase:
                 "total_entries": len(import_logs),
             },
         }
-        
+
         return summary_entry
 
 
@@ -1806,99 +1805,97 @@ def create_finalization_phase(features_importer: bool = False) -> FinalizationPh
 
 
 def run_complete_import_pipeline(
-    package_root: Path, 
-    features_importer: bool = False, 
-    features_importer_embeddings: bool = False
+    package_root: Path, features_importer: bool = False, features_importer_embeddings: bool = False
 ) -> dict[str, Any]:
     """Run the complete import pipeline with finalization.
-    
+
     This provides a production call site that demonstrates how the finalization
     phase integrates with the broader importer flow.
-    
+
     Args:
         package_root: Root directory containing package files
         features_importer: Whether importer features are enabled
         features_importer_embeddings: Whether embedding features are enabled
-        
+
     Returns:
         Complete import result including finalization output
     """
     from datetime import datetime, timezone
     from pathlib import Path
-    
+
     from Adventorator.importer_context import ImporterRunContext
-    
+
     # Initialize context
     context = ImporterRunContext()
     start_time = datetime.now(timezone.utc)
-    
+
     # Manifest phase
     manifest_phase = ManifestPhase(features_importer_enabled=features_importer)
     manifest_path = package_root / "package.manifest.json"
     manifest_result = manifest_phase.validate_and_register(manifest_path, package_root)
-    
+
     # Add sequence number to manifest ImportLog entry
     if "import_log_entry" in manifest_result:
         manifest_result["import_log_entry"]["sequence_no"] = context.next_sequence_number()
         manifest_result["import_log_entry"]["manifest_hash"] = manifest_result["manifest_hash"]
-    
+
     context.record_manifest(manifest_result)
-    
+
     manifest_with_hash = dict(manifest_result["manifest"])
     manifest_with_hash["manifest_hash"] = manifest_result["manifest_hash"]
-    
+
     # Entity phase
     entity_phase = EntityPhase(features_importer_enabled=features_importer)
     entities = entity_phase.parse_and_validate_entities(package_root, manifest_with_hash)
-    
+
     # Fix sequence numbers for entity ImportLog entries
     for entity in entities:
         import_log_entries = entity.get("import_log_entries", [])
         for entry in import_log_entries:
             entry["sequence_no"] = context.next_sequence_number()
-    
+
     context.record_entities(entities)
-    
+
     # Edge phase
     edge_phase = EdgePhase(features_importer_enabled=features_importer)
     edges = edge_phase.parse_and_validate_edges(package_root, manifest_with_hash, entities)
-    
+
     # Fix sequence numbers for edge ImportLog entries
     for edge in edges:
         import_log_entry = edge.get("import_log_entry")
         if import_log_entry:
             import_log_entry["sequence_no"] = context.next_sequence_number()
-    
+
     context.record_edges(edges)
-    
+
     # Ontology phase
     ontology_phase = OntologyPhase(features_importer_enabled=features_importer)
     tags, affordances, ontology_logs = ontology_phase.parse_and_validate_ontology(
         package_root, manifest_with_hash
     )
-    
+
     # Fix sequence numbers for ontology ImportLog entries
     for entry in ontology_logs:
         entry["sequence_no"] = context.next_sequence_number()
-    
+
     context.record_ontology(tags, affordances, ontology_logs)
-    
+
     # Lore phase
     lore_phase = create_lore_phase(features_importer, features_importer_embeddings)
     chunks = lore_phase.parse_and_validate_lore(package_root, manifest_with_hash)
-    
+
     # Fix sequence numbers for lore ImportLog entries
     for chunk in chunks:
         import_log_entries = chunk.get("import_log_entries", [])
         for entry in import_log_entries:
             entry["sequence_no"] = context.next_sequence_number()
-    
+
     context.record_lore_chunks(chunks)
-    
+
     # Finalization phase
     finalization_phase = create_finalization_phase(features_importer)
     finalization_result = finalization_phase.finalize_import(context, start_time)
-    
+
     return {
         "manifest_result": manifest_result,
         "entities": entities,
@@ -1913,7 +1910,7 @@ def run_complete_import_pipeline(
 
 __all__ = [
     "ManifestPhase",
-    "EntityPhase", 
+    "EntityPhase",
     "EdgePhase",
     "OntologyPhase",
     "LorePhase",
@@ -1924,6 +1921,6 @@ __all__ = [
     "ImporterError",
     "ManifestValidationError",
     "EntityValidationError",
-    "EdgeValidationError", 
+    "EdgeValidationError",
     "OntologyValidationError",
 ]

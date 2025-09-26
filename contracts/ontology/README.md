@@ -62,3 +62,55 @@ See `contracts/events/seed/tag-registered.v1.json` and `affordance-registered.v1
 - **`seed.json`** - Backward compatibility file (deprecated)
 
 New ontology definitions should use the v1 schema format for package import integration.
+
+## Migration & Evolution Guidance (Draft)
+
+This draft section is introduced by STORY-IPD-001E and will be finalized before story closure.
+
+### Versioning & Deprecation
+- Additive changes (new tags / affordances) are allowed without bumping schema version if they do not alter existing semantics.
+- Breaking changes (renaming `tag_id`, changing category, removing required fields) are not permitted; instead:
+  - Introduce a new tag/affordance with the updated meaning.
+  - Mark the old one as deprecated (future field: `deprecated: true`) and retain synonyms pointing to the canonical successor.
+- Synonyms list is additive; removals should be justified in a Migration Note.
+
+### Canonical Affordance Mapping
+- Tags intended for planner or ImprobabilityDrive actions SHOULD reference a `canonical_affordance` in metadata.
+- Multiple affordances invoking the same planner action should nominate one canonical and list others as aliases (planned enhancement).
+
+### Change Proposal Workflow
+1. Open a PR updating ontology JSON plus this README's Migration Log.
+2. Run validator locally: `make quality-artifacts ARGS="--only-ontology"`.
+3. Capture the timing summary line for performance tracking.
+4. Add a Migration Note (template below) summarizing rationale and impact.
+
+### Migration Note Template
+```
+Date: YYYY-MM-DD
+Change Type: Add | Deprecate | Metadata | Synonyms | Affordance
+Files: [list]
+Summary: <short description>
+Impact: <planner | importer | NLU>
+Backward Compatibility: <why safe>
+Follow-up: <cleanup or removal date>
+```
+
+### Validator Usage
+Only ontology validation:
+```
+make quality-artifacts ARGS="--only-ontology"
+```
+Full gates:
+```
+make quality-gates
+```
+Example timing output:
+```
+ontology.validate summary: files=3 items=120 avg_ms=4.12 p95_ms=6.30
+```
+
+### Planned Enhancements
+- Stable SHA-256 digest in conflict messages (replace Python hash())
+- Deprecation field with enforcement rules
+- Aggregated ontology metrics (counts by category, deprecated ratio)
+- Migration Log auto-extraction script
