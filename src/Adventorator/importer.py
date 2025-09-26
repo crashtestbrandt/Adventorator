@@ -57,6 +57,43 @@ def emit_structured_log(event: str, **fields) -> None:
     logger.info("Structured log", extra={"structured_data": log_data})
 
 
+def record_idempotent_run(package_id: str, manifest_hash: str) -> None:
+    """Record metrics and logs for idempotent import run.
+    
+    Args:
+        package_id: Package identifier
+        manifest_hash: Manifest hash for correlation
+    """
+    inc_counter("importer.idempotent", package_id=package_id)
+    emit_structured_log(
+        "import_idempotent_run",
+        package_id=package_id,
+        manifest_hash=manifest_hash,
+        outcome="idempotent_skip"
+    )
+
+
+def record_rollback(phase: str, package_id: str, manifest_hash: str, reason: str) -> None:
+    """Record metrics and logs for import rollback.
+    
+    Args:
+        phase: Import phase where rollback occurred
+        package_id: Package identifier
+        manifest_hash: Manifest hash for correlation  
+        reason: Reason for rollback
+    """
+    inc_counter("importer.rollback", package_id=package_id)
+    inc_counter(f"importer.rollback.{phase}", package_id=package_id)
+    emit_structured_log(
+        "import_rollback", 
+        package_id=package_id,
+        manifest_hash=manifest_hash,
+        phase=phase,
+        outcome="rollback",
+        reason=reason
+    )
+
+
 class ImporterError(Exception):
     """Base exception for importer errors."""
 
