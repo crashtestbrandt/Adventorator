@@ -863,6 +863,11 @@ class OntologyPhase:
             raise ImporterError("Importer feature flag is disabled (features.importer=false)")
 
         ontology_dir = package_root / "ontology"
+        if not ontology_dir.exists():
+            # Support existing fixture layout using plural directory name
+            alt_dir = package_root / "ontologies"
+            if alt_dir.exists():
+                ontology_dir = alt_dir
         package_id = manifest.get("package_id", "unknown")
         manifest_hash = manifest.get("manifest_hash", "unknown")
 

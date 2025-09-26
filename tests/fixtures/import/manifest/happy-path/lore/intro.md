@@ -1,9 +1,10 @@
 ---
+chunk_id: INTRO_CHUNK
 title: "The Archivist's Welcome"
-audience: "player"
+audience: "Player"
 tags:
-  - lore
-  - introduction
+  - lore:intro
+  - lore:archive
 ---
 
 Ada the Archivist greets newcomers to the grand library, offering curated quests based on their curiosity.

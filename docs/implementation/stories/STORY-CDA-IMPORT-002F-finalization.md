@@ -24,9 +24,9 @@ Finalize the multi-phase importer by emitting `seed.import.complete`, consolidat
 - [ ] **TASK-CDA-IMPORT-SUM-16C — ImportLog audit closure.** Verify sequence numbers contiguous; add test ensuring ImportLog summary row references manifest hash and final digest for traceability.
 
 ## Definition of Ready
-- Entity, edge, ontology, and lore phases produce counts + provenance info accessible via importer context.
-- Decision on `state_digest` hashing algorithm documented (reuse from ARCH-CDA-001) and helper availability confirmed.
-- Golden manifest fixtures available for full pipeline testing, including baseline expected digest.
+- ✅ Entity, edge, ontology, and lore phases produce counts + provenance info accessible via importer context via `ImporterRunContext.summary_counts()` with aggregation tests exercising all phase outputs. 【F:src/Adventorator/importer_context.py†L122-L208】【F:tests/importer/test_importer_context.py†L13-L138】
+- ✅ Decision on `state_digest` hashing algorithm documented (reuse from ARCH-CDA-001) and helper availability confirmed in the state digest strategy note and canonical hash helper tests. 【F:docs/implementation/importer/state_digest_strategy.md†L1-L38】【F:src/Adventorator/canonical_json.py†L159-L188】【F:tests/importer/test_importer_context.py†L141-L164】
+- ✅ Golden manifest fixtures available for full pipeline testing, including baseline expected digest validated by the new golden test. 【F:tests/fixtures/import/manifest/happy-path/state_digest.txt†L1-L1】【F:tests/importer/test_state_digest_fixture.py†L1-L62】
 
 ## Definition of Done
 - Completion event contract validated; importer finalization emits event with deterministic payload and idempotent behavior.

@@ -13,9 +13,9 @@
   ],
   "content_index": {
     "entities/npc.json": "7d478136a27ad013caa5a225cbc4629998bb38b29c133b5c11a87803ceb7a1e6",
-    "edges/relationship.json": "5a8c82953a5a4c283b95ccf5c7c962a55044ef7fed99e442d185b6f5e9714ae7",
-    "lore/intro.md": "f4a8d34f4ae1b6d0d850e9cdcbae5bb09b7a0b388fc0e1a2c4e962a510fe0e7c",
-    "ontologies/tags.json": "bdecfa6109eefe0f40779a513e044cad5520df1782914c5c76d8e3026ce8a016"
+    "edges/relationship.json": "204c849aada1eeac9abd23e522250bc66c37f5c39564da739ef0139632359b42",
+    "lore/intro.md": "7ff7d46f750f96a4ddc369b116710da383e64f0dd119abf53a205eb29a3c9388",
+    "ontologies/tags.json": "17cef9477e3d81838b005e4d04240fd733defe760e7a645671d56120490a5de6"
   },
   "ruleset_version": "1.2.3",
   "recommended_flags": {
