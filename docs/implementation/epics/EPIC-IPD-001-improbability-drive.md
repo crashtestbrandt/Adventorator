@@ -195,7 +195,13 @@ Status: Planned
 - DoD.
   - Zero-diff confirmed in preview output.
 
-### STORY-IPD-001H — Privacy, redaction, and safety
+### STORY-IPD-001H — Privacy, redaction, and safety - DEFERRED AND DESCOPED
+
+> Note: this story is deferred and will not be part of this epic at all. It is included here for traceability and to prevent further drift. PII concerns are out of scope for MVP.
+
+Original PII notes for posterity:
+
+```markdown
 Story doc: [/docs/implementation/stories/STORY-IPD-001H-privacy-and-safety.md](/docs/implementation/stories/STORY-IPD-001H-privacy-and-safety.md)
 *Epic linkage:* Ensures safe handling of user text.
 
@@ -209,6 +215,7 @@ Status: Planned
   - [ ] `TASK-IPD-PRIV-21` — Redaction filters for logs and AskReport persistence.
   - [ ] `TASK-IPD-LIMITS-22` — Enforce input size/time bounds with metrics.
   - [ ] `TASK-IPD-TEST-23` — Tests for redaction and bounds.
+```
 
 ### STORY-IPD-001I — Operational hardening and rollout
 Story doc: [/docs/implementation/stories/STORY-IPD-001I-operational-rollout.md](/docs/implementation/stories/STORY-IPD-001I-operational-rollout.md)

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "tags": [
+    {
+      "tag_id": "modifier.advantage",
+      "category": "modifier",
+      "slug": "advantage",
+      "display_name": "Advantage",
+      "synonyms": ["edge"],
+      "audience": ["player", "gm"],
+      "gating": {"ruleset_version": "v1.0"}
+    }
+  ],
+  "affordances": [
+    {
+      "affordance_id": "affordance.social.help-ally",
+      "category": "social",
+      "slug": "help-ally",
+      "applies_to": ["tag:modifier.advantage"],
+      "gating": {"audience": "player", "ruleset_version": "v1.0"}
+    }
+  ]
+}

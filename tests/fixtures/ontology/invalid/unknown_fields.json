@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "tags": [
+    {
+      "tag_id": "action.attack",
+      "category": "action",
+      "slug": "attack",
+      "display_name": "Attack",
+      "synonyms": ["strike"],
+      "audience": ["player"],
+      "gating": {"ruleset_version": "v1.0"},
+      "unknown_top": true
+    }
+  ],
+  "affordances": [
+    {
+      "affordance_id": "affordance.combat.basic-attack",
+      "category": "combat",
+      "slug": "basic-attack",
+      "applies_to": ["tag:action.attack"],
+      "gating": {"audience": "player", "ruleset_version": "v1.0"},
+      "metadata": {"effect": "Deal damage", "extra": {"not_allowed": true}}
+    }
+  ]
+}

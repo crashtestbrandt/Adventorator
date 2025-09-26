@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "tags": [
+    {
+      "tag_id": "action.attack",
+      "category": "action",
+      "slug": "attack",
+      "display_name": "Attack",
+      "synonyms": ["strike", "hit"],
+      "audience": ["player"],
+      "gating": {"ruleset_version": "v1.0"},
+      "metadata": {"description": "Perform a basic attack", "canonical_affordance": "affordance.combat.basic-attack"}
+    },
+    {
+      "tag_id": "target.enemy",
+      "category": "target",
+      "slug": "enemy",
+      "display_name": "Enemy",
+      "synonyms": ["foe"],
+      "audience": ["player", "gm"],
+      "gating": {"ruleset_version": "v1.0"}
+    }
+  ],
+  "affordances": [
+    {
+      "affordance_id": "affordance.combat.basic-attack",
+      "category": "combat",
+      "slug": "basic-attack",
+      "applies_to": ["tag:action.attack", "tag:target.enemy"],
+      "gating": {"audience": "player", "ruleset_version": "v1.0"},
+      "metadata": {
+        "effect": "Deal weapon damage",
+        "improbability_drive": {"intent_frame": "attack", "confidence": 80}
+      }
+    }
+  ]
+}

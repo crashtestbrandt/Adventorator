@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "tags": [
+    {
+      "category": "action",
+      "slug": "attack",
+      "display_name": "Attack",
+      "synonyms": ["strike"],
+      "audience": ["player"],
+      "gating": {"ruleset_version": "v1.0"}
+      
+    }
+  ],
+  "affordances": [
+    {
+      "category": "combat",
+      "slug": "basic-attack",
+      "applies_to": ["tag:action.attack"],
+      "gating": {"audience": "player", "ruleset_version": "v1.0"}
+    }
+  ]
+}

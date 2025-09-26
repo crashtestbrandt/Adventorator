@@ -2,10 +2,13 @@
 
 Epic: [EPIC-IPD-001 — ImprobabilityDrive Enablement](/docs/implementation/epics/EPIC-IPD-001-improbability-drive.md)
 Status: In Progress — Schemas present; validator integration pending
+DoR Status: Ready (all prerequisites satisfied)
 Owner: Ontology/Contracts WG
 
 ## Summary
 Define ontology files under `contracts/` or `prompts/` with versioning, validation script, and governance.
+
+Fixture separation note: Validator-focused fixtures live under `tests/fixtures/ontology/` (this story) and intentionally include invalid, duplicate, and conflict cases. They MUST remain separate from package import fixtures under `tests/fixtures/import/manifest/.../ontologies/` which model coherent, hash-stable bundles for the CDA importer stories (e.g., STORY-CDA-IMPORT-002D). Do not merge these directories; mixing would pollute manifest hash determinism and undermine negative test isolation.
 
 ## Acceptance Criteria
 - Contract-first validator in place: Ontology artifacts under `contracts/ontology/` validate via `scripts/validate_prompts_and_contracts.py` and the Make target `make quality-artifacts`; failures are clear and actionable.
@@ -82,6 +85,23 @@ Define ontology files under `contracts/` or `prompts/` with versioning, validati
 - Task breakdown: Subtasks above have owners and explicit artifacts with exit criteria.
 - Deterministic fixtures prepared under `tests/fixtures/ontology/` to exercise validator (happy/invalid/duplicate/conflict).
 - CI integration approach: Use `make quality-artifacts` and `make quality-gates`; failure policy documented in PR template.
+
+### Definition of Ready — Assessment (2025-09-25)
+
+- [x] Parent linkage — Verified: `docs/implementation/epics/EPIC-IPD-001-improbability-drive.md` exists and is referenced here.
+- [x] Scope clarity — Verified: Out-of-scope (importer behavior) is explicitly called out; in-scope is validator + docs.
+- [x] Contract-first — Verified: `contracts/ontology/tag.v1.json` and `contracts/ontology/affordance.v1.json` present; `contracts/ontology/README.md` documents invariants.
+- [x] Test strategy — Verified: Strategy documented in this story; specific tests and fixtures enumerated below.
+- [x] Observability plan — Verified: Timing summary requirement captured; no metrics beyond logs.
+- [x] Task breakdown — Verified: Tasks and owners listed with exit criteria.
+- [x] Deterministic fixtures prepared — Added under `tests/fixtures/ontology/` (valid/invalid/duplicate/conflict).
+- [x] CI integration approach — Verified: `Makefile` provides `quality-artifacts` and `quality-gates`; validator script path confirmed.
+
+Blocking items to reach Ready: None.
+
+Pre-Ready actionable deltas (non-invasive, to be addressed on implementation branch):
+- Extend `scripts/validate_prompts_and_contracts.py` with ontology checks behind an additive CLI flag (e.g., `--only-ontology`) without breaking existing usage, as described in TASK-IPD-VALIDATE-14.
+- Add `tests/test_ontology_validator.py` to exercise fixtures and timing summary (TASK-IPD-TESTS-17).
 
 ## Definition of Done
 - All acceptance criteria demonstrated via unit tests and CI runs; `make quality-gates` green.

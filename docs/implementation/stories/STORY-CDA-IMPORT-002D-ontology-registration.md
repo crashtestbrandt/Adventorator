@@ -7,6 +7,8 @@ Owner: Campaign Data / Content Pipeline WG — Ontology + retrieval alignment te
 ## Summary
 Load ontology definitions for tags and affordances from package artifacts (`ontology/tags.json`, `ontology/affordances.json` or similar), validate taxonomy consistency, register them in persistence with provenance, and emit `seed.tag_registered` (and affordance variants if applicable) events. Ensure deterministic ordering and idempotent replays, gating duplicates vs conflicting definitions per ADR-0011. Metrics must account for new registrations and idempotent skips.
 
+Fixture scope clarification: The ontology files exercised by importer integration tests reside within package-oriented directories under `tests/fixtures/import/manifest/.../ontologies/` to preserve manifest hash determinism for replay validation. Validator governance fixtures (including intentionally invalid/duplicate/conflict examples) live separately under `tests/fixtures/ontology/` (STORY-IPD-001E) and MUST NOT be moved into the package fixture tree. This separation prevents pathological test data from polluting canonical package manifests.
+
 ## Acceptance Criteria
 - Ontology schema contracts exist for tags and affordances (`contracts/ontology/tag.v1.json`, `contracts/ontology/affordance.v1.json`); validator rejects missing category/version, invalid slug formats, or mismatched relationships.
 - Importer enforces deterministic ordering (e.g., `(category, tag_id, source_path)`) and records ImportLog entries per ontology item with provenance.

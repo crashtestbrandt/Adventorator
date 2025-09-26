@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "tags": [
+    {
+      "tag_id": "trait.brave",
+      "category": "trait",
+      "slug": "brave",
+      "display_name": "Brave",
+      "synonyms": ["courageous"],
+      "audience": ["player"],
+      "gating": {"ruleset_version": "v1.0"}
+    }
+  ],
+  "affordances": []
+}
