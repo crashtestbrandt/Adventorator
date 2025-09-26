@@ -13,8 +13,8 @@ from Adventorator.importer import (
 from Adventorator.metrics import get_counter, reset_counters
 
 SRC_ID = "01JAR9WYH41R8TFM6Z0X5E7NPC"
-DST_ID = "01JAR9WYH41R8TFM6Z0X5E7L0C"
-ORG_ID = "01JAR9WYH41R8TFM6Z0X5E7ORG"
+DST_ID = "01JAR9WYH41R8TFM6Z0X5E7C00"
+ORG_ID = "01JAR9WYH41R8TFM6Z0X5E7RG0"
 
 
 class TestEdgePhase:
@@ -86,7 +86,7 @@ class TestEdgePhase:
                         "oversight": "Council of Chronomancers",
                     },
                     "validity": {
-                        "start_event_id": "01JAR9WYH41R8TFM6Z0X5EVLD1",
+                        "start_event_id": "01JAR9WYH41R8TFM6Z0X5EV001",
                         "end_event_id": None,
                     },
                 },
@@ -178,7 +178,7 @@ class TestEdgePhase:
                     "charter_clause": "Clause VII",
                 },
                 "validity": {
-                    "start_event_id": "01JAR9WYH41R8TFM6Z0X5EVLD1",
+                    "start_event_id": "01JAR9WYH41R8TFM6Z0X5EV001",
                     "end_event_id": None,
                 },
             }
@@ -213,7 +213,7 @@ class TestEdgePhase:
                 },
                 "validity": {
                     "start_event_id": "01JAR9WYH41R8TFM6Z0X5EVLD9",
-                    "end_event_id": "01JAR9WYH41R8TFM6Z0X5EVLD1",
+                    "end_event_id": "01JAR9WYH41R8TFM6Z0X5EV001",
                 },
             }
 

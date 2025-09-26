@@ -169,7 +169,7 @@ class TestEntityMetrics:
             entities_dir.mkdir()
 
             entity_data = {
-                "stable_id": "01JA6Z7F8ITM00000000000000",
+                "stable_id": "01JA6Z7F8TM000000000000000",
                 "kind": "item",
                 "name": "Magic Sword",
                 "tags": ["weapon"],

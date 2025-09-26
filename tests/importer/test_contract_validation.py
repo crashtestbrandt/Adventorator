@@ -74,7 +74,7 @@ class TestContractValidation:
             "stable_id": "01JAR9WYH41R8TFM6Z0X5E7ED1",
             "type": "npc.resides_in.location",
             "src_ref": "01JAR9WYH41R8TFM6Z0X5E7NPC",
-            "dst_ref": "01JAR9WYH41R8TFM6Z0X5E7L0C",
+            "dst_ref": "01JAR9WYH41R8TFM6Z0X5E7C00",
             "attributes": {"relationship_context": "liaison_residence"},
             "provenance": {
                 "package_id": "01JAR9WYH41R8TFM6Z0X5E7EDGE",
@@ -118,7 +118,7 @@ class TestContractValidation:
             "stable_id": "01JAR9WYH41R8TFM6Z0X5E7ED1",
             "type": "npc.resides_in.location",
             "src_ref": "01JAR9WYH41R8TFM6Z0X5E7NPC",
-            "dst_ref": "01JAR9WYH41R8TFM6Z0X5E7L0C",
+            "dst_ref": "01JAR9WYH41R8TFM6Z0X5E7C00",
             "attributes": {"relationship_context": "liaison_residence"},
         }
 

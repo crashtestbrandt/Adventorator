@@ -62,7 +62,7 @@ class TestCompleteImportWorkflow:
                     "props": {"capacity": 500},
                 },
                 {
-                    "stable_id": "01JA6Z7F8ORG00000000000001",
+                    "stable_id": "01JA6Z7F8RG000000000000001",
                     "kind": "organization",
                     "name": "Council of Chronomancers",
                     "tags": ["council", "arcane"],
@@ -83,20 +83,20 @@ class TestCompleteImportWorkflow:
                     "stable_id": "01JAR9WYH41R8TFM6Z0X5E7ED1",
                     "type": "npc.resides_in.location",
                     "src_ref": "01JA6Z7F8NPC00000000000001",
-                    "dst_ref": "01JA6Z7F8LOC00000000000001",
+                    "dst_ref": "01JA6Z7F8C0000000000000001",
                     "attributes": {"relationship_context": "resident", "duty_schedule": "day"},
                 },
                 {
                     "stable_id": "01JAR9WYH41R8TFM6Z0X5E7ED2",
                     "type": "organization.controls.location",
-                    "src_ref": "01JA6Z7F8ORG00000000000001",
-                    "dst_ref": "01JA6Z7F8LOC00000000000001",
+                    "src_ref": "01JA6Z7F8RG000000000000001",
+                    "dst_ref": "01JA6Z7F8C0000000000000001",
                     "attributes": {
                         "charter_clause": "Clause VII",
                         "oversight": "Council of Chronomancers",
                     },
                     "validity": {
-                        "start_event_id": "01JAR9WYH41R8TFM6Z0X5EVLD1",
+                        "start_event_id": "01JAR9WYH41R8TFM6Z0X5EV001",
                         "end_event_id": None,
                     },
                 },
@@ -195,7 +195,7 @@ class TestCompleteImportWorkflow:
             edge_events = edge_phase.create_seed_events(edges)
             assert len(edge_events) == 2
             assert edge_events[0]["type"] == "npc.resides_in.location"
-            assert edge_events[1]["validity"]["start_event_id"] == "01JAR9WYH41R8TFM6Z0X5EVLD1"
+            assert edge_events[1]["validity"]["start_event_id"] == "01JAR9WYH41R8TFM6Z0X5EV001"
 
             print("✓ Complete workflow test passed")
 

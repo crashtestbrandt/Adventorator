@@ -140,7 +140,7 @@ class TestEntitySeedEvents:
 
         entities = [
             {
-                "stable_id": "01JA6Z7F8ITM00000000000000",
+                "stable_id": "01JA6Z7F8TM000000000000000",
                 "kind": "item",
                 "name": "Magic Sword",
                 "tags": ["weapon"],
@@ -160,7 +160,7 @@ class TestEntitySeedEvents:
         event = events[0]
 
         # Should have all required fields
-        assert event["stable_id"] == "01JA6Z7F8ITM00000000000000"
+        assert event["stable_id"] == "01JA6Z7F8TM000000000000000"
         assert event["kind"] == "item"
         assert event["name"] == "Magic Sword"
         assert event["tags"] == ["weapon"]

@@ -8,8 +8,8 @@ from Adventorator.importer import EdgeCollisionError, EdgePhase
 from Adventorator.metrics import get_counter, reset_counters
 
 SRC_ID = "01JAR9WYH41R8TFM6Z0X5E7NPC"
-DST_ID = "01JAR9WYH41R8TFM6Z0X5E7L0C"
-ORG_ID = "01JAR9WYH41R8TFM6Z0X5E7ORG"
+DST_ID = "01JAR9WYH41R8TFM6Z0X5E7C00"
+ORG_ID = "01JAR9WYH41R8TFM6Z0X5E7RG0"
 
 
 class TestEdgeMetrics:
@@ -54,7 +54,7 @@ class TestEdgeMetrics:
                         "oversight": "Council",
                     },
                     "validity": {
-                        "start_event_id": "01JAR9WYH41R8TFM6Z0X5EVLD1",
+                        "start_event_id": "01JAR9WYH41R8TFM6Z0X5EV001",
                         "end_event_id": None,
                     },
                 },
