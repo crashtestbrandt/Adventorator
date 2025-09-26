@@ -452,3 +452,117 @@ class TestFailureInjectionHarness:
             with open(package_root / "entities" / "invalid.json") as f:
                 entity = json.load(f)
             assert "kind" not in entity  # Missing required field
+
+
+class TestDatabaseRollbackValidation:
+    """Test database state validation for rollback scenarios."""
+    
+    @pytest.mark.asyncio
+    async def test_entity_collision_database_rollback(self):
+        """Test that entity collision leaves database in clean state.""" 
+        from Adventorator.importer import run_full_import_with_database
+        from Adventorator.db import session_scope
+        from Adventorator import models
+        from sqlalchemy import select
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_root = Path(temp_dir)
+            FailureInjectionHarness.create_collision_package(package_root)
+            
+            # Get initial database state
+            async with session_scope() as session:
+                initial_events = await session.execute(
+                    select(models.Event).where(models.Event.campaign_id == 1)
+                )
+                initial_event_count = len(initial_events.scalars().all())
+                
+                initial_logs = await session.execute(
+                    select(models.ImportLog).where(models.ImportLog.campaign_id == 1)
+                )
+                initial_log_count = len(initial_logs.scalars().all())
+            
+            # Attempt database import - should fail with collision
+            from Adventorator.importer import EntityCollisionError
+            with pytest.raises(EntityCollisionError):
+                await run_full_import_with_database(
+                    package_root=package_root,
+                    campaign_id=1
+                )
+            
+            # Verify database state is unchanged (rollback completed)
+            async with session_scope() as session:
+                post_failure_events = await session.execute(
+                    select(models.Event).where(models.Event.campaign_id == 1)
+                )
+                post_failure_event_count = len(post_failure_events.scalars().all())
+                
+                post_failure_logs = await session.execute(
+                    select(models.ImportLog).where(models.ImportLog.campaign_id == 1)
+                )
+                post_failure_log_count = len(post_failure_logs.scalars().all())
+                
+                # Database should be in exactly the same state as before
+                assert post_failure_event_count == initial_event_count, \
+                    "No Events should be persisted after collision rollback"
+                assert post_failure_log_count == initial_log_count, \
+                    "No ImportLog entries should be persisted after collision rollback"
+            
+            # Verify rollback metrics were incremented
+            from Adventorator.metrics import get_counter
+            assert get_counter("importer.rollback.entity") > 0, \
+                "Entity rollback counter should increment"
+    
+    @pytest.mark.asyncio
+    async def test_manifest_failure_database_rollback(self):
+        """Test that manifest validation failure leaves database clean."""
+        from Adventorator.importer import run_full_import_with_database
+        from Adventorator.db import session_scope
+        from Adventorator import models
+        from sqlalchemy import select
+        
+        with tempfile.TemporaryDirectory() as temp_dir: 
+            package_root = Path(temp_dir)
+            FailureInjectionHarness.create_missing_dependency_package(package_root)
+            
+            # Get initial database state
+            async with session_scope() as session:
+                initial_events = await session.execute(
+                    select(models.Event).where(models.Event.campaign_id == 1)
+                )
+                initial_event_count = len(initial_events.scalars().all())
+                
+                initial_logs = await session.execute(
+                    select(models.ImportLog).where(models.ImportLog.campaign_id == 1)
+                )
+                initial_log_count = len(initial_logs.scalars().all())
+            
+            # Attempt database import - should fail with manifest error
+            from Adventorator.importer import ImporterError
+            with pytest.raises(ImporterError):
+                await run_full_import_with_database(
+                    package_root=package_root,
+                    campaign_id=1
+                )
+            
+            # Verify database state is unchanged (rollback completed)
+            async with session_scope() as session:
+                post_failure_events = await session.execute(
+                    select(models.Event).where(models.Event.campaign_id == 1)
+                )
+                post_failure_event_count = len(post_failure_events.scalars().all())
+                
+                post_failure_logs = await session.execute(
+                    select(models.ImportLog).where(models.ImportLog.campaign_id == 1)
+                )
+                post_failure_log_count = len(post_failure_logs.scalars().all())
+                
+                # Database should be in exactly the same state as before
+                assert post_failure_event_count == initial_event_count, \
+                    "No Events should be persisted after manifest failure rollback"
+                assert post_failure_log_count == initial_log_count, \
+                    "No ImportLog entries should be persisted after manifest failure rollback"
+            
+            # Verify rollback metrics were incremented
+            from Adventorator.metrics import get_counter
+            assert get_counter("importer.rollback.manifest") > 0, \
+                "Manifest rollback counter should increment"
