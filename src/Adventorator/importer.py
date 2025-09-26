@@ -1630,10 +1630,16 @@ class FinalizationPhase:
         # Compute state digest
         state_digest = context.compute_state_digest()
         
+        # Ensure required fields are present
+        if context.package_id is None:
+            raise ValueError("Missing required field: package_id")
+        if context.manifest_hash is None:
+            raise ValueError("Missing required field: manifest_hash")
+
         # Create completion event payload
         completion_payload = {
-            "package_id": context.package_id or "",
-            "manifest_hash": context.manifest_hash or "",
+            "package_id": context.package_id,
+            "manifest_hash": context.manifest_hash,
             "entity_count": counts["entities"],
             "edge_count": counts["edges"], 
             "tag_count": counts["tags"],
