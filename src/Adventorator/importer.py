@@ -1602,6 +1602,175 @@ class LorePhase:
         return events
 
 
+class FinalizationPhase:
+    """Handles importer finalization, completion events, and state digest computation."""
+
+    def __init__(self, features_importer_enabled: bool = False):
+        """Initialize finalization phase.
+        
+        Args:
+            features_importer_enabled: Whether importer features are enabled.
+        """
+        self.features_importer_enabled = features_importer_enabled
+
+    def finalize_import(self, context, start_time: datetime) -> dict[str, Any]:
+        """Finalize import by emitting completion event and computing final state.
+        
+        Args:
+            context: ImporterRunContext with aggregated phase outputs
+            start_time: Import start timestamp for duration calculation
+            
+        Returns:
+            Finalization result with completion event and ImportLog summary
+        """
+        if not self.features_importer_enabled:
+            emit_structured_log("finalization_skipped", reason="features_importer_disabled")
+            return {"skipped": True}
+
+        # Calculate duration
+        end_time = datetime.now(timezone.utc)
+        duration_ms = int((end_time - start_time).total_seconds() * 1000)
+
+        # Get counts from context
+        counts = context.summary_counts()
+        
+        # Compute state digest
+        state_digest = context.compute_state_digest()
+        
+        # Create completion event payload
+        completion_payload = {
+            "package_id": context.package_id or "",
+            "manifest_hash": context.manifest_hash or "",
+            "entity_count": counts["entities"],
+            "edge_count": counts["edges"], 
+            "tag_count": counts["tags"],
+            "affordance_count": counts["affordances"],
+            "chunk_count": counts["chunks"],
+            "state_digest": state_digest,
+            "import_duration_ms": duration_ms,
+        }
+
+        # Add warnings if any (placeholder for future warning collection)
+        warnings = []
+        if warnings:
+            completion_payload["warnings"] = warnings
+
+        # Emit completion event
+        completion_event = self._emit_completion_event(completion_payload)
+        
+        # Create ImportLog summary entry
+        import_log_summary = self._create_import_log_summary(
+            context, state_digest, duration_ms
+        )
+        
+        # Emit structured log with final summary
+        emit_structured_log(
+            "import_finalization_complete",
+            package_id=context.package_id,
+            manifest_hash=context.manifest_hash,
+            entity_count=counts["entities"],
+            edge_count=counts["edges"],
+            tag_count=counts["tags"],
+            affordance_count=counts["affordances"], 
+            chunk_count=counts["chunks"],
+            state_digest=state_digest,
+            duration_ms=duration_ms,
+        )
+        
+        # Record duration metric
+        inc_counter("importer.duration_ms", value=duration_ms, package_id=context.package_id)
+        
+        return {
+            "completion_event": completion_event,
+            "import_log_summary": import_log_summary,
+            "state_digest": state_digest,
+            "duration_ms": duration_ms,
+        }
+
+    def _emit_completion_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Emit seed.import.complete event.
+        
+        Args:
+            payload: Event payload
+            
+        Returns:
+            Event envelope dict
+        """
+        event_envelope = {
+            "event_type": "seed.import.complete",
+            "payload": payload,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "replay_ordinal": None,  # Would be assigned by event ledger
+            "idempotency_key": None,  # Would be computed by event ledger
+        }
+        
+        emit_structured_log(
+            "seed_event_emitted",
+            event_type="seed.import.complete",
+            package_id=payload.get("package_id"),
+            manifest_hash=payload.get("manifest_hash"),
+        )
+        
+        return event_envelope
+
+    def _create_import_log_summary(
+        self, context, state_digest: str, duration_ms: int
+    ) -> dict[str, Any]:
+        """Create ImportLog summary entry.
+        
+        Args:
+            context: ImporterRunContext with phase data
+            state_digest: Computed state digest
+            duration_ms: Import duration
+            
+        Returns:
+            ImportLog summary entry dict
+        """
+        import_logs = context.import_log_entries
+        
+        # Find the highest sequence number across all phases
+        max_sequence = 0
+        if import_logs:
+            max_sequence = max(
+                entry.get("sequence_no", 0) 
+                for entry in import_logs 
+                if isinstance(entry.get("sequence_no"), int)
+            )
+        
+        # Verify sequence contiguity (basic check)
+        sequences = [
+            entry.get("sequence_no") for entry in import_logs 
+            if isinstance(entry.get("sequence_no"), int)
+        ]
+        if sequences:
+            sequences.sort()
+            expected_sequences = list(range(1, len(sequences) + 1))
+            if sequences != expected_sequences:
+                emit_structured_log(
+                    "import_log_sequence_gap_detected",
+                    expected=expected_sequences,
+                    actual=sequences,
+                    package_id=context.package_id,
+                )
+        
+        summary_entry = {
+            "phase": "finalization",
+            "object_type": "summary",
+            "stable_id": f"summary-{context.package_id}",
+            "file_hash": state_digest,  # Use state digest as summary hash
+            "action": "completed",
+            "manifest_hash": context.manifest_hash or "",
+            "sequence_no": max_sequence + 1,
+            "metadata": {
+                "state_digest": state_digest,
+                "duration_ms": duration_ms,
+                "total_entries": len(import_logs),
+            },
+        }
+        
+        return summary_entry
+
+
 def create_lore_phase(
     features_importer: bool = False, features_importer_embeddings: bool = False
 ) -> LorePhase:
@@ -1618,3 +1787,19 @@ def create_lore_phase(
         features_importer_enabled=features_importer,
         features_importer_embeddings=features_importer_embeddings,
     )
+
+
+__all__ = [
+    "ManifestPhase",
+    "EntityPhase", 
+    "EdgePhase",
+    "OntologyPhase",
+    "LorePhase",
+    "FinalizationPhase",
+    "create_lore_phase",
+    "ImporterError",
+    "ManifestValidationError",
+    "EntityValidationError",
+    "EdgeValidationError", 
+    "OntologyValidationError",
+]
