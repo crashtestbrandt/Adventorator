@@ -20,6 +20,7 @@ Apply guardrails, SLOs, and rollout plan with canary+rollback.
 
 ## Definition of Done
 - Runbook linked; dashboards or mockups attached.
+ - Flag policy validated (defaults disabled unless documented exception); canary toggles enumerated with owners.
 
 ## Test Plan
 - Chaos-style tests for timeouts/bounds; manual canary checklist.
@@ -39,3 +40,9 @@ Apply guardrails, SLOs, and rollout plan with canary+rollback.
 ## Traceability
 - Epic: EPIC-IPD-001
 - Implementation Plan: Phase 6 — Operational Hardening and Rollout
+
+---
+
+## Alignment analysis — IPD↔CDA (embedded)
+
+- Coordinate rollout stages with CDA events enablement plan; require pre-enable checks (idempotency v2 shadow, hash chain observability) before allowing any AskReport persistence or planner-driven event creation.

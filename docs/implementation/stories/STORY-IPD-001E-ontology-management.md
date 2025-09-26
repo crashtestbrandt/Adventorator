@@ -53,5 +53,12 @@ Note on status: This story was not formally initiated; partial implementation re
 - N/A (docs and scripts)
 
 ## Traceability
+---
+
+Note: This story was partially started (seed files committed) without formal initiation. This document now reflects the current In Progress state and codifies the remaining steps to complete validation and governance.
+
+## Alignment analysis — IPD↔CDA (embedded)
+
+- Ensure ontology registration in CDA importer (seed `seed.tag_registered` events) lines up with tags used in IPD; validation script should cross-check usage.
 - Epic: EPIC-IPD-001
 - Implementation Plan: Phase 4 — Ontology Management & Validation

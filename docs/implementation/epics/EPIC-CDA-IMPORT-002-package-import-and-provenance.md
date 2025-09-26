@@ -190,3 +190,23 @@ Implementation plan: [STORY-CDA-IMPORT-002G — Idempotent re-run & rollback tes
 | ADR-0006 | ../../adr/ADR-0006-event-envelope-and-hash-chain.md | Event emission & payload hashing for seed events. |
 
 Update the table as GitHub issues are created to preserve AIDD traceability.
+
+---
+
+## Alignment analysis — EPIC roll-up (IMPORT ↔ CDA CORE and IPD)
+- Canonical JSON policy (CDA CORE): All importer hashing and any serialized payloads must reuse the canonical JSON helper (UTF-8 NFC, sorted keys, integer-only numerics). Each story now calls this out and should carry golden fixtures to prevent regressions.
+- Idempotency v2 (CDA CORE): Synthetic seed events must compute idempotency keys from stable fields only (identifiers + content digests), explicitly excluding replay_ordinal and run-scoped IDs. Reruns of identical packages must not append new envelopes and must reproduce identical envelope hashes.
+- Deterministic ordering (CDA CORE): Phase-internal ordering is defined per story (entities: kind→stable_id→path; edges: type→stable_id→path; ontology: category→tag; lore: path→chunk_index). Tests should assert stable replay_ordinal sequences across runs.
+- Hash chain integrity (CDA CORE): Importer reruns should leave the hash chain tip unchanged. The idempotent rerun story codifies verification of the chain state.
+- Feature flags and defaults (AIDD/IPD): Importer is gated by `features.importer` (and `features.importer_embeddings` where applicable) and must default to disabled. Stories include disabled-path no-op assertions.
+- Observability alignment (IPD): Use repo logging/metrics helpers for structured logs and counters. Logs must avoid leaking raw content beyond stable IDs and hashes; metrics namespaces start with `importer.*`.
+- Ontology/IPD integration: Entity/tag/affordance semantics must match IPD-side consumers (NLU/tagging, predicate gating). Contract parity tests or mapping docs should be added where names differ.
+
+## Status roll-up (concise)
+- 002A — Manifest validation & package_id registration: Planned
+- 002B — Entity ingestion & synthetic events: Planned
+- 002C — Edge ingestion & temporal validity: Planned
+- 002D — Ontology (tags & affordances) registration: Planned
+- 002E — Lore content chunking & ingestion: Planned
+- 002F — Finalization & ImportLog consolidation: Planned
+- 002G — Idempotent re-run & rollback tests: Planned

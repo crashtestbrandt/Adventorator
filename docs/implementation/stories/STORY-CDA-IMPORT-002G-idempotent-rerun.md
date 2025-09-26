@@ -60,6 +60,13 @@ Validate importer resilience by exercising repeated runs of the same package, fa
 - Epic: [EPIC-CDA-IMPORT-002](/docs/implementation/epics/EPIC-CDA-IMPORT-002-package-import-and-provenance.md)
 - Tests: `tests/importer/test_importer_idempotency.py`, `tests/importer/test_importer_rollback.py`.
 
+## Alignment analysis — IMPORT ↔ CDA CORE and IPD
+- Hash chain integrity (CDA CORE): Rerun tests must assert that the ledger hash chain tip and all envelope hashes remain unchanged for identical inputs, confirming no new events are appended.
+- Idempotency v2 policy (CDA CORE): Ensure idempotency key computation excludes volatile fields; fixtures should demonstrate identical keys and envelopes on repeat imports.
+- Deterministic ordering (CDA CORE): Validate that replay_ordinal sequences remain consistent across reruns; deviations should fail tests with clear diffs.
+- Observability alignment (IPD): Counters for idempotent paths and rollbacks should use established metrics helpers; logs must avoid leaking raw content paths beyond stable IDs and hashes.
+- Feature flag policy (AIDD/IPD): Confirm disabled importer leads to a pure no-op in rerun tests; enabled path demonstrates idempotent behavior.
+
 ## Implementation Notes
 - Consider running rerun tests using database transaction snapshots to speed up repeated runs.
 - Provide CLI harness to intentionally corrupt file between runs to validate detection/rollback messaging.

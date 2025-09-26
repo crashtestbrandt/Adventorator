@@ -93,17 +93,17 @@ Alignment checks against ADR-0005 and EPIC-IPD-001:
 - No external NLP/network calls — confirmed.
 
 ## Definition of Ready (DoR)
-- [ ] Acceptance criteria defined
-- [ ] Contracts drafted and reviewed (ontology MVP defined; normalization rules agreed)
-- [ ] Test strategy approved
-- [ ] Observability plan documented
+- [x] Acceptance criteria defined
+- [x] Contracts drafted and reviewed (ontology MVP defined; normalization rules agreed)
+- [x] Test strategy approved
+- [x] Observability plan documented (debug logs only)
 
 ## Definition of Done (DoD)
-- [ ] Acceptance criteria verified by automated tests
-- [ ] Contracts versioned & backward compatible (unknown tokens tolerated; CDC checks pass where applicable)
-- [ ] Observability signals implemented and documented (debug logging behind dev flag)
-- [ ] Security/SCA/SAST/secrets checks pass; basic perf sanity holds
-- [ ] Parser/extractor documented with examples and limitations; PR merged with all quality gates green
+- [x] Acceptance criteria verified by automated tests
+- [x] Contracts versioned & backward compatible (unknown tokens tolerated; CDC checks pass where applicable)
+- [x] Observability signals implemented and documented (debug logging behind dev flag)
+- [x] Security/SCA/SAST/secrets checks pass; basic perf sanity holds
+- [x] Parser/extractor documented with examples and limitations; PR merged with all quality gates green
 
 ## Risks & Mitigations
 - Overfitting rules: keep coverage broad; add fixtures iteratively.
@@ -121,5 +121,12 @@ Additional notes:
 - features.ask_nlu_rule_based (default=true)
 
 ## Traceability
+---
+
+## Alignment analysis — IPD↔CDA (embedded)
+
+- Determinism and offline operation ensure that if/when AskReport is persisted as an event, payload formation won’t introduce nondeterminism.
+- Tagging outputs avoid floats/NaN; any numeric fields introduced later must follow CDA integer-only policy.
+- Ontology governance links to importer/ontology registration stories on the CDA side to avoid drift between runtime tags and registered ontology artifacts.
 - Epic: EPIC-IPD-001
 - Implementation Plan: Phase 2 — NLU & Tagging Scaffold (Deterministic)

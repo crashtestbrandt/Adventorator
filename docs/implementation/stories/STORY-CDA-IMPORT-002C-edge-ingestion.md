@@ -80,6 +80,13 @@ Ingest relationship definitions (`edges/*.json`) that connect previously loaded 
 - Contracts: `contracts/edges/edge.v1.json`, `contracts/events/seed/edge-created.v1.json`.
 - Tests: `tests/importer/test_edge_parser.py`, `tests/importer/test_edge_seed_events.py`.
 
+## Alignment analysis — IMPORT ↔ CDA CORE and IPD
+- Canonical JSON and hashing (CDA CORE): Edge payload hashing and any stored provenance digests must reuse the canonical JSON normalization policy to avoid drift. Unicode and key order tests should accompany fixtures.
+- Idempotency v2 composition (CDA CORE): `seed.edge_created` events must compute idempotency keys based solely on stable fields (edge identity and content digest), not on replay_ordinal or runtime context. Repeat imports produce identical envelopes.
+- Deterministic ordering (CDA CORE): Sorting should mirror entity rules while adding referential checks; stable `replay_ordinal` assignments across runs must be demonstrated in tests.
+- Referential integrity and ontology alignment (IPD): Edges referencing tags/affordances must be validated against the ontology story outputs when applicable; fail fast with clear messages.
+- Feature flag policy (AIDD/IPD): Default-disabled importer behavior must be verified; disabled mode results in no parsing or events.
+
 ## Implementation Notes
 - Consider using streaming validation to avoid loading entire edge set into memory for large packages; maintain deterministic ordering via sort keys computed incrementally.
 - Leverage referential integrity map produced by entity phase (e.g., dictionary keyed by stable_id) to provide descriptive errors listing missing references.

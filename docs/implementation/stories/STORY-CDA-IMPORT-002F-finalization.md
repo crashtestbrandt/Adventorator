@@ -62,6 +62,13 @@ Finalize the multi-phase importer by emitting `seed.import.complete`, consolidat
 - Contracts: `contracts/events/seed/import-complete.v1.json`.
 - Tests: `tests/importer/test_importer_finalization.py`, `tests/importer/test_state_digest.py`.
 
+## Alignment analysis — IMPORT ↔ CDA CORE and IPD
+- Canonical JSON and hashing (CDA CORE): The `state_digest` fold must reuse canonical serialization policies to ensure the digest is stable and reproducible. Document and test any tie-breakers for fold ordering.
+- Idempotency v2 composition (CDA CORE): `seed.import.complete` event should be idempotent given identical prior phases, with the same envelope and idempotency key across reruns.
+- Hash chain integrity (CDA CORE): Verify that a rerun on a clean database produces the same hash chain tip; on idempotent rerun, no new events should append to the chain.
+- Feature flag policy (AIDD/IPD): Confirm importer remains default-disabled; finalization should be a no-op when disabled.
+- Observability alignment: Ensure duration metric integrates with repo metrics helpers and structured logs match observability conventions.
+
 ## Implementation Notes
 - Consider storing computed digest + manifest hash in dedicated table for snapshot seeding; align with ARCH-CDA-001 snapshot guidance.
 - Use database transaction to wrap finalization; on failure, roll back completion event and ImportLog summary to maintain consistency.

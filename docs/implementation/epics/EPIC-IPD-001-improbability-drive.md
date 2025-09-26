@@ -59,6 +59,8 @@
 Story doc: [/docs/implementation/stories/STORY-IPD-001A-contracts-and-flags.md](/docs/implementation/stories/STORY-IPD-001A-contracts-and-flags.md)
 *Epic linkage:* Establishes AskReport/IntentFrame contracts and flags for phased rollout.
 
+Status: In Progress
+
 - Summary. Introduce canonical Pydantic v2 models for AskReport, IntentFrame, and AffordanceTags with serialization helpers and adapters as needed.
 - Acceptance criteria.
   - New models align with ARCH-AVA-001 data contracts and pass round-trip serialization tests.
@@ -66,8 +68,10 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001A-contracts-and-flags.md](
   - Contract versioning documented (semver-like), with converters for any legacy planner inputs.
 - Tasks.
   - [x] `TASK-IPD-SCHEMA-01` — Implement AskReport/IntentFrame/AffordanceTags models and JSON helpers.
-  - [x] `TASK-IPD-FLAGS-02` — Extend config.toml and config dataclass with `features.improbability_drive`, `features.ask` (default off) and docs.
+  - [ ] `TASK-IPD-FLAGS-02` — Extend config.toml and config dataclass with `features.improbability_drive`, `features.ask` (default off) and docs. (Dev config currently enabled; document exception or flip defaults.)
   - [x] `TASK-IPD-TEST-03` — Add round-trip tests using deterministic fixtures.
+  - [x] `TASK-IPD-CONTRACT-05` — Add Ask JSON contract artifact under `contracts/ask/v1/` and wire to validation script.
+
 - DoR.
   - Contract change proposal reviewed with planner maintainers.
   - Test plan outlines identity fixtures and error handling.
@@ -78,6 +82,8 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001A-contracts-and-flags.md](
 ### STORY-IPD-001B — /ask command handler and responder
 Story doc: [/docs/implementation/stories/STORY-IPD-001B-ask-handler.md](/docs/implementation/stories/STORY-IPD-001B-ask-handler.md)
 *Epic linkage:* Wires entry point to emit AskReport while preserving existing flows.
+
+Status: Implemented
 
 - Summary. Add `/ask` handler using registry decorators and responder abstraction; when enabled, constructs AskReport using NLU/tagging scaffold and emits structured logs/metrics.
 - Acceptance criteria.
@@ -97,6 +103,8 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001B-ask-handler.md](/docs/im
 Story doc: [/docs/implementation/stories/STORY-IPD-001C-nlu-tagging-baseline.md](/docs/implementation/stories/STORY-IPD-001C-nlu-tagging-baseline.md)
 *Epic linkage:* Minimal, deterministic NLU to bootstrap IntentFrame + tags without ML dependencies.
 
+Status: Implemented
+
 - Summary. Implement a rule-based parser for action, actor, object/target refs, plus AffordanceTags extraction from a small ontology; include entity normalization hooks.
 - Acceptance criteria.
   - Deterministic parsing with seeded examples; no network calls.
@@ -114,6 +122,8 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001C-nlu-tagging-baseline.md]
 ### STORY-IPD-001D — World Knowledge Base (KB) integration (read-only)
 Story doc: [/docs/implementation/stories/STORY-IPD-001D-kb-integration.md](/docs/implementation/stories/STORY-IPD-001D-kb-integration.md)
 *Epic linkage:* Disambiguates entities and tags using existing repos or KB.
+
+Status: Implemented
 
 - Summary. Add a read-only KB adapter leveraging existing repos to resolve entity references and suggest alternatives; cache common lookups.
 - Acceptance criteria.
@@ -133,6 +143,8 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001D-kb-integration.md](/docs
 Story doc: [/docs/implementation/stories/STORY-IPD-001E-ontology-management.md](/docs/implementation/stories/STORY-IPD-001E-ontology-management.md)
 *Epic linkage:* Ensures AffordanceTags are governed and evolvable.
 
+Status: In Progress
+
 - Summary. Define ontology files under `prompts/` or `contracts/` with versioning, validation script, and governance.
 - Acceptance criteria.
   - Ontology schema and linter in place; changes validated via CI script (`scripts/validate_prompts_and_contracts.py`).
@@ -149,6 +161,8 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001E-ontology-management.md](
 ### STORY-IPD-001F — Logging, metrics, and ActivityLog linkage
 Story doc: [/docs/implementation/stories/STORY-IPD-001F-logging-and-metrics.md](/docs/implementation/stories/STORY-IPD-001F-logging-and-metrics.md)
 *Epic linkage:* Observability aligned with defensibility requirements.
+
+Status: In Progress
 
 - Summary. Standardize logs and counters for /ask and tagging; integrate with ActivityLog when Phase 6 assets exist.
 - Acceptance criteria.
@@ -167,6 +181,8 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001F-logging-and-metrics.md](
 Story doc: [/docs/implementation/stories/STORY-IPD-001G-planner-handoff.md](/docs/implementation/stories/STORY-IPD-001G-planner-handoff.md)
 *Epic linkage:* Connects AskReport output to existing planner path behind flags.
 
+Status: Planned
+
 - Summary. When enabled, planner accepts AskReport; otherwise use existing inputs. Add adapters and parity tests.
 - Acceptance criteria.
   - Adapter maps AskReport to current planner inputs with no behavioral regressions.
@@ -183,6 +199,8 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001G-planner-handoff.md](/doc
 Story doc: [/docs/implementation/stories/STORY-IPD-001H-privacy-and-safety.md](/docs/implementation/stories/STORY-IPD-001H-privacy-and-safety.md)
 *Epic linkage:* Ensures safe handling of user text.
 
+Status: Planned
+
 - Summary. Implement PI/PII redaction for logs, bounded context windows, and configurable retention.
 - Acceptance criteria.
   - Redaction in logs enabled by default; opt-out documented.
@@ -194,6 +212,8 @@ Story doc: [/docs/implementation/stories/STORY-IPD-001H-privacy-and-safety.md](/
 
 ### STORY-IPD-001I — Operational hardening and rollout
 Story doc: [/docs/implementation/stories/STORY-IPD-001I-operational-rollout.md](/docs/implementation/stories/STORY-IPD-001I-operational-rollout.md)
+
+Status: Planned
 
 ---
 
@@ -274,3 +294,7 @@ Module placement:
 | Implementation Plan | ../improbability-drive-implementation.md | Phases, validation, and rollout plan. |
 
 Update the table as GitHub issues are created to preserve AIDD traceability.
+
+---
+
+Note: Stories E and F were partially started without formal initiation due to prior instruction confusion. This epic now reflects their true status and embeds alignment and policy notes to prevent further drift.

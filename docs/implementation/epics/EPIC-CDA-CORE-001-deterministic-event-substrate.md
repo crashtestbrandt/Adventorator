@@ -36,6 +36,8 @@
 ### STORY-CDA-CORE-001A — Event envelope migration & constraints ([#189](https://github.com/crashtestbrandt/Adventorator/issues/189))
 *Epic linkage:* Creates physical substrate (schema & DB invariants) enabling deterministic chain.
 
+Status: Implemented (migration present: `migrations/versions/cda001a0001_event_envelope_upgrade.py`)
+
 - **Summary.** Introduce `events` table (or evolve existing) with full envelope columns, replay ordinal trigger/constraint, hash chain fields, idempotency uniqueness, and necessary indexes.
 - **Acceptance criteria.**
   - Migration adds columns: `campaign_id`, `event_id` PK, `replay_ordinal` (gap-free trigger), `event_type`, `event_schema_version`, `world_time`, `wall_time_utc`, `prev_event_hash` (BINARY/bytea 32), `payload_hash` (BINARY/bytea 32), `idempotency_key` (BINARY/bytea 16), `actor_id`, `plan_id`, `execution_request_id`, `approved_by`, `payload` (JSONB), `migrator_applied_from` (nullable int), plus supporting FKs.
@@ -81,6 +83,8 @@ Status Tracking Fields (to update during remediation):
 ### STORY-CDA-CORE-001B — Canonical JSON encoder & golden vectors ([#190](https://github.com/crashtestbrandt/Adventorator/issues/190))
 *Epic linkage:* Ensures payload hashing & idempotency rely on stable serialization.
 
+Status: Implemented (encoder module `src/Adventorator/canonical_json.py`; tests present: `tests/test_canonical_json*.py`)
+
 - **Summary.** Implement canonical encoder enforcing ordering, null elision, UTF-8 NFC normalization, integer-only numeric policy; generate deterministic hash.
 - **Acceptance criteria.**
   - Encoder outputs identical byte sequence for logically equivalent inputs across runs.
@@ -101,6 +105,8 @@ Status Tracking Fields (to update during remediation):
 ### STORY-CDA-CORE-001C — Hash chain computation & verification ([#191](https://github.com/crashtestbrandt/Adventorator/issues/191))
 *Epic linkage:* Secures tamper-evident event history.
 
+Status: In Progress (verification helper present `verify_hash_chain`; integration at insert path pending executor wiring)
+
 - **Summary.** Integrate hash chain update logic in event creation path; supply verification routine and mismatch alert hook.
 - **Acceptance criteria.**
   - On insert, `payload_hash = sha256(canonical_payload)`, `prev_event_hash` references prior event’s `payload_hash` (genesis zeroes).
@@ -118,6 +124,8 @@ Status Tracking Fields (to update during remediation):
 
 ### STORY-CDA-CORE-001D — Idempotency key generation & collision tests ([#192](https://github.com/crashtestbrandt/Adventorator/issues/192))
 *Epic linkage:* Prevents duplicate event emission on network/client retries.
+
+Status: In Progress (v2 helper implemented `compute_idempotency_key_v2` in `events/envelope.py`; executor shadow/integration pending)
 
 - **Summary.** Provide helper constructing 16-byte key prefix per ADR composition spec; integrate into executor stub for early reuse; test retry storms.
 - **Acceptance criteria.**
@@ -148,6 +156,8 @@ Risk Mitigation: Shadow period ensures no accidental broad collisions before enf
 
 ### STORY-CDA-CORE-001E — Observability & metric taxonomy ([#193](https://github.com/crashtestbrandt/Adventorator/issues/193))
 *Epic linkage:* Supplies foundational telemetry for subsequent epics (executor, snapshots, importer).
+
+Status: In Progress (structured log helpers `log_event_applied`, `log_idempotent_reuse` and chain tip accessor present; metric registration to complete)
 
 - **Summary.** Register counters/histograms, structured log fields; expose chain tip inspection API for verification jobs.
 - **Acceptance criteria.**

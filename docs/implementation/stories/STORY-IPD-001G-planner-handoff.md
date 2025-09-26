@@ -39,3 +39,9 @@ When enabled, planner accepts AskReport; otherwise use existing inputs. Add adap
 ## Traceability
 - Epic: EPIC-IPD-001
 - Implementation Plan: Phase 5 — Planner Handoff
+
+---
+
+## Alignment analysis — IPD↔CDA (embedded)
+
+- When enabling planner handoff, compute candidate idempotency key v2 inputs early (plan_id, tool_name, ruleset_version, args_json) to be ready for CDA integration; do not persist until CDA events are enabled.

@@ -63,6 +63,13 @@ Deterministically ingest entity definitions (`entities/*.json`), enforce `stable
 - Contracts: `contracts/entities/entity.v1.json` (new or updated), `contracts/events/seed/entity-created.v1.json` (expected).
 - Tests: `tests/importer/test_entity_parser.py`, `tests/importer/test_entity_seed_events.py`.
 
+## Alignment analysis — IMPORT ↔ CDA CORE and IPD
+- Canonical JSON and hashing (CDA CORE): Entity file hashing must reuse the canonical JSON normalization strategy so provenance digests are stable regardless of whitespace or key order. Validate with golden fixtures, including Unicode edge cases.
+- Idempotency v2 composition (CDA CORE): `seed.entity_created` events should compute idempotency keys using only stable payload fields (entity identity and content digest), excluding replay_ordinal and ephemeral run IDs. Re-running the same package must not create new envelopes.
+- Deterministic ordering (CDA CORE): Enforce the documented sort key `(kind, stable_id, source_path)`; tests should assert stable `replay_ordinal` assignment across runs for identical inputs.
+- Ontology alignment (IPD): Tags and affordances referenced by entities must align with ontology contracts used by IPD features. Add validation to catch unknown tags/affordances early or document dependency ordering with the ontology story.
+- Feature flag policy (AIDD/IPD): Respect default-disabled importer; ensure tests cover disabled-path no-ops and enabled-path full behavior.
+
 ## Implementation Notes
 - Maintain consistent sort key by capturing original relative path; include as tiebreaker for identical `(kind, stable_id)` combos (should only occur in error cases, but ensures deterministic ordering).
 - Consider caching manifest metadata in parser context object to avoid redundant disk reads.

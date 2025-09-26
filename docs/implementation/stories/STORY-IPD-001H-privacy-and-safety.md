@@ -21,6 +21,7 @@ Implement PI/PII redaction for logs, bounded context windows, and configurable r
 
 ## Definition of Done
 - Redaction filters applied in observability and storage paths; tests green.
+ - Redaction configuration documented; default-on posture validated in logs and sample audit persistence path.
 
 ## Test Plan
 - Unit tests for redaction of PII-like tokens and limit enforcement.
@@ -40,3 +41,9 @@ Implement PI/PII redaction for logs, bounded context windows, and configurable r
 ## Traceability
 - Epic: EPIC-IPD-001
 - Implementation Plan: Phase 6 — Privacy/Redaction & Operational Hardening
+
+---
+
+## Alignment analysis — IPD↔CDA (embedded)
+
+- Any AskReport audit persistence or ActivityLog linkage must redact per policy before serialization; when later emitting CDA events, ensure canonical JSON is applied after redaction to avoid drift.
