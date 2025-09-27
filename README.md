@@ -19,18 +19,11 @@ A Discord-native Game Moderator bot that blends deterministic Tabletop RPG mecha
 - [Changelog](./CHANGELOG.md)
  - [Roadmap](./ROADMAP.md)
 
-> Encounters (Phase 10)
-- See docs: [Encounters (dev notes)](./docs/dev/encounters.md)
-- Feature flag: enable `[combat].enabled=true` in `config.toml` (legacy fallback to `[features].combat` is supported).
-- Command: `/encounter status` (FF-gated) shows current round, active combatant, and initiative order.
-
-![](/docs/images/usage-slash-check.jpeg)
-
 ---
 
 ## MVP Definition
 
-End-to-end automated DnD 5e campaign management within a Discord channel for all members with an assigned character sheet (a party):
+End-to-end automated 5e SRD campaign management within a Discord channel for all members with an assigned character sheet (a party):
 
 - Campaign data is ingestible via the importer pipeline (scripts and APIs) with well‑formed definitions for important people, places/geography, history, theme, etc. A future slash command for uploads may arrive in a later ingestion epic.
 - Gameplay swaps between exploration (asynchronous, free-form) and encounter (synchronous, opt-in, turn-order) modes according to party actions.
