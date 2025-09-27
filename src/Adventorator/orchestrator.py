@@ -356,7 +356,10 @@ async def run_orchestrator(
             return _complete(cached, "cache_hit")
 
     inc_counter("llm.request.enqueued")
-    log.info("llm.request.enqueued", scene_id=scene_id)
+    # Emit provider/model context if available for easier debugging
+    prov = getattr(llm_client, "provider", None)
+    model = getattr(llm_client, "model_name", None)
+    log.info("llm.request.enqueued", scene_id=scene_id, llm_provider=prov, llm_model=model)
 
     # 0) Optional: retrieval augmentation (Phase 6, feature-flagged)
     retrieval_snippets: list[ContentSnippet] = []
@@ -412,7 +415,9 @@ async def run_orchestrator(
     out = await llm_client.generate_json(narrator_msgs)  # type: ignore[attr-defined]
     if not out:
         inc_counter("llm.parse.failed")
-        log.warning("llm.parse.failed", scene_id=scene_id)
+        log.warning(
+            "llm.parse.failed", scene_id=scene_id, llm_provider=prov, llm_model=model
+        )
         # Map internal code to user-friendly text
         friendly = "I couldn't generate a structured preview. Try rephrasing or a simpler action."
         return _complete(
@@ -425,7 +430,7 @@ async def run_orchestrator(
             "llm_invalid_or_empty",
         )
     inc_counter("llm.response.received")
-    log.info("llm.response.received", scene_id=scene_id)
+    log.info("llm.response.received", scene_id=scene_id, llm_provider=prov, llm_model=model)
     ok, why = _validate_proposal(out)
     if not ok:
         inc_counter("llm.defense.rejected")
@@ -486,7 +491,7 @@ async def run_orchestrator(
             )
             return _complete(
                 OrchestratorResult(
-                    mechanics="Proposal rejected: unknown actors",
+                    mechanics=f"Proposal rejected: unknown actors ({bad})",
                     narration="",
                     rejected=True,
                     reason="unknown_actor",

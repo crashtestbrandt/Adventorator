@@ -1,16 +1,35 @@
 {
   "tags": [
     {
-      "tag_id": "tag.lore.intro",
+      "tag_id": "lore.intro",
       "category": "lore",
-      "version": "1.0.0"
+      "slug": "lore-intro",
+      "display_name": "Lore Intro",
+      "synonyms": [
+        "intro"
+      ],
+      "audience": [
+        "player"
+      ],
+      "gating": {
+        "ruleset_version": "v1.2.3",
+        "requires_feature": null
+      }
     }
   ],
   "affordances": [
     {
-      "affordance_id": "affordance.greet",
-      "description": "Allow NPCs to greet players",
-      "ruleset_version": "v1.2.3"
+      "affordance_id": "affordance.interaction.greet",
+      "category": "interaction",
+      "slug": "greet",
+      "applies_to": [
+        "tag:lore.intro"
+      ],
+      "gating": {
+        "ruleset_version": "v1.2.3",
+        "requires_feature": null,
+        "audience": "player"
+      }
     }
   ]
 }

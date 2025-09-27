@@ -20,20 +20,16 @@ services:
     env_file: .env.docker
     # This environment block overrides variables from the env file
     # specifically for this container.
-    environment:
-      # Only override values that differ in-container. DATABASE_URL comes from env_file directly
-      # to avoid docker compose variable-substitution warnings during 'compose exec'.
-      LLM_API_URL: ${LLM_API_URL:-http://ollama:11434}
-      # If you need to temporarily point at a different Postgres instance, override DATABASE_URL
-      # here or export it before 'docker compose up'. Keeping it out avoids accidental empty
-      # interpolation when POSTGRES_* are unset.
+    # If you need to temporarily point at a different Postgres instance, override DATABASE_URL
+    # via the env_file or export it before 'docker compose up'. Keeping it out avoids accidental
+    # empty interpolation when POSTGRES_* are unset.
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "${APP_PORT:-18000}:18000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18000/healthz >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${APP_PORT:-18000}/healthz >/dev/null || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 10

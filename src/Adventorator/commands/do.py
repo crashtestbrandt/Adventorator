@@ -21,7 +21,10 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
     settings = inv.settings
     llm = inv.llm_client if (settings and getattr(settings, "features_llm", False)) else None
     if not llm:
-        await inv.responder.send("❌ The LLM narrator is currently disabled.", ephemeral=True)
+        await inv.responder.send(
+            "❌ The narrator is disabled. Ask a GM to enable LLM features.",
+            ephemeral=True,
+        )
         return
 
     message = (opts.message or "").strip()
@@ -172,7 +175,10 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         async with session_scope() as s:
             if player_tx_id is not None:
                 await repos.update_transcript_status(s, player_tx_id, "error")
-        await inv.responder.send("❌ Failed to process your request.", ephemeral=True)
+        await inv.responder.send(
+            "❌ Unexpected error while processing your action. Please try again.",
+            ephemeral=True,
+        )
         return
 
     if res.rejected:
@@ -190,7 +196,40 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                     except IntegrityError:
                         # Safe to ignore: activity log row not persisted yet; linkage is optional.
                         pass
-        await inv.responder.send(f"🛑 Proposal rejected: {res.reason or 'invalid'}", ephemeral=True)
+        # Friendlier surface for known rejection reasons
+        reason_key = (res.reason or "").lower()
+        # Special-case unknown_actor:<names>
+        if reason_key.startswith("unknown_actor"):
+            names = (res.reason.split(":", 1)[1] if ":" in (res.reason or "") else "").strip()
+            detail = f" ({names})" if names else ""
+            readable = (
+                "🛑 Narration referenced unknown characters" + detail + ". "
+                "Use only your character or known NPCs in this scene."
+            )
+        else:
+            readable = {
+            "llm_invalid_or_empty": (
+                "🛑 The narrator couldn't produce a structured preview. "
+                "Try a simpler action or rephrase."
+            ),
+            "unsafe_verb": (
+                "🛑 Action rejected for unsafe content. "
+                "Describe what you attempt, not direct state changes."
+            ),
+            "unsupported action": "🛑 That action type isn't supported yet.",
+            "unknown ability": "🛑 Unknown ability; use STR/DEX/CON/INT/WIS/CHA.",
+            "dc out of acceptable range": "🛑 DC must be between 5 and 30.",
+            "attacker/target required": "🛑 Attack needs both attacker and target.",
+            "attack_bonus/target_ac required": "🛑 Provide attack_bonus and target_ac.",
+            "attack_bonus out of range": "🛑 attack_bonus must be between -5 and 15.",
+            "target_ac out of range": "🛑 target_ac must be between 5 and 30.",
+            "damage spec required": "🛑 Missing damage dice (e.g., 1d6+2).",
+            "damage.mod out of range": "🛑 Damage modifier must be between -5 and +10.",
+            "damage.mod invalid": "🛑 Damage modifier must be a number.",
+            "duration out of range": "🛑 Duration must be between 0 and 100.",
+            "duration invalid": "🛑 Duration must be a number.",
+            }.get(reason_key, f"🛑 Proposal rejected: {res.reason or 'invalid'}")
+        await inv.responder.send(readable, ephemeral=True)
         inc_counter("pending.rejected")
         return
 
@@ -292,7 +331,10 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
                 await repos.update_transcript_status(s, player_tx_id, "error")
             if bot_tx_id is not None:
                 await repos.update_transcript_status(s, bot_tx_id, "error")
-        await inv.responder.send("⚠️ Failed to deliver narration.", ephemeral=True)
+        await inv.responder.send(
+            "⚠️ Failed to deliver narration to the channel. Please try again.",
+            ephemeral=True,
+        )
 
 
 @slash_command(name="do", description="Take an in-world action.", option_model=DoOpts)

@@ -58,7 +58,7 @@ Implement the ImprobabilityDrive and `/ask` entry point to produce `AskReport` w
 ### Phase 4 — Ontology Management & Validation
 - Deliverables:
   - Ontology schema and seed under `contracts/` or `prompts/`.
-  - Linter/validator integrated into `scripts/validate_prompts_and_contracts.py` and CI.
+  - Linter/validator integrated into `scripts/validate_contracts.py` and CI.
 - Validation:
   - Script exits non-zero on invalid changes; docs on governance.
 - Rollback:

@@ -15,14 +15,26 @@ Demonstrates:
 """
 
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 
 # Add src to Python path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from Adventorator import models
+from Adventorator.db import session_scope
 from Adventorator.importer import ImporterError, create_manifest_phase
 from Adventorator.manifest_validation import ManifestValidationError
+
+
+async def _emit_manifest_event(phase, campaign_id: int, payload: dict) -> models.Event:
+    async with session_scope() as session:
+        campaign = await session.get(models.Campaign, campaign_id)
+        if campaign is None:
+            session.add(models.Campaign(id=campaign_id, name=f"Demo Campaign {campaign_id}"))
+            await session.flush()
+        return await phase.emit_seed_event(session, campaign_id, payload)
 
 
 def demo_manifest_validation(manifest_path: Path, features_importer: bool = True) -> None:
@@ -53,12 +65,19 @@ def demo_manifest_validation(manifest_path: Path, features_importer: bool = True
         
         # Demonstrate event emission
         print("Step 2: Emitting synthetic seed event...")
-        event_envelope = phase.emit_seed_event(result["event_payload"])
-        
-        print(f"✓ Synthetic event created!")
-        print(f"  Event type: {event_envelope['event_type']}")
-        print(f"  Payload keys: {', '.join(event_envelope['payload'].keys())}")
-        print()
+        campaign_id = 4242
+        try:
+            event = asyncio.run(
+                _emit_manifest_event(phase, campaign_id, result["event_payload"])
+            )
+            print("✓ Synthetic event persisted!")
+            print(f"  Event type: {event.type}")
+            print(f"  Replay ordinal: {event.replay_ordinal}")
+            print(f"  Payload keys: {', '.join(event.payload.keys())}")
+            print()
+        except Exception as exc:  # pragma: no cover - demo fallback
+            print(f"⚠️ Unable to persist event (database not available?): {exc}")
+            print()
         
         # Show ImportLog entry structure
         print("Step 3: ImportLog provenance entry...")

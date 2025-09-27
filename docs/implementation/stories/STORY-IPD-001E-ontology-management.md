@@ -8,13 +8,13 @@ Owner: Ontology/Contracts WG
 Define ontology files under `contracts/` or `prompts/` with versioning, validation script, and governance.
 
 ## Acceptance Criteria
-- Ontology schema and linter in place; changes validated via CI script (`scripts/validate_prompts_and_contracts.py`).
+- Ontology schema and linter in place; changes validated via CI script (`scripts/validate_contracts.py`).
 - Tags referenced by NLU and planner documented with migration guidance.
  - Performance budget: Ontology validator completes within p95 ≤ 200ms for a typical medium-sized ontology file on CI hardware (or a recorded measurement is captured in the PR description if CI perf is not deterministic). This measures the validator's schema-check runtime, not NLU translation latency.
 
 ## Tasks
 - [x] TASK-IPD-ONTO-13 — Author ontology schema and seed ontology. (Artifacts present under `contracts/ontology/` including `seed-v0_1.json`, `tag.v1.json`, `affordance.v1.json`.)
-- [ ] TASK-IPD-VALIDATE-14 — Extend validation script to include ontology checks. (Pending; `scripts/validate_prompts_and_contracts.py` currently does not validate ontology artifacts.)
+- [ ] TASK-IPD-VALIDATE-14 — Extend validation script to include ontology checks. (Pending; `scripts/validate_contracts.py` currently does not validate ontology artifacts.)
 - [x] TASK-IPD-DOCS-15 — Author ontology guide under docs/architecture or docs/dev. (See `contracts/ontology/README.md`.)
 
 ## Definition of Ready
@@ -33,7 +33,7 @@ Define ontology files under `contracts/` or `prompts/` with versioning, validati
 
 ## Test Plan
 - Validator unit tests; schema round-trip for sample ontology files (valid/invalid/duplicate/conflict).
-- Integration: CI job invokes `scripts/validate_prompts_and_contracts.py` and fails on ontology violations.
+- Integration: CI job invokes `scripts/validate_contracts.py` and fails on ontology violations.
 - Performance check (validator): capture p95 ≤ 200ms for validating a representative ontology file on CI hardware.
 	- Clarification: this measures ontology validator runtime, not NLU translation; NLU parsing performance is covered in Stories B/C.
 	- If CI timing is flaky, attach a recorded measurement from a representative developer machine in the PR.

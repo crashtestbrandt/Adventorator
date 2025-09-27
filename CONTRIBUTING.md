@@ -24,7 +24,7 @@ Adventorator organizes delivery using the AI-Driven Development (AIDD) pipeline.
 ### Manage Prompts, Contracts, and Evaluations
 - Store AI prompt updates in the [`prompts/`](./prompts) registry and follow the [versioning workflow](./prompts/README.md). Pair prompt changes with evaluation fixtures (for example the assets under [`prompts/evals/`](./prompts/evals/)) so quality gates can exercise them.
 - Capture API or schema deltas in [`contracts/`](./contracts) and document compatibility in the [contract workspace README](./contracts/README.md). Link Stories/Tasks to these artifacts for contract-first delivery.
-- When automation requires additional validation (e.g., ADR linting or prompt checks), use the scripts in [`scripts/`](./scripts) such as [`validate_prompts_and_contracts.py`](./scripts/validate_prompts_and_contracts.py).
+- When automation requires additional validation (e.g., ADR linting or prompt checks), use the scripts in [`scripts/`](./scripts) such as [`validate_contracts.py`](./scripts/validate_contracts.py).
 
 ### Satisfy Quality Gates
 - Pull requests should include the Story/Task references and quality results requested by [`.github/pull_request_template.md`](./.github/pull_request_template.md). Reviewers will block merges when gates are missing.
@@ -54,6 +54,77 @@ make run           # FastAPI app (port 18000)
 make tunnel        # cloudflared for Discord webhook ingress
 make alembic-up    # apply DB migrations
 ```
+
+## Cleaning and Factory Reset
+
+This repo includes a comprehensive set of Make targets to clean local artifacts and Docker resources. Use these when you need to reset your environment.
+
+Common tasks:
+
+```bash
+# Full reset: warn if git is dirty, remove venv, caches, logs, sqlite, and Docker resources for this project
+make clean
+
+# Local-only cleanup (no Docker): venv, build artifacts, bytecode, caches, logs, local sqlite
+make local
+
+# Docker-only cleanup for this project: compose down (containers, volumes, images, orphans) + stray resources
+make docker
+
+# Global prune of dangling Docker resources (across machine). Be careful if you develop multiple projects.
+make prune
+```
+
+What `make clean` does:
+
+- Warns if your working tree has unstaged/uncommitted changes.
+- Removes local artifacts:
+   - `.venv`, build outputs (`build/`, `dist/`, `*.egg-info`), Python bytecode and `__pycache__`.
+   - Tool caches: `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.cache`.
+   - Logs under `logs/` and the local sqlite database file `adventorator_test.sqlite3`.
+- Docker cleanup scoped to this project:
+   - `docker compose down --remove-orphans --volumes --rmi all`.
+   - Removes containers/volumes/networks whose names match the project (folder name or `COMPOSE_PROJECT_NAME`).
+   - Also removes the ad-hoc Postgres container `advdb` created by `make db-up` if present.
+
+Advanced/Destructive:
+
+```bash
+# Remove ALL Docker images on the machine (not just dangling). Extremely destructive.
+# You MUST confirm explicitly or the target will refuse to run.
+CONFIRM=YES make clean-docker-all-images
+
+# Safer global cleanup: remove only UNUSED images (across machine). Keeps any image currently used by a container.
+make clean-docker-unused-images
+
+# Project-scoped cleanup: remove images that look like they belong to this project (heuristic: repo name starts with <project>- or <project>_)
+make clean-docker-images-project
+
+# Dry-run style helper: list which images would be considered project images
+make list-docker-images-project
+
+# Volumes (scoped and global):
+# List project volumes and remove them (names typically start with <project>_)
+make list-docker-volumes-project
+make clean-docker-volumes-project
+
+# Remove ALL volumes on this machine (destructive; requires confirmation)
+CONFIRM=YES make clean-docker-volumes-all
+
+# Build cache:
+# Safe prune (dangling only)
+make clean-docker-build-cache
+
+# Nuke all builder cache (destructive; requires confirmation)
+CONFIRM=YES make clean-docker-build-cache-all
+```
+
+This target will:
+
+1) Stop and remove all containers (any project).  
+2) Remove all images (any project).
+
+Only run this if you fully understand the impact. You’ll have to rebuild images for other projects afterward.
 
 ## Feature flags
 

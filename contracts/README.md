@@ -43,7 +43,7 @@ The ontology (planner / action-validation tag taxonomy) is versioned under `onto
 - The file must contain an `openapi` field (even if not a full API) to satisfy traceability and tooling expectations.
 - Extend via additional version folders (`v2/`) rather than mutating prior versions; deprecate tags via docs and downstream migration stories.
 
-Validator script: `python scripts/validate_prompts_and_contracts.py --only-contracts`.
+Validator script: `python scripts/validate_contracts.py`.
 
 ## Recent Updates (STORY-CDA-IMPORT-002B)
 
@@ -57,4 +57,4 @@ Validator script: `python scripts/validate_prompts_and_contracts.py --only-contr
 
 - Added `edges/edge.v1.json` schema enforcing allowed edge relationship types, referential identifiers, and temporal validity structure.
 - Added `events/seed/edge-created.v1.json` schema for synthetic edge ingestion events with provenance metadata.
-- Edge taxonomy lives in `edges/edge-type-taxonomy.json`; importer validation enforces required attributes per relationship type.
+- Edge taxonomy lives in `edges/edge-type-taxonomy-v1.json`; importer validation enforces required attributes per relationship type.

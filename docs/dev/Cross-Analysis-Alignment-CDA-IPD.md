@@ -103,7 +103,7 @@ Domains in scope:
 P0 — Before enabling CDA events or broadening IPD usage
 - Add Ask JSON contracts and validation
 	- Create `contracts/ask/v1/ask-report.v1.json` covering AskReport/IntentFrame/AffordanceTag.
-	- Extend `scripts/validate_prompts_and_contracts.py` to validate ask contracts. Tie to make quality-gates.
+	- Extend `scripts/validate_contracts.py` to validate ask contracts. Tie to make quality-gates.
 - Align defaults with policy
 	- Either: set `[features].improbability_drive=false` and `ask=false` by default, or document dev-only default-on policy in EPIC-IPD-001 and AGENTS.md references.
 - Prepare executor for idempotency v2
@@ -145,7 +145,7 @@ P2 — Hardening and governance
 
 ## Reference log (proposed changes and rationale)
 
-- RL-001 — Add ask contract JSONs under `contracts/ask/v1/` and wire into `scripts/validate_prompts_and_contracts.py`. Rationale: lock schema; enable validation in CI; align with AIDD.
+- RL-001 — Add ask contract JSONs under `contracts/ask/v1/` and wire into `scripts/validate_contracts.py`. Rationale: lock schema; enable validation in CI; align with AIDD.
 - RL-002 — Update IPD defaults to disabled in `config.toml` (or document dev-only enablement). Rationale: adhere to feature flag policy; reduce surprise activation.
 - RL-003 — Integrate `compute_idempotency_key_v2` in executor (shadow then enforce). Rationale: ensure retry collapse; prepare for events enablement.
 - RL-004 — Add ActivityLog linkage for AskReport (behind `features.activity_log`). Rationale: traceability and auditability.

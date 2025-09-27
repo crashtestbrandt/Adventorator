@@ -23,9 +23,9 @@ Validate importer resilience by exercising repeated runs of the same package, fa
 - [ ] **TASK-CDA-IMPORT-RERUN-19C — CLI/automation support.** Provide script or Make target to execute idempotency regression suite for operators/CI.
 
 ## Definition of Ready
-- Prior stories deliver deterministic importer pipeline with accessible manifest hash, counts, and metrics hooks.
-- Golden manifest fixture available for baseline re-run tests; corrupted fixtures prepared for failure injection scenarios.
-- Agreements on rollback semantics (full phase rollback vs per-item) documented with persistence team.
+- ✅ Prior stories deliver deterministic importer pipeline with accessible manifest hash, counts, and metrics hooks, covered by `ImporterRunContext`, golden digest regression, and importer metrics suites. 【F:src/Adventorator/importer_context.py†L1-L189】【F:tests/importer/test_importer_context.py†L13-L138】【F:tests/importer/test_state_digest_fixture.py†L21-L62】【F:src/Adventorator/importer.py†L276-L318】【F:tests/importer/test_entity_metrics.py†L18-L136】
+- ✅ Golden manifest fixture available for baseline re-run tests; corrupted fixtures prepared for failure injection scenarios. 【F:tests/fixtures/import/manifest/README.md†L7-L21】【F:tests/fixtures/import/manifest/happy-path/state_digest.txt†L1-L1】【F:tests/fixtures/import/manifest/tampered/entities/npc.json†L1-L11】【F:tests/fixtures/import/manifest/collision-test/entities/npc1.json†L1-L7】
+- ✅ Rollback expectations are codified in the importer phases: entity, edge, and lore handlers hard-fail on stable-ID or hash divergence after incrementing collision metrics, emit phase-complete logs, and avoid ImportLog writes, with regression tests asserting collision runs leave creation counters at zero. ADR-0011 anchors the deterministic ImportLog ordering relied upon for rerun assertions. 【F:src/Adventorator/importer.py†L276-L318】【F:src/Adventorator/importer.py†L565-L643】【F:src/Adventorator/importer.py†L1474-L1519】【F:tests/importer/test_entity_metrics.py†L93-L136】【F:tests/importer/test_edge_metrics.py†L95-L129】【F:tests/test_lore_chunking.py†L833-L867】【F:docs/adr/ADR-0011-package-import-provenance.md†L12-L16】
 
 ## Definition of Done
 - Idempotent re-run tests pass in CI; failure injection scenarios produce expected metrics/logs and leave database clean.

@@ -72,7 +72,7 @@ Implementation notes:
 ## Developer Workflow & Quality Gates
 - Prefer Makefile targets:
   - `make format`, `make lint`, `make type`, `make test` (required for code changes)
-  - If prompts/contracts are changed: `make quality-gates` and `PYTHONPATH=./src scripts/validate_prompts_and_contracts.py`
+  - If contracts are changed: `make quality-gates` and `PYTHONPATH=./src scripts/validate_contracts.py`
   - Database tasks only if needed (not expected here): `make db-up`, `make alembic-up`
 - PRs must summarize quality-gate outcomes and map evidence to acceptance criteria (see Issue & Branch Metadata).
 
