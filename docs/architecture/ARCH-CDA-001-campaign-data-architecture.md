@@ -1,6 +1,6 @@
 # ARCH-CDA-001 — Campaign Data & Deterministic World State Architecture
 
-Status: Proposed (MVP scope locked)  
+Status: Active (MVP scope locked)  
 Last Updated: 2025-09-21  
 Related Architecture: [ARCH-AVA-001](../architecture/ARCH-AVA-001-action-validation-architecture.md) (Action Validation Pipeline)  
 Supersedes / Extends: Implicit legacy “flat tables as state” model (no prior ADR)  

@@ -329,3 +329,66 @@ compose-orphans-rm:
 	@orphans=$$(docker ps -a --filter "name=adventorator" --format '{{.Names}}' | grep orphan || true); \
 	if [ -n "$$orphans" ]; then echo "Removing orphans: $$orphans"; docker rm -f $$orphans || true; else echo "No orphan containers found"; fi
 
+# -------------- Campaign Package Workflow --------------
+.PHONY: package-scaffold package-ids package-hash package-preflight package-import package-watch
+
+# Scaffold a new package directory
+# Usage: make package-scaffold DEST=campaigns/sample-campaign NAME="Greenhollow Demo"
+package-scaffold:
+	@if [ -z "$(DEST)" ]; then \
+	  echo "DEST is required (e.g., make package-scaffold DEST=campaigns/sample-campaign NAME=\"Greenhollow Demo\")"; \
+	  exit 1; \
+	fi
+	. .venv/bin/activate && python scripts/scaffold_package.py --dest "$(DEST)" $(if $(NAME),--name "$(NAME)")
+
+# Assign ULID stable_id to entities missing/invalid IDs
+# Usage: make package-ids PACKAGE_ROOT=campaigns/sample-campaign
+package-ids:
+	@if [ -z "$(PACKAGE_ROOT)" ]; then \
+	  echo "PACKAGE_ROOT is required (e.g., make package-ids PACKAGE_ROOT=campaigns/sample-campaign)"; \
+	  exit 1; \
+	fi
+	. .venv/bin/activate && python scripts/assign_entity_ids.py --package-root "$(PACKAGE_ROOT)"
+
+# Recompute content_index hashes in manifest
+# Usage: make package-hash PACKAGE_ROOT=campaigns/sample-campaign
+package-hash:
+	@if [ -z "$(PACKAGE_ROOT)" ]; then \
+	  echo "PACKAGE_ROOT is required (e.g., make package-hash PACKAGE_ROOT=campaigns/sample-campaign)"; \
+	  exit 1; \
+	fi
+	. .venv/bin/activate && python scripts/update_content_index.py --package-root "$(PACKAGE_ROOT)"
+
+# DB preflight (checks tables; AUTO=1 to auto-migrate)
+# Usage: make package-preflight [AUTO=1]
+package-preflight:
+	. .venv/bin/activate && python scripts/preflight_import.py $(if $(AUTO),--auto-migrate)
+
+# End-to-end import (updates hashes unless NO_HASH_UPDATE=1, runs preflight unless SKIP_PREFLIGHT=1)
+# Usage: make package-import PACKAGE_ROOT=campaigns/sample-campaign CAMPAIGN_ID=1 [NO_EMBEDDINGS=1 SKIP_PREFLIGHT=1 NO_HASH_UPDATE=1 NO_IMPORTER=1]
+package-import:
+	@if [ -z "$(PACKAGE_ROOT)" ] || [ -z "$(CAMPAIGN_ID)" ]; then \
+	  echo "PACKAGE_ROOT and CAMPAIGN_ID are required (e.g., make package-import PACKAGE_ROOT=campaigns/sample-campaign CAMPAIGN_ID=1)"; \
+	  exit 1; \
+	fi
+	. .venv/bin/activate && python scripts/import_package.py \
+	  --package-root "$(PACKAGE_ROOT)" \
+	  --campaign-id "$(CAMPAIGN_ID)" \
+	  $(if $(NO_EMBEDDINGS),--no-embeddings) \
+	  $(if $(SKIP_PREFLIGHT),--skip-preflight) \
+	  $(if $(NO_HASH_UPDATE),--no-hash-update) \
+	  $(if $(NO_IMPORTER),--no-importer)
+
+# Watch a package for changes; IMPORT_ON_CHANGE=1 to auto-import; set INTERVAL=seconds (default 1.0)
+# Usage: make package-watch PACKAGE_ROOT=campaigns/sample-campaign [CAMPAIGN_ID=1 IMPORT_ON_CHANGE=1 INTERVAL=1.0]
+package-watch:
+	@if [ -z "$(PACKAGE_ROOT)" ]; then \
+	  echo "PACKAGE_ROOT is required (e.g., make package-watch PACKAGE_ROOT=campaigns/sample-campaign CAMPAIGN_ID=1 IMPORT_ON_CHANGE=1)"; \
+	  exit 1; \
+	fi
+	. .venv/bin/activate && python scripts/watch_package.py \
+	  --package-root "$(PACKAGE_ROOT)" \
+	  $(if $(CAMPAIGN_ID),--campaign-id "$(CAMPAIGN_ID)") \
+	  $(if $(IMPORT_ON_CHANGE),--import-on-change) \
+	  $(if $(INTERVAL),--interval "$(INTERVAL)")
+
