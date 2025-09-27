@@ -521,7 +521,8 @@ class ImportLog(Base):
     sequence_no: Mapped[int] = mapped_column(Integer, nullable=False)
     phase: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     object_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    stable_id: Mapped[str] = mapped_column(String(26), nullable=False, index=True)
+    # Not always a ULID; may include prefixed synthetic IDs like 'summary-...'
+    stable_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(String(16), nullable=False)  # "created", "skipped"
     manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)

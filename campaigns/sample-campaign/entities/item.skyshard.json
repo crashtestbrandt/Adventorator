@@ -1,0 +1,14 @@
+{
+  "stable_id": "01J8A0A0000000000000000004",
+  "kind": "item",
+  "name": "Skyshard",
+  "tags": ["item.artifact", "lore.legendary"],
+  "affordances": ["inspect", "attune", "research", "guard"],
+  "traits": ["radiant", "fragments_scattered"],
+  "props": {
+    "rarity": "legendary",
+    "attunement": true,
+    "effects": ["glows softly in presence of corruption", "restores 1d4+1 hit points when invoked once per dawn"],
+    "srd_note": "Uses only SRD-consistent mechanics: generic healing and attunement."
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "affordances": [
+    {
+      "affordance_id": "affordance.combat.attack",
+      "category": "combat",
+      "slug": "attack",
+      "applies_to": ["tag:trait.human", "tag:trait.elf", "tag:creature.troll"],
+      "gating": {"audience": "player", "ruleset_version": "v5.2.1", "requires_feature": null},
+      "metadata": {"effect": "Make a weapon attack per SRD rules.", "improbability_drive": {"intent_frame": "attack", "confidence": 80}}
+    },
+    {
+      "affordance_id": "affordance.social.talk",
+      "category": "social",
+      "slug": "talk",
+      "applies_to": ["tag:trait.human", "tag:trait.elf"],
+      "gating": {"audience": "player", "ruleset_version": "v5.2.1", "requires_feature": null},
+      "metadata": {"effect": "Engage in conversation to gather information or persuade."}
+    },
+    {
+      "affordance_id": "affordance.exploration.explore",
+      "category": "exploration",
+      "slug": "explore",
+      "applies_to": ["tag:location.settlement", "tag:region.heartlands", "tag:location.ruin"],
+      "gating": {"audience": "player", "ruleset_version": "v5.2.1", "requires_feature": null}
+    }
+  ]
+}

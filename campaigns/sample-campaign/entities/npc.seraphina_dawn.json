@@ -1,0 +1,20 @@
+{
+  "stable_id": "01J8A0A0000000000000000001",
+  "kind": "npc",
+  "name": "Seraphina Dawn",
+  "tags": ["trait.elf", "role.priest", "faction.wayfarers_guild", "location.greenhollow"],
+  "affordances": ["talk", "heal", "bless", "request_help"],
+  "traits": ["compassionate", "wise"],
+  "props": {
+    "title": "Dawnmother of the Shrine",
+    "level": 5,
+    "alignment": "NG",
+    "ac": 12,
+    "hp": 27,
+    "speed": 30,
+    "ability_scores": {"str": 8, "dex": 12, "con": 12, "int": 12, "wis": 16, "cha": 14},
+    "bond": "Protect the Skyshard and the hope it represents.",
+    "ideal": "Mercy heals more than steel.",
+    "flaw": "Too trusting of the repentant."
+  }
+}
