@@ -4,12 +4,10 @@ Functions here avoid external deps and operate on paths/JSON.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterable
 import hashlib
 import json
-
+from dataclasses import dataclass
+from pathlib import Path
 
 INGEST_DIRS = ("entities", "edges", "ontology", "ontologies", "lore")
 INGEST_EXTS = {".json", ".md", ".txt"}

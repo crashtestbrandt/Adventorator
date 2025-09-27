@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Minimal ULID generator (Crockford base32), no external dependencies.
 
 ULID spec:
 - 128-bit value = 48-bit timestamp (ms since UNIX epoch) + 80-bit randomness
 - Crockford base32 alphabet: 0123456789ABCDEFGHJKMNPQRSTVWXYZ
 """
+
+from __future__ import annotations
 
 import os
 import time
