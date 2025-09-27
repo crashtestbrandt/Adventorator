@@ -494,7 +494,7 @@ async def run_orchestrator(
                     mechanics=f"Proposal rejected: unknown actors ({bad})",
                     narration="",
                     rejected=True,
-                    reason=f"unknown_actor:{bad}",
+                    reason="unknown_actor",
                 ),
                 "defense_rejected",
             )
