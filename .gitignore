@@ -216,3 +216,6 @@ __marimo__/
 
 # Adventorator specific ignores
 logs/
+
+# Local developer notes
+.localnotes
