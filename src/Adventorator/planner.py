@@ -19,7 +19,7 @@ from Adventorator.planner_prompts import SYSTEM_PLANNER
 from Adventorator.planner_schemas import PlannerOutput
 
 # --- Allowlist of commands the planner may route to (defense-in-depth) ---
-_ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do", "ooc"}
+_ALLOWED: set[str] = {"roll", "check", "sheet.create", "sheet.show", "do"}
 
 
 def _is_allowed(name: str) -> bool:

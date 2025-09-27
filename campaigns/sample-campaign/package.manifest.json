@@ -1,0 +1,33 @@
+{
+  "content_index": {
+    "README.md": "4abb25535a980a227e4cff46fcfc5b71b863e6abc8425949c81d8775ce53253f",
+    "edges/adjacency.json": "75ae6c9ce95eb17edfeb699ab981f9cce1b67d79abd75b4f0ac3e97baa92590a",
+    "edges/relations.json": "dc27b2364ba13d4751b6cd2c1df0a154093ede62950af897c31eea921831eabc",
+    "entities/creature.forest_troll.json": "940df21f49ab37b6dc93a301ae9398de9687b2d893c976d3e05c14c56072e18c",
+    "entities/item.skyshard.json": "1bfeedd3c4d875abce79e0512bd714e1817d3b1c9b5c5aadc8730b698b0c1165",
+    "entities/location.greenhollow.json": "2f146ad08e2ca48e78a8e7a26b1ad1c41f4e56d19994f49382f916b3847b7ea8",
+    "entities/location.ruined_watchtower.json": "6362ce53078e84e98055e55dc1f218aa4e47508c329cf1cf44894eebd8194ac5",
+    "entities/npc.alric_stone.json": "24ef70c47d468aab336a9e3433d27808e6011b614c43ef26df40391d3c6c7008",
+    "entities/npc.seraphina_dawn.json": "79b340804a81c69bcda02ec971f2b3a0c522ffad04bf6bdf3b1cc37ca727a6b4",
+    "entities/organization.wayfarers_guild.json": "32852c531f6dee738c38770233dcd85e78753e201b690958bc6da105cdc48381",
+    "lore/chapter-1.md": "d8d1f351810f8972c569e531df994132df75dfbe2d80adce347bff5d642b6611",
+    "lore/intro.md": "a9a1965b30624be5dc7411a853702adb93b16e55733401bcaebaf53c760113c4",
+    "lore/legends-skyshard.md": "e0117374564376a1a2b47f7b7c646bae31b16223e57a9aaf6ebb81aaf76a6b17",
+    "ontology/affordances.json": "b9a0dbcc62e3e52b09b7711eac200c8b11a0b1a443640d7efce1c0229fd9bdf9",
+    "ontology/tags.json": "500f8fb2688af27b432f35959a59ee7f380652ff3ffabfc05ea2ef7f07984692"
+  },
+  "dependencies": [],
+  "engine_contract_range": {
+    "max": "1.2.0",
+    "min": "1.2.0"
+  },
+  "package_id": "01J8A0P0000000000000000001",
+  "recommended_flags": {
+    "features.ask.enabled": true,
+    "features.importer": true,
+    "features.llm": false,
+    "features.retrieval.enabled": true
+  },
+  "ruleset_version": "5.2.1",
+  "schema_version": 1
+}

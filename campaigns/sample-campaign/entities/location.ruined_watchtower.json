@@ -1,0 +1,13 @@
+{
+  "stable_id": "01J8A0A0000000000000000003",
+  "kind": "location",
+  "name": "Ruined Watchtower",
+  "tags": ["location.ruin", "region.heartlands", "danger.low"],
+  "affordances": ["explore", "scout", "take_cover", "investigate"],
+  "traits": ["crumbling", "overgrown"],
+  "props": {
+    "threats": ["forest_troll"],
+    "hooks": ["disappearances_nearby", "strange_glow_at_night"],
+    "treasures": ["skyshard_fragment"]
+  }
+}

@@ -11,6 +11,7 @@ A Discord-native Game Moderator bot that blends deterministic Tabletop RPG mecha
 - [Configuration](#configuration)
 - [Retrieval & Safety](#retrieval--safety)
 - [Key Command Flows](#key-command-flows)
+  - See also: [Ask / Plan / Do guide](./docs/usage/ask-plan-do.md)
 - [Operations](#operations)
 - [AI Development Pipeline Onboarding](#ai-development-pipeline-onboarding)
 - [Repo Structure](#repo-structure)
@@ -18,25 +19,18 @@ A Discord-native Game Moderator bot that blends deterministic Tabletop RPG mecha
 - [Changelog](./CHANGELOG.md)
  - [Roadmap](./ROADMAP.md)
 
-> Encounters (Phase 10)
-- See docs: [Encounters (dev notes)](./docs/dev/encounters.md)
-- Feature flag: enable `[combat].enabled=true` in `config.toml` (legacy fallback to `[features].combat` is supported).
-- Command: `/encounter status` (FF-gated) shows current round, active combatant, and initiative order.
-
-![](/docs/images/usage-slash-check.jpeg)
-
 ---
 
 ## MVP Definition
 
-End-to-end automated DnD 5e campaign management within a Discord channel for all members with an assigned character sheet (a party):
+End-to-end automated 5e SRD campaign management within a Discord channel for all members with an assigned character sheet (a party):
 
-- Campaign data uploaded as a .zip via `/campaign upload` with well-formed definitions for important people, places/geography, history, theme, etc. LLM tools can safely fill reasonable gaps.
+- Campaign data is ingestible via the importer pipeline (scripts and APIs) with well‑formed definitions for important people, places/geography, history, theme, etc. A future slash command for uploads may arrive in a later ingestion epic.
 - Gameplay swaps between exploration (asynchronous, free-form) and encounter (synchronous, opt-in, turn-order) modes according to party actions.
 - Core commands and roles:
   - `/plan` — Take in-character actions that don’t affect shared state, or preview actions that do.
   - `/do` — Attempt to take actions that affect other players or world state (guarded by preview/confirm).
-  - `/sheet create|upload|show [id]` — Manage character sheets.
+  - `/sheet create|show` — Manage character sheets. Use `create --json '<payload>'` to upsert; `show --name <character>` to display a summary.
   <!-- Removed undocumented /campaign command (not yet implemented; future ingestion epic will introduce official commands). -->
   - Plus `/roll`, `/check`, and emergent GM tools under feature flags.
 
@@ -145,8 +139,8 @@ flowchart TD
   Repos --> Characters
   Repos --> Transcripts
   ActivityLog --> ActLog
-  %% Optional MCP path: ExecutionRequest fan-out
-  ExecReq -.->|if features.mcp| MCP
+  %% Optional MCP path: Executor routes via MCP adapters when enabled
+  Exec -.->|if features.mcp| MCP
   MCP -.-> ActivityLog
   Metrics -.-> APP
   Logs -.-> APP
@@ -215,7 +209,7 @@ File: `Adventorator/executor.py`
 - Role: Execute mechanics as a declarative, validated tool chain. Supports dry-run previews (for `/do` confirmation) and apply (append events).
 - Registry and built-ins:
   - `InMemoryToolRegistry` with JSON schemas per tool.
-  - Built-in tools: `roll`, `check` (pure previews), and mutating stubs `apply_damage`, `heal`, `apply_condition`, `remove_condition`, `clear_condition` (emit domain events).
+  - Built-in tools currently: `roll`, `check`, and `attack` (preview mechanics and predicted events). When `features.events` is enabled, applying a chain appends events to the ledger.
 - Data contracts:
   - `ToolStep {tool: str, args: dict, requires_confirmation?: bool, visibility?: "ephemeral|public"}`
   - `ToolCallChain {request_id: str, scene_id: int, steps: [ToolStep], actor_id?: str}`
@@ -258,7 +252,7 @@ sequenceDiagram
   participant PGate as Predicate Gate
   participant Registry as Command Registry
   participant LLM as LLM
-  participant ExecReq as ExecutionRequest
+  %% Note: Planner yields a Plan; ExecutionRequest is built later in /do
 
   Note over Planner: 30s cache (dedupe semantic intents)
 
@@ -275,14 +269,10 @@ sequenceDiagram
       Planner-->>App: rejected (predicate failures)
       App-->>User: error summary (ephemeral)
     else ok
-      Planner->>ExecReq: build(plan_id, steps, ctx)
-      ExecReq-->>Planner: ref
-      Planner-->>App: Plan + ExecutionRequest
+      Planner-->>App: Plan
     end
   else gate disabled
-    Planner->>ExecReq: build(plan_id, steps, ctx)
-    ExecReq-->>Planner: ref
-    Planner-->>App: Plan + ExecutionRequest
+    Planner-->>App: Plan
   end
 
   Note over App: Dispatch to resolved command handler (/do, /roll, etc.)
@@ -324,7 +314,7 @@ sequenceDiagram
   ExecReq-->>Orc: ref
   Orc->>ALog: record(orchestrator.result)
   alt features.mcp
-    ExecReq->>MCP: fan-out (future adapter)
+    Exec->>MCP: route via MCP adapters
     MCP-->>ALog: activity entries
   end
   alt executor enabled
@@ -390,17 +380,20 @@ Required env for compose dev (see `.env.docker.example`):
 ```env
 DATABASE_URL=postgresql+asyncpg://adventorator:adventorator@db:5432/adventorator
 # Discord
-DISCORD_APPLICATION_ID=...
+DISCORD_APP_ID=...
 DISCORD_PUBLIC_KEY=...
 DISCORD_BOT_TOKEN=...
 # Feature flags (examples)
 FEATURES_LLM=true
-FEATURES_PLANNER=true
+FEATURE_PLANNER_ENABLED=true
 FEATURES_LLM_VISIBLE=false
 FEATURES_EXECUTOR=true
 FEATURES_EXECUTOR_CONFIRM=true
 FEATURES_EVENTS=true
-FEATURES_RETRIEVAL_ENABLED=true
+# Retrieval config (nested via double-underscore env syntax)
+RETRIEVAL__ENABLED=true
+RETRIEVAL__PROVIDER=none
+RETRIEVAL__TOP_K=4
 ```
 
 Apply migrations from your host (or inside the app container):
@@ -448,12 +441,12 @@ Behavior is configured via `config.toml`, which can be overridden by environment
 
   * `features.llm`: Master switch for all LLM-powered features (`/do`, `/plan`).
   * `features.llm_visible`: If `true`, LLM narration is posted publicly; otherwise, it runs in a "shadow mode" (logged but not sent to Discord).
-  * `[planner].enabled` — Hard on/off switch for the `/plan` planner (legacy fallback: `[features].planner`).
+  * `[planner].enabled` — Hard on/off switch for the `/plan` planner (legacy fallback: `[features].planner`). In env, use `FEATURE_PLANNER_ENABLED=true`.
   * `ops.metrics_endpoint_enabled`: If `true`, exposes a `GET /metrics` endpoint.
 
 **LLM Client:**
 
-  * `llm.api_provider`: `"ollama"` or `"openai"`.
+  * `llm.api_provider`: "ollama" or "openai".
   * `llm.api_url`: Base URL for your provider (e.g., `http://localhost:11434` for Ollama).
   * `llm.model_name`: Model identifier (e.g., `"llama3:latest"`).
 
@@ -469,8 +462,9 @@ Phase 6 adds a simple, safe retrieval layer to augment the Orchestrator with pla
 - Retriever: A SQL LIKE fallback searches over `title`, `player_text`, and (for matching only) `gm_text` to improve recall. GM text is never surfaced.
 - Feature flags (config.toml):
   - `features.retrieval.enabled` (bool): turn retrieval on/off.
-  - `features.retrieval.provider` ("none" for SQL fallback; future: pgvector/qdrant).
+  - `features.retrieval.provider` ("none" for SQL fallback; future: `pgvector`/`qdrant`).
   - `features.retrieval.top_k` (int): number of snippets to include.
+  - In env files, use nested keys via double underscores (e.g., `RETRIEVAL__ENABLED=true`).
 - Orchestrator integration: when enabled, the top-k snippets for the active campaign are appended to the facts bundle as `[ref] <title>: <player_text>`.
 - Safety defenses in the orchestrator:
   - Only allows the action `ability_check` with whitelisted abilities and a bounded DC (5–30).

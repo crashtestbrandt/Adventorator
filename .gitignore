@@ -213,9 +213,15 @@ __marimo__/
 # SQLite
 *.sqlite3
 *.sqlite3-journal
+*.sqlite3-*
 
 # Adventorator specific ignores
 logs/
 
 # Local developer notes
 .localnotes
+
+# Ignore all subdirectories in campaigns/ except the sample
+campaigns/*/
+!campaigns/sample-campaign/
+!campaigns/sample-campaign/**

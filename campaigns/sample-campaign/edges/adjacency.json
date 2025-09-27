@@ -1,0 +1,9 @@
+[
+  {
+    "stable_id": "01J8A0E0000000000000000004",
+    "type": "adjacent_to",
+    "src_ref": "01J8A0A0000000000000000002",
+    "dst_ref": "01J8A0A0000000000000000003",
+    "attributes": {"distance": 2, "connection_type": "trail"}
+  }
+]

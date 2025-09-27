@@ -1,0 +1,13 @@
+{
+  "stable_id": "01J8A0A0000000000000000002",
+  "kind": "location",
+  "name": "Greenhollow Township",
+  "tags": ["region.heartlands", "location.settlement", "location.greenhollow"],
+  "affordances": ["rest", "shop", "gather_information", "request_audience"],
+  "traits": ["bucolic", "palisade_walls"],
+  "props": {
+    "population": 850,
+    "notables": ["Alric Stone", "Seraphina Dawn"],
+    "features": ["south_gate", "market_square", "shrine_of_morning"]
+  }
+}

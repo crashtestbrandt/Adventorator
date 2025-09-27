@@ -200,8 +200,10 @@ async def _handle_do_like(inv: Invocation, opts: DoOpts):
         reason_key = (res.reason or "").lower()
         # Special-case unknown_actor:<names>
         if reason_key.startswith("unknown_actor"):
-            names = (res.reason.split(":", 1)[1] if ":" in (res.reason or "") else "").strip()
-            detail = f" ({names})" if names else ""
+            # Safely parse the actor list from reason string, avoid None and variable shadowing
+            _r = res.reason or ""
+            names_part = _r.split(":", 1)[1].strip() if ":" in _r else ""
+            detail = f" ({names_part})" if names_part else ""
             readable = (
                 "🛑 Narration referenced unknown characters" + detail + ". "
                 "Use only your character or known NPCs in this scene."
