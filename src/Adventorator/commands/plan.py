@@ -240,8 +240,22 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
         from Adventorator.action_validation.metrics import record_planner_failure
 
         record_planner_failure("parse")
-        log_event("planner", "failed", reason="parse")
-        await inv.responder.send("⚠️ I couldn't figure out a valid command.", ephemeral=True)
+        # Add light diagnostic context for logs
+        try:
+            prov = getattr(inv.llm_client, "provider", None)
+            model = getattr(inv.llm_client, "model_name", None)
+            log_event("planner", "failed", reason="parse", llm_provider=prov, llm_model=model)
+        except Exception:
+            log_event("planner", "failed", reason="parse")
+        # Provide actionable tips to the user
+        await inv.responder.send(
+            (
+                "⚠️ I couldn't parse a valid plan from the model.\n"
+                "Try a simpler ask like: 'roll 1d20' or 'sheet show name: Aria'.\n"
+                "If this keeps happening, your LLM may not be producing valid JSON."
+            ),
+            ephemeral=True,
+        )
         return
 
     target_name = out.command.replace(":", ".")
@@ -261,12 +275,16 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
             confidence=getattr(out, "confidence", None),
             rationale=(getattr(out, "rationale", None) or "")[:120],
         )
-        await inv.responder.send("⚠️ That action isn't supported yet.", ephemeral=True)
+        await inv.responder.send(
+            "⚠️ That action isn't supported yet by the planner.", ephemeral=True
+        )
         return
 
     cmd = find_command(target_top, target_sub or None)
     if not cmd:
-        await inv.responder.send("⚠️ Planned command was not found.", ephemeral=True)
+        await inv.responder.send(
+            f"⚠️ Planned command '{cmd_name_flat}' was not found.", ephemeral=True
+        )
         return
 
     if use_action_validation and use_predicate_gate:
@@ -377,7 +395,9 @@ async def plan_cmd(inv: Invocation, opts: PlanOpts):
                 '"I sneak along the wall"'
             )
 
-        msg = guidance or "⚠️ Planned arguments were invalid."
+        msg = guidance or (
+            "⚠️ Planned arguments were invalid. The model may have produced malformed args."
+        )
         await inv.responder.send(msg, ephemeral=True)
         return
 
