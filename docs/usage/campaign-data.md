@@ -4,7 +4,7 @@ This guide shows how to author, validate, and ingest a campaign data pack.
 
 ## Quickstart
 
-- Create a new pack:
+- Create a new pack
   - make package-scaffold DEST=campaigns/sample-campaign NAME="Greenhollow Demo"
 - Author/edit content, then assign IDs and update hashes:
   - make package-ids PACKAGE_ROOT=campaigns/sample-campaign

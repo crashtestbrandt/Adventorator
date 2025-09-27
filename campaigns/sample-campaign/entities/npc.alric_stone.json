@@ -1,13 +1,20 @@
 {
-  "affordances": [
-    "talk",
-    "trade"
-  ],
+  "stable_id": "01J8A0A0000000000000000000",
   "kind": "npc",
   "name": "Alric Stone",
-  "stable_id": "01K64PF0SKXHVFJ6YYDY93ECP5",
-  "tags": [
-    "trait.human",
-    "role.guard"
-  ]
+  "tags": ["trait.human", "role.guard", "faction.wayfarers_guild", "location.greenhollow"],
+  "affordances": ["talk", "trade", "request_help", "attack"],
+  "traits": ["disciplined", "observant"],
+  "props": {
+    "title": "Greenhollow Watchman",
+    "level": 3,
+    "alignment": "LN",
+    "ac": 15,
+    "hp": 24,
+    "speed": 30,
+    "ability_scores": {"str": 14, "dex": 12, "con": 12, "int": 10, "wis": 12, "cha": 10},
+    "bond": "Protect the south gate and the people of Greenhollow.",
+    "ideal": "Order keeps the wild at bay.",
+    "flaw": "Slow to trust outsiders."
+  }
 }
